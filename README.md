@@ -1,2 +1,237 @@
 # ai-dev-sop
-AI develop SOP with Skills
+
+**AI Development SOP with Skills**
+
+A comprehensive standard operating procedure (SOP) repository for AI-assisted development, featuring development workflows, skills, and automation tools for building full-stack applications.
+
+## Overview
+
+This repository contains the complete development SOP for **mediation-platform**, a full-stack Java + Vue enterprise application platform. It provides:
+
+- Standardized development workflows from "one-sentence requirement" to "code delivery"
+- Skills for AI coding tools (Cursor, Qoder, CodeBuddy, Claude Code)
+- Double-track memory framework (MemPalace × codebase-mem-mcp)
+- Scenario-based pipelines for different development patterns
+- QA automation with end-to-end browser testing
+- Documentation templates and scene prompts
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AI Development Pipeline                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Installation → Understanding → Prompt Generation → Scenario Selection   │
+│        ↓                                                          ↓     │
+│        └────── Testing Automation ←── Docs Automation ←─────────────┘     │
+│        ↓                                                                │
+│        └────────── Operations Demand Automation (FDE闭环回流)             │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Key Components
+
+### 1. Development SOP (`docs/cn/`)
+
+The core SOP document (`develop-sop.md`) covers:
+
+| Section | Description |
+|---------|-------------|
+| §0 | Document Overview - Goals, roles, flowcharts, architecture |
+| §1 | Preparation - Reading existing projects, installing Skills, IDE configuration |
+| §2 | Prompt Generation - Test prompts, development prompts, scene templates |
+| §3 | Testing & Development - End-to-end execution, batch processing |
+| §4 | Scenario SOPs - Framework, one-sentence, upgrade, copy pipelines |
+| §5 | Double-Track Memory - MemPalace × codebase-mem-mcp framework |
+| §6 | Documentation - Product research, market research templates |
+
+### 2. Skills (`skills/`)
+
+- **qa-dev**: Test + development automation skill with `/qa-dev` command
+- Supports batch execution, unattended mode, regression testing
+
+### 3. Tools (`tools/`)
+
+- **cbmem-team**: HTTP multi-user wrapper around `codebase-memory-mcp` for team collaboration
+
+### 4. Example Projects (`example/`)
+
+- **ai-coding-boot**: Reference implementation using ruoyi-vue-pro architecture
+
+## Seven Development Stages
+
+| Stage | Description | Deliverables |
+|-------|-------------|--------------|
+| 1. Installation | Install Skills, toolchains, configure IDE | Skill set, Design docs |
+| 2. Understanding | Map codebase with `/gsd-map-codebase` | 7 cognitive files |
+| 3. Prompt Generation | Generate test/dev prompts from templates | Scene documents, PRDs |
+| 4. Scenario Selection | Route to appropriate scenario pipeline | Code, commits, reports |
+| 5. Testing Automation | E2E browser automation with `/qa` | Test reports, bug lists |
+| 6. Documentation Automation | Auto-generate project docs | API docs, manuals |
+| 7. Operations Automation | Customer demand → FDE execution |闭环 reports |
+
+## Scenario Pipelines
+
+| Pipeline | Use Case |
+|----------|----------|
+| `framework-pipeline.md` | Baseline scaffold development |
+| `one-sentence-pipeline.md` | From one-sentence requirement to prototype |
+| `docs-pipeline.md` | Automated project documentation |
+| `copy-web-pipeline.md` | Clone existing web projects |
+| `copy-app-pipeline.md` | Clone mobile apps (uniapp) |
+| `java-upgrade-pipeline.md` | Technology stack migration |
+
+## Double-Track Memory Framework
+
+Combines natural language memory with code structure memory:
+
+| Track | Technology | Purpose |
+|-------|------------|---------|
+| **Track A** | MemPalace | Team semantic memory, decisions, customer requirements |
+| **Track B** | codebase-mem-mcp | Code structure, architecture, call chains |
+
+### Deployment
+
+```bash
+# Track A: MemPalace (Docker)
+docker run -d --name mempalace \
+  -p 8080:8080 \
+  -v ~/.mempalace:/data \
+  -e MP_VECTOR_BACKEND=chromadb \
+  mempalace/mempalace:0.8.3
+
+# Track B: codebase-memory-mcp
+npm install -g codebase-memory-mcp
+codebase-memory-mcp install
+```
+
+## Getting Started
+
+### 1. Install Skills
+
+```bash
+# Using npx skills
+npx skills add obra/superpowers -a qoder --global
+npx skills add garrytan/gstack -a qoder --global
+npx get-shit-done-cc@latest --qoder --global
+npm install -g @fission-ai/openspec@latest
+
+# Clone design-md
+git clone https://github.com/VoltAgent/awesome-design-md.git temp-design
+cp temp-design/design-md/vercel/DESIGN.md ./DESIGN.md
+rm -rf temp-design
+```
+
+### 2. Configure IDE
+
+**Qoder:**
+```json
+{
+  "general": {
+    "defaultPermissionMode": "auto"
+  }
+}
+```
+
+**Cursor:** Install MCP servers for `playwright` and `memplace`.
+
+### 3. Map Your Codebase
+
+```bash
+/gsd-map-codebase
+```
+
+This generates 7 cognitive files in `.planning/codecase/`:
+- ARCHITECTURE.md
+- CONCERNS.md
+- CONVENTIONS.md
+- INTEGRATIONS.md
+- STACK.md
+- STRUCTURE.md
+- TESTING.md
+
+### 4. Generate Scene Prompts
+
+```bash
+# Generate test + development prompts from existing code
+/brainstorm
+参照模板 @mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档...
+```
+
+### 5. Execute Development
+
+```bash
+# Full flow: test → report → fix → develop → verify
+/qa-dev --file docs/scene/system-scene.md --module SYS-01
+
+# Batch execution (unattended)
+/qa-dev --batch --unattended --file docs/scene/system-scene.md
+```
+
+## Recommended AI Models
+
+| IDE | Recommended Model |
+|-----|-------------------|
+| Cursor | composer-2.5 |
+| Qoder | Lite / QWen3.7-MAX |
+| CodeBuddy | Hy3 |
+
+## Project Structure
+
+```
+ai-dev-sop/
+├── README.md
+├── README_CN.md          # Chinese version
+├── README_JP.md           # Japanese version
+├── docs/
+│   ├── cn/               # Chinese documentation
+│   │   ├── develop-sop.md
+│   │   ├── scene-template.md
+│   │   ├── one-sentence-pipeline.md
+│   │   ├── framework-pipeline.md
+│   │   ├── copy-web-pipeline.md
+│   │   ├── copy-app-pipeline.md
+│   │   ├── java-upgrade-pipeline.md
+│   │   ├── docs-pipeline.md
+│   │   ├── qa-dev-sop.md
+│   │   ├── mempalace-codebase-mem-framework.md
+│   │   └── benchmark/       # Evaluation datasets
+│   │       ├── DS-Decision.md
+│   │       ├── DS-CallPath.md
+│   │       ├── DS-Cross.md
+│   │       ├── DS-ADR.md
+│   │       ├── DS-Customer.md
+│   │       └── DS-DeadCode.md
+│   └── scene/
+├── skills/
+│   └── qa-dev/
+├── tools/
+│   └── cbmem-team/       # Team wrapper for codebase-memory-mcp
+│       ├── cmd/
+│       │   ├── cbmem-team/
+│       │   └── cbmem-mint-token/
+│       └── internal/
+│           ├── pool/
+│           ├── mcp/
+│           ├── auth/
+│           └── store/
+└── example/
+    └── ai-coding-boot/
+```
+
+## Resources
+
+- [MemPalace GitHub](https://github.com/MemPalace/mempalace)
+- [MemPalace Documentation](https://mempalaceofficial.com/)
+- [codebase-memory-mcp GitHub](https://github.com/DeusData/codebase-memory-mcp)
+- [codebase-memory-mcp npm](https://www.npmjs.com/package/codebase-memory-mcp)
+
+## License
+
+MIT License
+
+## Contributing
+
+Contributions are welcome! Please follow the SOP guidelines when contributing new scenarios, pipelines, or skills.
