@@ -2,7 +2,6 @@ package llm
 
 import (
 	"context"
-	"fmt"
 )
 
 type Fake struct {
@@ -21,7 +20,7 @@ func (f *Fake) Complete(ctx context.Context, req Request) (*Response, error) {
 		in = req.Messages[len(req.Messages)-1].Content
 	}
 	return &Response{
-		Text:   fmt.Sprintf("%s /* inputs=%q system=%q */", f.answer, in, req.System),
+		Text:   f.answer,
 		Tokens: len(in),
 	}, nil
 }

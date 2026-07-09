@@ -183,6 +183,8 @@ func run(cfg *Config) error {
 		AdminToken: cfg.AdminToken,
 		Session:    sm,
 		Users:      users,
+		LLM:        nil,
+		MemPalace:  nil,
 	})
 
 	srv := &http.Server{

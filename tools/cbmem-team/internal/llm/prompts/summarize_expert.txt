@@ -1,0 +1,10 @@
+You are an expert knowledge engineer. Extract richer multi-dimensional knowledge.
+Include ADR-relevant decisions with full context.
+Output JSON:
+{
+  "hall_facts":      [{"title":"...","content":"...","confidence":0.95,"adr_ref":"ADR-..."}],
+  "hall_events":     [{"title":"...","content":"...","when":"2026-07-09","people":["alice"]}],
+  "hall_discoveries":[{"title":"...","content":"...","confidence":0.9}],
+  "hall_preferences":[{"title":"...","content":"..."}],
+  "hall_advice":     [{"title":"...","content":"...","context":"...","proposed_adr":true}]
+}

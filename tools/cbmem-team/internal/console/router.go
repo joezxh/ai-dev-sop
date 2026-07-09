@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"cbmem-team/internal/llm"
 	"cbmem-team/internal/store"
 )
 
@@ -13,6 +14,8 @@ type MountConfig struct {
 	AdminToken string
 	Session    *SessionManager
 	Users      *store.Registry
+	LLM        llm.Provider
+	MemPalace  *llm.MemPalace
 }
 
 func Mount(r *gin.Engine, cfg MountConfig) {
@@ -52,4 +55,17 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	sessions.GET("", ListSessionsHandler(cfg.DB))
 	sessions.GET("/:id", SessionDetailHandler(cfg.DB))
 	protected.GET("/sessions-stats", SessionsStatsHandler(cfg.DB))
+
+	// Summarize route group requires an LLM provider. Without one
+	// (e.g. in unit tests / no-llm console) the routes are simply not
+	// mounted.
+	if cfg.LLM != nil {
+		summary := protected.Group("/summarize")
+		summary.POST("", SummarizeHandler(cfg.DB, cfg.LLM))
+		summary.GET("/:task_id", GetSummarizeHandler(cfg.DB))
+	}
+
+	// Distill routes (Task 14) are mounted when both an LLM provider and
+	// a MemPalace client are wired in.
+	_ = cfg.MemPalace
 }
