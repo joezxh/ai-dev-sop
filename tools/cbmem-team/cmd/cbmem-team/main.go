@@ -145,9 +145,21 @@ func run(cfg *Config) error {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "users": len(users.List())})
 	})
 
-	// MCP endpoint - per-user isolated stdio
+	// Console DB is needed by both the console routes AND the /mcp capture
+	// middleware, so open it before mounting either.
+	consoleDB, err := console.Open(filepath.Join(cfg.DataDir, "cbmem-team.db"))
+	if err != nil {
+		return fmt.Errorf("open console db: %w", err)
+	}
+	defer consoleDB.Close()
+
+	// MCP endpoint - per-user isolated stdio.
+	//
+	// Middleware order: JWT first (sets `user_id`), then CaptureSessions
+	// (reads body, replaces it with a replay-able reader, calls c.Next,
+	// then post-processes asynchronously).
 	mcpGroup := r.Group("/mcp")
-	mcpGroup.Use(jwtv.Middleware())
+	mcpGroup.Use(jwtv.Middleware(), console.CaptureSessions(consoleDB))
 	{
 		mcpGroup.POST("", mcp.Handler(p, users))
 		mcpGroup.POST("/", mcp.Handler(p, users))
@@ -163,12 +175,6 @@ func run(cfg *Config) error {
 		adminGroup.POST("/users/:id/token", mintTokenHandler(users, []byte(cfg.JWTSecret)))
 		adminGroup.GET("/stats", statsHandler(p, users))
 	}
-
-	consoleDB, err := console.Open(filepath.Join(cfg.DataDir, "cbmem-team.db"))
-	if err != nil {
-		return fmt.Errorf("open console db: %w", err)
-	}
-	defer consoleDB.Close()
 
 	sm := console.NewSessionManager(consoleDB, 8*time.Hour)
 

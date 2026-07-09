@@ -44,4 +44,12 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	projects.DELETE("/:id", DeleteProjectHandler(cfg.DB))
 	projects.GET("/:id/index-status", ProjectIndexStatusHandler(cfg.DB, nil))
 	projects.POST("/:id/reindex", ProjectReindexHandler(cfg.DB, nil))
+
+	// Sessions captured by CaptureSessions — list, detail, and dashboard
+	// stats. The stats endpoint is mounted on `protected` (NOT under
+	// /sessions) so the `:id` route above doesn't accidentally capture it.
+	sessions := protected.Group("/sessions")
+	sessions.GET("", ListSessionsHandler(cfg.DB))
+	sessions.GET("/:id", SessionDetailHandler(cfg.DB))
+	protected.GET("/sessions-stats", SessionsStatsHandler(cfg.DB))
 }
