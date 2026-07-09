@@ -29,4 +29,19 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	protected := api.Group("")
 	protected.Use(RequireSession(cfg.Session))
 	protected.GET("/me", MeHandler())
+
+	users := protected.Group("/users")
+	users.GET("", ListUsersHandler(cfg.Users))
+	users.POST("", CreateUserHandler(cfg.Users))
+	users.PUT("/:id", UpdateUserHandler(cfg.Users))
+	users.DELETE("/:id", DeleteUserHandler(cfg.Users))
+	users.POST("/:id/revoke", RevokeUserHandler(cfg.Users))
+
+	projects := protected.Group("/projects")
+	projects.GET("", ListProjectsHandler(cfg.DB))
+	projects.POST("", CreateProjectHandler(cfg.DB, nil))
+	projects.PUT("/:id", UpdateProjectHandler(cfg.DB))
+	projects.DELETE("/:id", DeleteProjectHandler(cfg.DB))
+	projects.GET("/:id/index-status", ProjectIndexStatusHandler(cfg.DB, nil))
+	projects.POST("/:id/reindex", ProjectReindexHandler(cfg.DB, nil))
 }
