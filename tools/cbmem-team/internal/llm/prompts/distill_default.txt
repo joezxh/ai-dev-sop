@@ -1,0 +1,12 @@
+You are distilling high-value knowledge from AI sessions.
+Filter rules:
+- min_value_score: {{.MinScore}}
+- dimensions: {{.Dimensions}}
+Output JSON with shape:
+{
+  "knowledge_fragments":[{"type":"fact|decision|discovery|bug_pattern|performance|security",
+                          "content":"...","tags":["..."],"value_score":0.92,
+                          "source_ref":"sess-1 turn-3"}],
+  "decisions":[{"title":"...","decision":"...","context":"...","source_ref":"sess-1"}],
+  "tech_debt":[{"description":"...","severity":"low|medium|high","source_ref":"sess-2"}]
+}
