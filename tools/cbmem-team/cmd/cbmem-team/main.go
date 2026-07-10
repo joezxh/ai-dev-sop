@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 
 	"cbmem-team/internal/auth"
 	"cbmem-team/internal/console"
+	"cbmem-team/internal/llm"
 	"cbmem-team/internal/mcp"
 	"cbmem-team/internal/pool"
 	"cbmem-team/internal/store"
@@ -39,35 +41,45 @@ import (
 
 func main() {
 	var (
-		listen    = flag.String("listen", ":8787", "HTTP listen address")
-		cfgFile   = flag.String("config", "/etc/cbmem-team/config.yaml", "config file path")
-		dataDir   = flag.String("data", "/var/lib/cbmem-team", "per-user data root")
-		mcpBin    = flag.String("mcp-bin", "/usr/local/bin/codebase-memory-mcp", "path to codebase-memory-mcp binary")
-		jwtSecret = flag.String("jwt-secret", "", "HMAC secret for JWT verification (overrides config)")
-		adminTok  = flag.String("admin-token", "", "admin token for /admin endpoints (overrides config)")
-		logLevel  = flag.String("log", "info", "log level: debug|info|warn|error")
+		listen        = flag.String("listen", ":8787", "HTTP listen address")
+		cfgFile       = flag.String("config", "/etc/cbmem-team/config.yaml", "config file path")
+		dataDir       = flag.String("data", "/var/lib/cbmem-team", "per-user data root")
+		mcpBin        = flag.String("mcp-bin", "/usr/local/bin/codebase-memory-mcp", "path to codebase-memory-mcp binary")
+		jwtSecret     = flag.String("jwt-secret", "", "HMAC secret for JWT verification (overrides config)")
+		adminTok      = flag.String("admin-token", "", "admin token for /admin endpoints (overrides config)")
+		logLevel      = flag.String("log", "info", "log level: debug|info|warn|error")
+		llmProvider   = flag.String("llm-provider", "fake", "llm provider: fake|openai|ollama")
+		llmModel      = flag.String("llm-model", "", "model name")
+		llmBaseURL    = flag.String("llm-base-url", "", "llm base url")
+		llmAPIKey     = flag.String("llm-api-key", "", "llm api key (optional for ollama)")
+		mempalaceBase = flag.String("mempalace-base", "", "mempalace http base url, empty disables integration")
+		consoleDist   = flag.String("console-dist", "", "path to vitepress build dist for console frontend")
 	)
 	flag.Parse()
 
 	cfg := loadConfig(*cfgFile)
-	if *listen != "" {
+	if *listen != "" && *listen != ":8787" {
 		cfg.Listen = *listen
 	}
-	if *dataDir != "" {
+	if *dataDir != "" && *dataDir != "/var/lib/cbmem-team" {
 		cfg.DataDir = *dataDir
 	}
-	if *mcpBin != "" {
+	if *mcpBin != "" && *mcpBin != "/usr/local/bin/codebase-memory-mcp" {
 		cfg.MCPBinary = *mcpBin
 	}
 	if *jwtSecret != "" {
 		cfg.JWTSecret = *jwtSecret
 	}
-	if *adminTok != "" {
-		cfg.AdminToken = *adminTok
-	}
+	cfg.AdminToken = *adminTok
 	if *logLevel != "" {
 		cfg.LogLevel = *logLevel
 	}
+	cfg.LLMProvider = *llmProvider
+	cfg.LLMModel = *llmModel
+	cfg.LLMBaseURL = *llmBaseURL
+	cfg.LLMAPIKey = *llmAPIKey
+	cfg.MemPalaceBase = *mempalaceBase
+	cfg.ConsoleDist = *consoleDist
 
 	if err := run(cfg); err != nil {
 		log.Fatalf("fatal: %v", err)
@@ -75,15 +87,21 @@ func main() {
 }
 
 type Config struct {
-	Listen     string         `yaml:"listen"`
-	DataDir    string         `yaml:"data_dir"`
-	MCPBinary  string         `yaml:"mcp_binary"`
-	JWTSecret  string         `yaml:"jwt_secret"`
-	AdminToken string         `yaml:"admin_token"`
-	LogLevel   string         `yaml:"log_level"`
-	Users      []store.User   `yaml:"users"`
-	IdleTTL    time.Duration  `yaml:"idle_ttl"`
-	MaxProcs   int            `yaml:"max_procs_per_user"`
+	Listen        string        `yaml:"listen"`
+	DataDir       string        `yaml:"data_dir"`
+	MCPBinary     string        `yaml:"mcp_binary"`
+	JWTSecret     string        `yaml:"jwt_secret"`
+	AdminToken    string        `yaml:"admin_token"`
+	LogLevel      string        `yaml:"log_level"`
+	LLMProvider   string        `yaml:"llm_provider"`
+	LLMModel      string        `yaml:"llm_model"`
+	LLMBaseURL    string        `yaml:"llm_base_url"`
+	LLMAPIKey     string        `yaml:"llm_api_key"`
+	MemPalaceBase string        `yaml:"mempalace_base"`
+	ConsoleDist   string        `yaml:"console_dist"`
+	Users         []store.User  `yaml:"users"`
+	IdleTTL       time.Duration `yaml:"idle_ttl"`
+	MaxProcs      int           `yaml:"max_procs_per_user"`
 }
 
 func loadConfig(path string) *Config {
@@ -178,14 +196,35 @@ func run(cfg *Config) error {
 
 	sm := console.NewSessionManager(consoleDB, 8*time.Hour)
 
+	var provider llm.Provider
+	switch strings.ToLower(cfg.LLMProvider) {
+	case "openai":
+		provider = llm.NewOpenAI(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
+	case "ollama":
+		provider = llm.NewOllama(cfg.LLMBaseURL, cfg.LLMModel)
+	default:
+		provider = llm.NewFake(`{"hall_facts":[],"hall_events":[],"hall_discoveries":[],"hall_preferences":[],"hall_advice":[]}`)
+	}
+	var mp *llm.MemPalace
+	if cfg.MemPalaceBase != "" {
+		mp = llm.NewMemPalace(cfg.MemPalaceBase, "")
+	}
+
 	console.Mount(r, console.MountConfig{
 		DB:         consoleDB,
 		AdminToken: cfg.AdminToken,
 		Session:    sm,
 		Users:      users,
-		LLM:        nil,
-		MemPalace:  nil,
+		LLM:        provider,
+		MemPalace:  mp,
 	})
+
+	if cfg.ConsoleDist != "" {
+		r.Static("/console", cfg.ConsoleDist)
+		r.GET("/console/*action", func(c *gin.Context) {
+			c.File(filepath.Join(cfg.ConsoleDist, "index.html"))
+		})
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
