@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,8 +21,23 @@ type MountConfig struct {
 
 func Mount(r *gin.Engine, cfg MountConfig) {
 	if cfg.DB != nil {
-		if err := cfg.DB.Migrate(context.Background()); err != nil {
+		// M2 schema registration is independent of M1: even if M1's
+		// tool_directory / tool_invocation_logs already exist, M2 just
+		// adds the two BP tables alongside.
+		if err := cfg.DB.Migrate(context.Background(), M1ExtraSchema(), M2ExtraSchema()); err != nil {
 			panic("console: migrate db: " + err.Error())
+		}
+		if n, err := SeedToolDirectory(context.Background(), cfg.DB); err != nil {
+			// best-effort: an empty catalog is still served by the API,
+			// it just returns []. Log and continue.
+			fmt.Printf("seed tool_directory: %v\n", err)
+		} else if n > 0 {
+			fmt.Printf("seeded %d tool_directory rows\n", n)
+		}
+		if n, err := SeedBPs(context.Background(), cfg.DB); err != nil {
+			fmt.Printf("seed best_practices: %v\n", err)
+		} else if n > 0 {
+			fmt.Printf("seeded %d best_practices rows\n", n)
 		}
 	}
 
@@ -55,6 +71,30 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	sessions.GET("", ListSessionsHandler(cfg.DB))
 	sessions.GET("/:id", SessionDetailHandler(cfg.DB))
 	protected.GET("/sessions-stats", SessionsStatsHandler(cfg.DB))
+
+	// M1: tool directory + invocation dashboard. Mounted under
+	// /api/console/v2/* so existing /api/console/* routes are not disturbed.
+	v2 := protected.Group("/v2")
+	{
+		v2.GET("/tools", ListToolsHandler(cfg.DB))
+		v2.GET("/invocations/recent", RecentInvocationsHandler(cfg.DB))
+		v2.GET("/dashboard/summary", DashboardSummaryHandler(cfg.DB))
+
+		// M2: best-practice CRUD + version history + association graph.
+		// Mounted under the same v2 namespace; the tool detail UI in M2
+		// will hit these via /api/console/v2/bps/*
+		bps := v2.Group("/bps")
+		{
+			bps.GET("", ListBPsHandler(cfg.DB))
+			bps.POST("", CreateBPHandler(cfg.DB))
+			bps.GET("/:id", GetBPHandler(cfg.DB))
+			bps.PUT("/:id", UpdateBPHandler(cfg.DB))
+			bps.POST("/:id/publish", PublishBPHandler(cfg.DB))
+			bps.GET("/:id/versions", ListBPVersionsHandler(cfg.DB))
+			bps.GET("/:id/versions/:n", GetBPVersionHandler(cfg.DB))
+			bps.GET("/:id/graph", BPGraphHandler(cfg.DB))
+		}
+	}
 
 	// Summarize route group requires an LLM provider. Without one
 	// (e.g. in unit tests / no-llm console) the routes are simply not
