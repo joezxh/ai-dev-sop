@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -80,6 +81,18 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		v2.GET("/invocations/recent", RecentInvocationsHandler(cfg.DB))
 		v2.GET("/dashboard/summary", DashboardSummaryHandler(cfg.DB))
 
+		// M2: per-tool rate-limit admin (T2.2). Six routes:
+		//   GET    /v2/rate-limits                     list all configured tools
+		//   GET    /v2/tools/:id/rate-limit            fetch single (or defaults)
+		//   PUT    /v2/tools/:id/rate-limit            overwrite
+		//   DELETE /v2/tools/:id/rate-limit            reset to defaults
+		//   POST   /v2/tools/:id/rate-limit/reset      force-clear in-memory state
+		v2.GET("/rate-limits", ListRateLimitsHandler(cfg.DB))
+		v2.GET("/tools/:id/rate-limit", GetRateLimitHandler(cfg.DB))
+		v2.PUT("/tools/:id/rate-limit", PutRateLimitHandler(cfg.DB))
+		v2.DELETE("/tools/:id/rate-limit", DeleteRateLimitHandler(cfg.DB))
+		v2.POST("/tools/:id/rate-limit/reset", ResetRateLimitHandler())
+
 		// M2: best-practice CRUD + version history + association graph.
 		// Mounted under the same v2 namespace; the tool detail UI in M2
 		// will hit these via /api/console/v2/bps/*
@@ -95,6 +108,12 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 			bps.GET("/:id/graph", BPGraphHandler(cfg.DB))
 		}
 	}
+
+	// M2 single-file UI. Public so a curl smoke can hit it without a
+	// login; the in-page API calls still hit /api/console/* which is
+	// session-protected.
+	r.GET("/ui/m2", func(c *gin.Context) { c.Redirect(http.StatusFound, "/ui/m2/") })
+	r.GET("/ui/m2/*filepath", StaticUIHandler())
 
 	// Summarize route group requires an LLM provider. Without one
 	// (e.g. in unit tests / no-llm console) the routes are simply not
