@@ -159,3 +159,10 @@ JSON bodies when you escape them via PowerShell. Either:
 | Auth model | Shared HS256 secret | Switch to per-user keys + Vault transit |
 | Index sharing | None (intentional) | Add `team_share: true` to enable a shared read-only SQLite mount |
 | High availability | Single instance | Sticky session load balancer (no shared state) |
+
+## Related docs
+
+- [`CONSOLE.md`](./CONSOLE.md) — admin console (CON-01..CON-07): users, projects,
+  sessions, summarize, distill, **workflows (M3)**, **repo pipelines (M4)**.
+- [`BUILD.md`](./BUILD.md) — build / cross-compile / release tarball.
+- [`cbmem-team-prd.md`](./cbmem-team-prd.md) — full product requirements.
