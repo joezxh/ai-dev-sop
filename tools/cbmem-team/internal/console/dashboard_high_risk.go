@@ -198,6 +198,14 @@ func HighRiskSummaryHandler(db *DB) gin.HandlerFunc {
 }
 
 // atoiOrDefault is a small helper for query-string ints.
+//
+// Returns def when:
+//   - the string is empty
+//   - any character is not 0-9
+//
+// Returns the parsed integer otherwise, including 0. The function does
+// not check for overflow — callers that need an upper bound should clamp
+// after this call (the M4 candidate handler clamps to [1,500]).
 func atoiOrDefault(s string, def int) int {
 	if s == "" {
 		return def
@@ -208,9 +216,6 @@ func atoiOrDefault(s string, def int) int {
 			return def
 		}
 		n = n*10 + int(ch-'0')
-	}
-	if n == 0 {
-		return def
 	}
 	return n
 }
