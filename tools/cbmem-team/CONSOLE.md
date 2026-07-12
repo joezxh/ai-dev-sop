@@ -113,6 +113,78 @@ cbmem-team \
 | `/api/console/distill/:task_id` | GET | 任务状态/结果 |
 | `/api/console/distill/:task_id/commit` | POST | 写入 MemPalace `{target_wing}` |
 
+### 工作流（CON-06 · M3）
+
+工作流是 console 端的「可发布 + 可执行」图节点序列，每个节点是
+一种 `kind`（`log` / `repo-pipeline` / `bp-candidate-review` 等）。
+内置 3 个工作流随迁移自动 seed；用户可创建 + publish 后通过
+`/run` 端到端触发。
+
+| Path | Method | 说明 |
+|------|--------|------|
+| `/api/console/v2/workflows` | GET | 列表（含内置 + 用户），`?category=&track=&status=` |
+| `/api/console/v2/workflows` | POST | 新建 `{name, category, track, entry_id, nodes[]}` |
+| `/api/console/v2/workflows/:id` | GET | 详情 |
+| `/api/console/v2/workflows/:id` | PUT | 更新节点图（仅 draft） |
+| `/api/console/v2/workflows/:id` | DELETE | 删除 |
+| `/api/console/v2/workflows/:id/publish` | POST | draft → published（只读图） |
+| `/api/console/v2/workflows/:id/archive` | POST | 归档 |
+| `/api/console/v2/workflows/:id/run` | POST | 同步执行，返回 `run_id` + `step_count` |
+
+内置工作流（`wf-*` 前缀，随 migration 自动 seed）：
+
+| ID | 名称 | 节点数 | 用途 |
+|----|------|--------|------|
+| `wf-commit-precheck` | Commit 前置检查 | 7 | 高风险提交前自动跑 7 步合规校验 |
+| `wf-adr-doublewrite` | ADR 双写 | 6 | 把 ADR 同时写到 MemPalace + 文件 |
+| `wf-repo-daily-sync` | 仓库每日同步 | 4 | 每日 cron 拉取 repo pipeline 增量 |
+
+### Repo Pipeline（CON-07 · M4）
+
+repo pipeline 把外部内容（本地 markdown / GitHub commit / RSS feed）
+通过 6 阶段 runtime（crawl → parse → grade → sink → rehearse）落地
+为 `bp_candidates`，由人工 review 后接受 / 拒绝 / 合并到
+`best_practices`。
+
+| Path | Method | 说明 |
+|------|--------|------|
+| `/api/console/v2/repos` | GET | 列表，?status=draft\|active\|archived |
+| `/api/console/v2/repos` | POST | 新建 `{name, source, target, cron_expr?, threshold?}` |
+| `/api/console/v2/repos/:id` | GET | 详情 |
+| `/api/console/v2/repos/:id` | PUT | 更新（仅 draft / archived） |
+| `/api/console/v2/repos/:id/activate` | POST | draft → active |
+| `/api/console/v2/repos/:id/archive` | POST | active → archived |
+| `/api/console/v2/repos/:id/run` | POST | 同步执行一次 pipeline |
+| `/api/console/v2/repos/:id/runs` | GET | 该 pipeline 的执行历史 |
+| `/api/console/v2/repos/runs/:run_id` | GET | 单次 run 的 stage 状态 + 计数 |
+| `/api/console/v2/repos/candidates` | GET | 候选 BP 列表（见下文） |
+| `/api/console/v2/repos/candidates/:id` | GET | 单条候选详情 |
+| `/api/console/v2/repos/candidates/:id/accept` | POST | 接受，状态变为 `accepted` |
+| `/api/console/v2/repos/candidates/:id/reject` | POST | 拒绝，状态变为 `rejected` |
+| `/api/console/v2/repos/candidates/:id/merge` | POST | 合并到 `best_practices` |
+
+`GET /api/console/v2/repos/candidates` 查询参数：
+
+| 参数 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| `status` | string | — | 精确匹配 `draft` / `accepted` / `rejected` / `merged` |
+| `pipeline_id` | string | — | 限制为某条 pipeline，例如 `?pipeline_id=rp-xxxxxxxx` |
+| `limit` | int | 50 | 分页大小，超出 [1,500] 强制回到 50 |
+
+返回结构：`{"candidates": [...], "count": N}`，按 `created_at DESC` 排序。
+
+示例：
+
+```bash
+# 列出某条 pipeline 当前所有的 draft 候选
+curl -b cookies.txt \
+  'http://127.0.0.1:8787/api/console/v2/repos/candidates?pipeline_id=rp-abc123&status=draft'
+
+# 全局最近 200 条候选（接受 / 拒绝 / 已合并）
+curl -b cookies.txt \
+  'http://127.0.0.1:8787/api/console/v2/repos/candidates?limit=200'
+```
+
 ## 统一响应格式
 
 ```json
