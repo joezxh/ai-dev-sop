@@ -2,20 +2,20 @@
 //
 // Coverage per the v2 plan §6.3 + §7.3:
 //
-//   [1] M3 workflow catalog: list returns 3 seeded built-ins (publish status)
-//   [2] create draft workflow + publish + run (depth 2 graph) → run row exists
-//   [3] all 3 built-in workflows run end-to-end (commit-precheck /
-//       adr-doublewrite / repo-daily-sync) — verify each writes a
-//       workflow_runs row
-//   [4] high-risk dashboard: feed a synthetic tool_invocation_logs row
-//       with affected_halls_json=[…] + error_code=UPSTREAM_ERROR →
-//       /v2/dashboard/high-risk returns it
-//   [5] ticket auto-open: /v2/tickets/auto-open creates a ticket with
-//       severity=critical (because halls+error_code)
-//   [6] M4 repo pipeline CRUD: create local-source pipeline pointing at
-//       a temp dir with README.md → activate → run → run row + ≥1
-//       bp_candidate row produced
-//   [7] bp_candidate review: accept / reject endpoints change status
+//	[1] M3 workflow catalog: list returns 3 seeded built-ins (publish status)
+//	[2] create draft workflow + publish + run (depth 2 graph) → run row exists
+//	[3] all 3 built-in workflows run end-to-end (commit-precheck /
+//	    adr-doublewrite / repo-daily-sync) — verify each writes a
+//	    workflow_runs row
+//	[4] high-risk dashboard: feed a synthetic tool_invocation_logs row
+//	    with affected_halls_json=[…] + error_code=UPSTREAM_ERROR →
+//	    /v2/dashboard/high-risk returns it
+//	[5] ticket auto-open: /v2/tickets/auto-open creates a ticket with
+//	    severity=critical (because halls+error_code)
+//	[6] M4 repo pipeline CRUD: create local-source pipeline pointing at
+//	    a temp dir with README.md → activate → run → run row + ≥1
+//	    bp_candidate row produced
+//	[7] bp_candidate review: accept / reject endpoints change status
 package main
 
 import (
@@ -25,6 +25,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -37,16 +38,25 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"cbmem-team/internal/devconf"
 )
 
 const (
 	bin        = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\cbmem-team.exe`
-	mysqlDSN   = `root:mediation123@tcp(127.0.0.1:3306)/cbmem?parseTime=true&loc=Local&charset=utf8mb4`
 	adminToken = "dev-admin-v7-2026"
 	jwtSecret  = "dev-secret-v7-7f8a-2026"
 )
 
+// mysqlDSN is resolved in main() from flag/env via internal/devconf so
+// CI / local devs can override without editing source.
+var mysqlDSN string
+
 func main() {
+	flagDSN := flag.String("mysql-dsn", "", "MySQL DSN; if empty, falls back to $CBMEM_MYSQL_DSN then $DSN then the dev default")
+	flag.Parse()
+	mysqlDSN = devconf.ResolveMySQLDSNWithDB(*flagDSN, devconf.DefaultDevMySQLDB)
+
 	listen := ":28797"
 	for _, p := range []string{":28791", ":28792", ":28793", ":28794", ":28795", ":28796", ":28797"} {
 		if isFreePort(p) {
@@ -122,10 +132,10 @@ func main() {
 	fmt.Println("[2] create + publish + run depth-2 workflow")
 	var newWF map[string]any
 	mustPostJSON(hc, baseURL+"/api/console/v2/workflows", map[string]any{
-		"name":        "e2e-v7 测试工作流",
-		"category":    "precheck",
-		"track":       "J",
-		"entry_id":    "n_a",
+		"name":     "e2e-v7 测试工作流",
+		"category": "precheck",
+		"track":    "J",
+		"entry_id": "n_a",
 		"nodes": []map[string]any{
 			{"id": "n_a", "kind": "log", "label": "start", "next": []string{"n_b"}},
 			{"id": "n_b", "kind": "log", "label": "done", "next": []string{}},
@@ -176,8 +186,8 @@ func main() {
 		fail("seed high-risk row: %v", err)
 	}
 	var hrList struct {
-		Count       int                      `json:"count"`
-		Invocations []map[string]any        `json:"invocations"`
+		Count       int              `json:"count"`
+		Invocations []map[string]any `json:"invocations"`
 	}
 	mustGetJSON(hc, baseURL+"/api/console/v2/dashboard/high-risk?limit=200", &hrList)
 	found := false
@@ -485,10 +495,10 @@ func resetSharedMySQL() {
 	db := openMysql()
 	defer db.Close()
 	tables := []string{
-		"bp_candidates",       // M4 sink output
-		"repo_pipeline_runs",  // M4 per-run counters
-		"repo_pipelines",      // M4 catalog (parent of runs)
-		"workflow_runs",       // M3 per-run counters
+		"bp_candidates",      // M4 sink output
+		"repo_pipeline_runs", // M4 per-run counters
+		"repo_pipelines",     // M4 catalog (parent of runs)
+		"workflow_runs",      // M3 per-run counters
 	}
 	for _, t := range tables {
 		if _, err := db.Exec("DELETE FROM " + t); err != nil {

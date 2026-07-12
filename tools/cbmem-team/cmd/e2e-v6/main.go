@@ -1,13 +1,13 @@
 // e2e-v6 — M2 验收脚本（Go 版）。
 //
 // 5 个检查点（spec §5.3 验收）：
-//   1. /v2/tools 返回 49 条
-//   2. 限流生效：把 qps_per_user 调到 1，立刻触发到第 2 次同 user 的
-//      tools/list → 应该看到 429（含 reason=qps + retry_after）
-//   3. 新增 BP：POST /v2/bps → 201，bp.id 以 "bp-" 开头
-//   4. 修订 BP：PUT /v2/bps/:id 改 body → 版本 +1 + bp_versions 多一行
-//   5. 关联图：GET /v2/bps/:id/graph → 节点包含中心 bp + ≥1 tool
-//   + UI: GET /ui/m2/ 返回 200 + 含 "cbmem-team · M2"
+//  1. /v2/tools 返回 49 条
+//  2. 限流生效：把 qps_per_user 调到 1，立刻触发到第 2 次同 user 的
+//     tools/list → 应该看到 429（含 reason=qps + retry_after）
+//  3. 新增 BP：POST /v2/bps → 201，bp.id 以 "bp-" 开头
+//  4. 修订 BP：PUT /v2/bps/:id 改 body → 版本 +1 + bp_versions 多一行
+//  5. 关联图：GET /v2/bps/:id/graph → 节点包含中心 bp + ≥1 tool
+//     + UI: GET /ui/m2/ 返回 200 + 含 "cbmem-team · M2"
 package main
 
 import (
@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -28,16 +29,25 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"cbmem-team/internal/devconf"
 )
 
 const (
 	bin        = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\cbmem-team.exe`
-	mysqlDSN   = `root:mediation123@tcp(127.0.0.1:3306)/cbmem?parseTime=true&loc=Local&charset=utf8mb4`
 	adminToken = "dev-admin-v6-2026"
 	jwtSecret  = "dev-secret-v6-7f8a-2026"
 )
 
+// mysqlDSN is resolved in main() from flag/env via internal/devconf so
+// CI / local devs can override without editing source.
+var mysqlDSN string
+
 func main() {
+	flagDSN := flag.String("mysql-dsn", "", "MySQL DSN; if empty, falls back to $CBMEM_MYSQL_DSN then $DSN then the dev default")
+	flag.Parse()
+	mysqlDSN = devconf.ResolveMySQLDSNWithDB(*flagDSN, devconf.DefaultDevMySQLDB)
+
 	// Pick free port
 	listen := ":28796"
 	for _, p := range []string{":28791", ":28792", ":28793", ":28794", ":28795", ":28796"} {
@@ -165,13 +175,13 @@ func main() {
 		Status  string `json:"status"`
 	}
 	mustPostJSON(hc, baseURL+"/api/console/v2/bps", map[string]any{
-		"title":       "e2e-v6 测试 BP",
-		"category":    "naming",
-		"track":       "J",
-		"body":        "## 场景\ne2e-v6 测试\n## 操作步骤\n1.\n## 验证\n## 注意事项\n## 协同使用",
-		"created_by":  "e2e-v6",
-		"priority":    "P3",
-		"tools":       []string{toolID},
+		"title":         "e2e-v6 测试 BP",
+		"category":      "naming",
+		"track":         "J",
+		"body":          "## 场景\ne2e-v6 测试\n## 操作步骤\n1.\n## 验证\n## 注意事项\n## 协同使用",
+		"created_by":    "e2e-v6",
+		"priority":      "P3",
+		"tools":         []string{toolID},
 		"related_halls": []string{"hall_facts"},
 	}, &newBP)
 	if !strings.HasPrefix(newBP.ID, "bp-") {

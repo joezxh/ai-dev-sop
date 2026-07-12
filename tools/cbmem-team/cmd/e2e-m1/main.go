@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -30,17 +31,27 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
+
+	"cbmem-team/internal/devconf"
 )
 
 const (
 	bin        = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\cbmem-team.exe`
 	sqlitePath = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\test-cbmem.db`
-	mysqlDSN   = `root:mediation123@tcp(127.0.0.1:3306)/cbmem?parseTime=true&loc=Local&charset=utf8mb4`
 	adminToken = "dev-admin-m1-2026"
 	jwtSecret  = "dev-secret-m1-7f8a-2026"
 )
 
+// mysqlDSN is resolved in main() from flag/env via internal/devconf.
+// Kept as a package-level var so the rest of the file keeps its const-style
+// reference shape.
+var mysqlDSN string
+
 func main() {
+	flagDSN := flag.String("mysql-dsn", "", "MySQL DSN; if empty, falls back to $CBMEM_MYSQL_DSN then $DSN then the dev default")
+	flag.Parse()
+	mysqlDSN = devconf.ResolveMySQLDSNWithDB(*flagDSN, devconf.DefaultDevMySQLDB)
+
 	// Pick a free listen port. We cycle through a small list so parallel
 	// CI runs don't collide.
 	tryPorts := []string{":28791", ":28792", ":28793", ":28794", ":28795"}
@@ -117,7 +128,9 @@ func main() {
 	// 4. Mint a real JWT for alice-0 using the same secret the server uses.
 	fmt.Println("[4] mint JWT + POST /mcp?transport=streamable")
 	token, err := mintJWT(jwtSecret, "alice-0", time.Hour)
-	if err != nil { fail("mint jwt: %v", err) }
+	if err != nil {
+		fail("mint jwt: %v", err)
+	}
 	authHeader := "Bearer " + token
 	fmt.Printf("    token preview: %s...\n", token[:48])
 
@@ -147,7 +160,7 @@ func main() {
 	// 6. drill into the most recent row
 	var (
 		lastUser, lastTool, lastTransport, lastError string
-		lastLatency                                 int
+		lastLatency                                  int
 	)
 	row := db.QueryRow(`SELECT user_id, tool_id, transport, IFNULL(latency_ms,0), IFNULL(error_code,'') FROM tool_invocation_logs ORDER BY started_at DESC LIMIT 1`)
 	if err := row.Scan(&lastUser, &lastTool, &lastTransport, &lastLatency, &lastError); err != nil {
@@ -199,7 +212,9 @@ func mintJWT(secret, sub string, ttl time.Duration) (string, error) {
 
 func snippet(s string) string {
 	s = strings.TrimSpace(s)
-	if len(s) > 100 { return s[:100] + "..." }
+	if len(s) > 100 {
+		return s[:100] + "..."
+	}
 	return s
 }
 
@@ -210,8 +225,12 @@ func rebuildServer() error {
 	// `bin` directory the e2e launches.
 	modRoot := filepath.Dir(filepath.Dir(bin))
 	prev, err := os.Getwd()
-	if err != nil { return err }
-	if err := os.Chdir(modRoot); err != nil { return err }
+	if err != nil {
+		return err
+	}
+	if err := os.Chdir(modRoot); err != nil {
+		return err
+	}
 	defer func() { _ = os.Chdir(prev) }()
 
 	cmd := exec.Command("go", "build", "-o", bin, "./cmd/cbmem-team/")
@@ -252,7 +271,9 @@ func waitForHealthz(timeout time.Duration, baseURL string) {
 			resp.Body.Close()
 			return
 		}
-		if resp != nil { resp.Body.Close() }
+		if resp != nil {
+			resp.Body.Close()
+		}
 		time.Sleep(200 * time.Millisecond)
 	}
 	fmt.Println("❌ timeout waiting for", baseURL+"/healthz")
@@ -269,7 +290,9 @@ func postRPC(url, authHeader, body string) (int, string) {
 		req.Header.Set("Authorization", authHeader)
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return 0, err.Error() }
+	if err != nil {
+		return 0, err.Error()
+	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
@@ -278,9 +301,13 @@ func postRPC(url, authHeader, body string) (int, string) {
 func postJSON(url, token, body string) (int, string) {
 	req, _ := http.NewRequest("POST", url, bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" { req.Header.Set("X-Admin-Token", token) }
+	if token != "" {
+		req.Header.Set("X-Admin-Token", token)
+	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return 0, err.Error() }
+	if err != nil {
+		return 0, err.Error()
+	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
@@ -296,9 +323,13 @@ func readSSE(url, authHeader string, timeout time.Duration) string {
 	req = req.WithContext(ctx)
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return "" }
+	if err != nil {
+		return ""
+	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 { return "" }
+	if resp.StatusCode != 200 {
+		return ""
+	}
 
 	r := bufio.NewReader(resp.Body)
 	line, _ := r.ReadString('\n')
@@ -312,10 +343,16 @@ func readSSE(url, authHeader string, timeout time.Duration) string {
 
 func openMysql() *sql.DB {
 	db, err := sql.Open("mysql", mysqlDSN)
-	if err != nil { fmt.Println("open mysql err:", err); os.Exit(1) }
+	if err != nil {
+		fmt.Println("open mysql err:", err)
+		os.Exit(1)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil { fmt.Println("ping mysql err:", err); os.Exit(1) }
+	if err := db.PingContext(ctx); err != nil {
+		fmt.Println("ping mysql err:", err)
+		os.Exit(1)
+	}
 	return db
 }
 
@@ -324,7 +361,9 @@ func clearMySQLM1Tables() {
 	defer db.Close()
 	for _, t := range []string{"tool_invocation_logs", "tool_directory"} {
 		_, err := db.Exec("DELETE FROM " + t)
-		if err != nil { fmt.Println("warn clear", t, ":", err) }
+		if err != nil {
+			fmt.Println("warn clear", t, ":", err)
+		}
 	}
 	// Drop tables so we can verify migrate-tables is idempotent + re-seeds.
 	db.Exec("DROP TABLE IF EXISTS tool_invocation_logs")
@@ -333,22 +372,36 @@ func clearMySQLM1Tables() {
 
 func httpGET(url, token string) (int, string) {
 	req, _ := http.NewRequest("GET", url, nil)
-	if token != "" { req.Header.Set("X-Admin-Token", token) }
+	if token != "" {
+		req.Header.Set("X-Admin-Token", token)
+	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return 0, err.Error() }
+	if err != nil {
+		return 0, err.Error()
+	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
 }
 
 func mustScan(row *sql.Row, dst ...any) {
-	if err := row.Scan(dst...); err != nil { fmt.Println("scan err:", err); os.Exit(1) }
+	if err := row.Scan(dst...); err != nil {
+		fmt.Println("scan err:", err)
+		os.Exit(1)
+	}
 }
 
-func must(err error) { if err != nil { fmt.Println("err:", err); os.Exit(1) } }
+func must(err error) {
+	if err != nil {
+		fmt.Println("err:", err)
+		os.Exit(1)
+	}
+}
 
 func killCmd(cmd *exec.Cmd) {
-	if cmd.Process == nil { return }
+	if cmd.Process == nil {
+		return
+	}
 	cmd.Process.Kill()
 	cmd.Wait()
 }

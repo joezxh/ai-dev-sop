@@ -5,19 +5,24 @@ package main
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"cbmem-team/internal/devconf"
 )
 
 func main() {
-	dsn := os.Getenv("DSN")
-	if dsn == "" {
-		dsn = "root:mediation123@tcp(127.0.0.1:3306)/?parseTime=true&loc=Local&charset=utf8mb4"
-	}
-	db, err := sql.Open("mysql", dsn)
+	flagDSN := flag.String("mysql-dsn", "", "MySQL DSN; if empty, falls back to $CBMEM_MYSQL_DSN then $DSN then "+devconf.DefaultDevMySQLDB+" default")
+	flag.Parse()
+
+	bootstrapDSN := devconf.ResolveMySQLDSN(*flagDSN)
+	cbmemDSN := devconf.ResolveMySQLDSNWithDB(*flagDSN, "cbmem")
+
+	db, err := sql.Open("mysql", bootstrapDSN)
 	if err != nil {
 		fmt.Println("open err:", err)
 		os.Exit(1)
@@ -46,7 +51,7 @@ func main() {
 	}
 
 	// Re-connect WITH the schema selected and verify
-	db2, err := sql.Open("mysql", "root:mediation123@tcp(127.0.0.1:3306)/cbmem?parseTime=true&loc=Local&charset=utf8mb4")
+	db2, err := sql.Open("mysql", cbmemDSN)
 	if err != nil {
 		fmt.Println("reopen err:", err)
 		os.Exit(3)

@@ -6,18 +6,21 @@ package main
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"cbmem-team/internal/devconf"
 )
 
 func main() {
-	dsn := os.Getenv("DSN")
-	if dsn == "" {
-		dsn = "root:mediation123@tcp(127.0.0.1:3306)/?parseTime=true&loc=Local&charset=utf8mb4"
-	}
+	flagDSN := flag.String("mysql-dsn", "", "MySQL DSN; if empty, falls back to $CBMEM_MYSQL_DSN then $DSN then the dev default")
+	flag.Parse()
+
+	dsn := devconf.ResolveMySQLDSN(*flagDSN)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		fmt.Println("open err:", err)

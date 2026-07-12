@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,19 +23,28 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
+
+	"cbmem-team/internal/devconf"
 )
 
 const (
 	bin        = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\cbmem-team.exe`
 	sqlitePath = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\test-cbmem.db`
-	mysqlDSN   = `root:mediation123@tcp(127.0.0.1:3306)/cbmem?parseTime=true&loc=Local&charset=utf8mb4`
 	adminToken = "dev-admin-token-e2e-v5-2026"
 	jwtSecret  = "dev-secret-e2e-v5-2026-7f8a"
 	listen     = ":18787"
 	dataDir    = `D:\projects\ai-dev-sop\tools\cbmem-team\bin\data-e2e`
 )
 
+// mysqlDSN is resolved in main() from flag/env via internal/devconf so
+// CI / local devs can override without editing source.
+var mysqlDSN string
+
 func main() {
+	flagDSN := flag.String("mysql-dsn", "", "MySQL DSN; if empty, falls back to $CBMEM_MYSQL_DSN then $DSN then the dev default")
+	flag.Parse()
+	mysqlDSN = devconf.ResolveMySQLDSNWithDB(*flagDSN, devconf.DefaultDevMySQLDB)
+
 	os.MkdirAll(dataDir, 0755)
 
 	// Seed SQLite test DB if missing (idempotent across runs)
