@@ -55,7 +55,7 @@ func main() {
 		case "mysql-ping":
 			os.Exit(runMySQLPing(os.Args[2:]))
 		case "help", "--help", "-h":
-			fmt.Println(usage)
+			fmt.Print(usage)
 			os.Exit(0)
 		default:
 			fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n\n%s\n", os.Args[1], usage)
