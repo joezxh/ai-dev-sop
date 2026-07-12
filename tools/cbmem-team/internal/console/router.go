@@ -18,6 +18,11 @@ type MountConfig struct {
 	Users      *store.Registry
 	LLM        llm.Provider
 	MemPalace  *llm.MemPalace
+
+	// CORS, when non-nil, is mounted on the /api/console group only.
+	// /healthz and other root-level routes are intentionally left untouched
+	// so internal health checks remain CORS-free.
+	CORS gin.HandlerFunc
 }
 
 func Mount(r *gin.Engine, cfg MountConfig) {
@@ -48,6 +53,9 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	}
 
 	api := r.Group("/api/console")
+	if cfg.CORS != nil {
+		api.Use(cfg.CORS)
+	}
 	api.POST("/login", LoginHandler(cfg.AdminToken, cfg.Session))
 	api.POST("/logout", RequireSession(cfg.Session), RequireCSRF(), LogoutHandler(cfg.Session))
 

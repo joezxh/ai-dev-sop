@@ -33,6 +33,7 @@ import (
 
 	"cbmem-team/internal/auth"
 	"cbmem-team/internal/console"
+	"cbmem-team/internal/httpsrv/middleware"
 	"cbmem-team/internal/llm"
 	"cbmem-team/internal/mcp"
 	"cbmem-team/internal/pool"
@@ -110,6 +111,8 @@ func runServe(args []string) int {
 		mysqlMaxOpen  = fs.Int("mysql-max-open", 16, "MySQL max open conns")
 		mysqlMaxIdle  = fs.Int("mysql-max-idle", 4, "MySQL max idle conns")
 		mysqlMaxLife  = fs.Duration("mysql-max-lifetime", 30*time.Minute, "MySQL conn max lifetime")
+		corsOrigins   = fs.String("cors-allow-origins", "*",
+			"Comma-separated CORS origin whitelist for /api/console. Use '*' for dev only; pass an empty string to disable CORS.")
 	)
 	_ = fs.Parse(args)
 
@@ -140,6 +143,7 @@ func runServe(args []string) int {
 	cfg.MySQLMaxOpen = *mysqlMaxOpen
 	cfg.MySQLMaxIdle = *mysqlMaxIdle
 	cfg.MySQLMaxLife = *mysqlMaxLife
+	cfg.CORSOrigins = *corsOrigins
 
 	if err := run(cfg); err != nil {
 		log.Printf("fatal: %v", err)
@@ -247,6 +251,17 @@ type Config struct {
 	MySQLMaxOpen  int           `yaml:"mysql_max_open"`
 	MySQLMaxIdle  int           `yaml:"mysql_max_idle"`
 	MySQLMaxLife  time.Duration `yaml:"mysql_max_lifetime"`
+	CORSOrigins   string        `yaml:"cors_allow_origins"`
+}
+
+// splitCORSOrigins converts the -cors-allow-origins flag into the slice
+// shape middleware.CORS expects. The empty string yields a nil slice so
+// the middleware treats CORS as disabled.
+func splitCORSOrigins(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	return strings.Split(raw, ",")
 }
 
 func loadConfig(path string) *Config {
@@ -391,6 +406,7 @@ func run(cfg *Config) error {
 		Users:      users,
 		LLM:        provider,
 		MemPalace:  mp,
+		CORS:       middleware.CORS(splitCORSOrigins(cfg.CORSOrigins)),
 	})
 
 	if cfg.ConsoleDist != "" {
