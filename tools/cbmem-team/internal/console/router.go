@@ -175,9 +175,21 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		summary := protected.Group("/summarize")
 		summary.POST("", SummarizeHandler(cfg.DB, cfg.LLM))
 		summary.GET("/:task_id", GetSummarizeHandler(cfg.DB))
-	}
 
-	// Distill routes (Task 14) are mounted when both an LLM provider and
-	// a MemPalace client are wired in.
-	_ = cfg.MemPalace
+		// Distill routes (Task 14). Mounted whenever an LLM provider is
+		// wired up — the LLM is the only required dependency. The
+		// MemPalace client is only used by the commit step (POST .../commit),
+		// so absent MemPalace that single endpoint 503s rather than the
+		// whole group disappearing.
+		distill := protected.Group("/distill")
+		distill.POST("", DistillHandler(cfg.DB, cfg.LLM, cfg.MemPalace))
+		distill.GET("/:task_id", GetDistillHandler(cfg.DB))
+		if cfg.MemPalace != nil {
+			distill.POST("/:task_id/commit", CommitDistillHandler(cfg.DB, cfg.MemPalace))
+		} else {
+			distill.POST("/:task_id/commit", func(c *gin.Context) {
+				Fail(c, http.StatusServiceUnavailable, 5000003, "mempalace client not configured")
+			})
+		}
+	}
 }
