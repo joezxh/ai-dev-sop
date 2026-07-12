@@ -150,7 +150,9 @@ func main() {
 		lastLatency                                 int
 	)
 	row := db.QueryRow(`SELECT user_id, tool_id, transport, IFNULL(latency_ms,0), IFNULL(error_code,'') FROM tool_invocation_logs ORDER BY started_at DESC LIMIT 1`)
-	mustScan(row, &lastUser, &lastTool, &lastTransport, &lastLatency, &lastError)
+	if err := row.Scan(&lastUser, &lastTool, &lastTransport, &lastLatency, &lastError); err != nil {
+		fail("scan last log row: %v", err)
+	}
 	fmt.Printf("    last row: user=%s tool=%s transport=%s latency=%dms err=%q\n",
 		lastUser, lastTool, lastTransport, lastLatency, lastError)
 	if lastUser != "alice-0" {

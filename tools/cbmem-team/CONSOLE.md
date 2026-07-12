@@ -138,6 +138,38 @@ cbmem-team 在 MCP handler 外包一层 capture middleware，自动采集：
 - 采集触发：JSON-RPC `initialize` / `tools/call` 含 `messages/create`
 - session 复用策略：`(user_id, project_path)` 30 分钟内有最近 session 则复用
 
+## 数据库（SQLite · MySQL 双轨）
+
+cbmem-team 支持两种后端，通过启动 flag 切换：
+
+| 后端 | 启用方式 | 何时用 |
+|------|---------|--------|
+| **SQLite**（默认） | 不设 `-mysql-dsn` flag | 单机 / 开发 / 小团队 |
+| **MySQL 8.0** | `-mysql-dsn <dsn>` | 生产 / 多实例 / 高并发 |
+
+**两套 systemd 单元**：
+- `deploy/cbmem-team.service`（旧 v2）—— SQLite 路径，仍保留作为**回退**（7 天窗口）
+- `deploy/cbmem-team-mysql.service`（v3）—— MySQL 路径，**生产主用**
+
+### MySQL 部署清单
+
+1. 起 MySQL：`cd tools/cbmem-team/deploy && docker compose -f docker-compose.mysql.yml up -d`
+2. 写 DSN：`sudo cp deploy/mysql.env.example /etc/cbmem-team/mysql.env && sudo chmod 0600 /etc/cbmem-team/mysql.env`
+3. 改 `/etc/cbmem-team/mysql.env` 中 `CBMEM_MYSQL_PASSWORD` 为强随机串
+4. 建表：`cbmem-team migrate-tables -mysql-dsn "$(grep CBMEM_MYSQL_DSN /etc/cbmem-team/mysql.env | cut -d= -f2)"`
+5. ETL（首次迁移）：`./examples/mysql-etl.sh --mysql-dsn "$(grep CBMEM_MYSQL_DSN /etc/cbmem-team/mysql.env | cut -d= -f2)"`
+6. 切换：`sudo systemctl disable cbmem-team && sudo systemctl enable --now cbmem-team-mysql`
+7. 装 cron：`sudo cp examples/mysql-backup.sh /etc/cron.daily/cbmem-mysql-backup`
+
+### 7 天回退窗口
+
+`cbmem-team` 二进制启动时**只读** `-data` 中 `cbmem-team.db`。任何时候：
+```bash
+sudo systemctl stop cbmem-team-mysql
+sudo systemctl start cbmem-team    # SQLite 旧单元，无 -mysql-dsn flag
+```
+即可瞬时回退到 SQLite，验证后再切回 MySQL。
+
 ## 数据库表
 
 | 表名 | 用途 |

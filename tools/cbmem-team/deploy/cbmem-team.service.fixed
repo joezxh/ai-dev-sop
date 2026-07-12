@@ -1,0 +1,22 @@
+[Unit]
+Description=cbmem-team
+After=network-online.target
+
+[Service]
+Type=simple
+User=cbmem
+Group=cbmem
+EnvironmentFile=/etc/cbmem-team/cbmem-team.env
+ExecStart=/usr/local/bin/cbmem-team -listen :8787 -data /var/lib/cbmem-team -mcp-bin /home/tianque/codebase-memory-mcp -jwt-secret $JWT_SECRET -admin-token $ADMIN_TOKEN -log info
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cbmem-team /var/log/cbmem-team
+PrivateTmp=true
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

@@ -86,6 +86,35 @@ func StreamableHandler(p *pool.Pool, users *store.Registry, repos *repos.Manager
 			return
 		}
 
+		// Rate-limit gate. We compute the tool_id from the JSON-RPC body
+		// (params.name for the methods/call envelope) so per-tool
+		// counters are accurate. Falls back to "unknown" for non-tool
+		// RPCs (initialize, ping) which still count toward a single
+		// shared bucket so a runaway client can't bypass limits by
+		// spamming pings.
+		toolID := jsonRPCMethod(body)
+		if toolID == "" {
+			toolID = "unknown"
+		}
+		if db != nil {
+			rl := console.Check(c.Request.Context(), db, toolID, userID)
+			if !rl.Allowed {
+				// 429 for short-term throttles, 503 for breaker open.
+				status := http.StatusTooManyRequests
+				if rl.Reason == "breaker" {
+					status = http.StatusServiceUnavailable
+				}
+				c.Header("Retry-After", fmt.Sprintf("%d", int(rl.RetryAfter.Seconds()+0.999)))
+				c.JSON(status, gin.H{
+					"error":       "rate limited",
+					"reason":      rl.Reason,
+					"retry_after": rl.RetryAfter.String(),
+					"tool_id":     toolID,
+				})
+				return
+			}
+		}
+
 		// Start timing + write to tool_invocation_logs on completion.
 		inv := newInvocation("streamable", userID, project, body, c)
 		started := time.Now()
@@ -94,6 +123,14 @@ func StreamableHandler(p *pool.Pool, users *store.Registry, repos *repos.Manager
 		ended := time.Now()
 
 		inv.markComplete(resp, err, ended.Sub(started))
+
+		// Feed the breaker.
+		if err != nil {
+			console.ObserveError(toolID, userID)
+		} else {
+			console.ObserveSuccess(toolID, userID)
+		}
+		console.Release(toolID, userID)
 
 		// Streamable is self-persisting; the CaptureInvocations
 		// middleware skips us via the skip_capture_invocations sentinel.

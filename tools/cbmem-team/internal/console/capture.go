@@ -66,7 +66,7 @@ func fmtHex(n uint64) string {
 type captureJSONRPC struct {
 	Method string `json:"method"`
 	Params struct {
-		Name string `json:"name"`
+		Name      string `json:"name"`
 		Arguments struct {
 			Messages []struct {
 				Role    string `json:"role"`
@@ -110,6 +110,9 @@ func CaptureSessions(db *DB) gin.HandlerFunc {
 			return
 		}
 		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		// Stash a copy for downstream middlewares (e.g. M1's
+		// CaptureInvocations needs the body to build tool_id / args_json).
+		c.Set("captured_body", body)
 		c.Next()
 
 		if c.Writer.Status() != 200 {

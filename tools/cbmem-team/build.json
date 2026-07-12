@@ -1,0 +1,27 @@
+{
+  "name": "cbmem-team",
+  "version": "0.1.0",
+  "description": "HTTP multi-user wrapper around codebase-memory-mcp",
+  "main": "cmd/cbmem-team/main.go",
+  "module": "cbmem-team",
+  "go_version": "1.22",
+  "binaries": [
+    {
+      "name": "cbmem-team",
+      "path": "cmd/cbmem-team"
+    },
+    {
+      "name": "cbmem-mint-token",
+      "path": "cmd/cbmem-mint-token"
+    }
+  ],
+  "dependencies": [
+    "github.com/gin-gonic/gin"
+  ],
+  "build": {
+    "CGO_ENABLED": "0",
+    "GOOS": "linux",
+    "GOARCH": "amd64",
+    "ldflags": "-s -w"
+  }
+}

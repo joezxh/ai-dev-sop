@@ -25,7 +25,7 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		// M2 schema registration is independent of M1: even if M1's
 		// tool_directory / tool_invocation_logs already exist, M2 just
 		// adds the two BP tables alongside.
-		if err := cfg.DB.Migrate(context.Background(), M1ExtraSchema(), M2ExtraSchema()); err != nil {
+		if err := cfg.DB.Migrate(context.Background(), M1ExtraSchema(), M2ExtraSchema(), M3ExtraSchema(), M4ExtraSchema()); err != nil {
 			panic("console: migrate db: " + err.Error())
 		}
 		if n, err := SeedToolDirectory(context.Background(), cfg.DB); err != nil {
@@ -39,6 +39,11 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 			fmt.Printf("seed best_practices: %v\n", err)
 		} else if n > 0 {
 			fmt.Printf("seeded %d best_practices rows\n", n)
+		}
+		if n, err := SeedWorkflows(context.Background(), cfg.DB); err != nil {
+			fmt.Printf("seed workflows: %v\n", err)
+		} else if n > 0 {
+			fmt.Printf("seeded %d workflow rows\n", n)
 		}
 	}
 
@@ -106,6 +111,54 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 			bps.GET("/:id/versions", ListBPVersionsHandler(cfg.DB))
 			bps.GET("/:id/versions/:n", GetBPVersionHandler(cfg.DB))
 			bps.GET("/:id/graph", BPGraphHandler(cfg.DB))
+		}
+
+		// M3: workflow CRUD + run/simulate + impact dashboard + tickets.
+		// All routes live under the existing v2 namespace; the editor UI
+		// (planned for a separate delivery) hits these endpoints.
+		wfs := v2.Group("/workflows")
+		{
+			wfs.GET("", ListWorkflowsHandler(cfg.DB))
+			wfs.POST("", CreateWorkflowHandler(cfg.DB))
+			wfs.GET("/:id", GetWorkflowHandler(cfg.DB))
+			wfs.PUT("/:id", UpdateWorkflowHandler(cfg.DB))
+			wfs.POST("/:id/publish", PublishWorkflowHandler(cfg.DB))
+			wfs.POST("/:id/archive", ArchiveWorkflowHandler(cfg.DB))
+			wfs.POST("/:id/run", RunWorkflowHandler(cfg.DB))
+			wfs.GET("/:id/runs", ListWorkflowRunsHandler(cfg.DB))
+		}
+
+		v2.GET("/dashboard/high-risk", HighRiskDashboardHandler(cfg.DB))
+		v2.GET("/dashboard/high-risk/summary", HighRiskSummaryHandler(cfg.DB))
+
+		tickets := v2.Group("/tickets")
+		{
+			tickets.GET("", ListTicketsHandler(cfg.DB))
+			tickets.POST("", CreateTicketHandler(cfg.DB))
+			tickets.POST("/auto-open", AutoOpenTicketHandler(cfg.DB))
+			tickets.GET("/:id", GetTicketHandler(cfg.DB))
+			tickets.POST("/:id/resolve", ResolveTicketHandler(cfg.DB))
+			tickets.POST("/:id/wont-fix", WontFixTicketHandler(cfg.DB))
+		}
+
+		// M4: repo pipeline CRUD + run/simulate + bp_candidates review.
+		rpRuntime := DefaultRuntime()
+		repos := v2.Group("/repos")
+		{
+			repos.GET("", ListRepoPipelinesHandler(cfg.DB))
+			repos.POST("", CreateRepoPipelineHandler(cfg.DB))
+			repos.GET("/runs/:run_id", GetRepoPipelineRunHandler(cfg.DB))
+			repos.GET("/candidates", ListBPCandidatesHandler(cfg.DB))
+			repos.GET("/candidates/:id", GetBPCandidateHandler(cfg.DB))
+			repos.POST("/candidates/:id/accept", AcceptBPCandidateHandler(cfg.DB))
+			repos.POST("/candidates/:id/reject", RejectBPCandidateHandler(cfg.DB))
+			repos.POST("/candidates/:id/merge", MergeBPCandidateHandler(cfg.DB))
+			repos.GET("/:id", GetRepoPipelineHandler(cfg.DB))
+			repos.PUT("/:id", UpdateRepoPipelineHandler(cfg.DB))
+			repos.POST("/:id/activate", ActivateRepoPipelineHandler(cfg.DB))
+			repos.POST("/:id/archive", ArchiveRepoPipelineHandler(cfg.DB))
+			repos.POST("/:id/run", RunRepoPipelineHandler(cfg.DB, rpRuntime))
+			repos.GET("/:id/runs", ListRepoPipelineRunsHandler(cfg.DB))
 		}
 	}
 

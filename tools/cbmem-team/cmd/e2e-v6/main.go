@@ -67,7 +67,7 @@ func main() {
 		"-admin-token", adminToken,
 		"-jwt-secret", jwtSecret,
 		"-mysql-dsn", mysqlDSN,
-		"-mcp-bin", "/usr/local/bin/codebase-memory-mcp",
+		"-mcp-bin", mcpStubPath(),
 		"-log", "info")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -262,6 +262,14 @@ func wipeVolatileTables() {
 	// its own row. tool_directory count is ≥49 because seed skipped.
 }
 
+// rebuildServer builds both the main cbmem-team binary and the mcp-stub
+// binary that the test points -mcp-bin at. The stub is a tiny stdio MCP
+// responder (see cmd/mcp-stub/main.go) — using it instead of the real
+// /usr/local/bin/codebase-memory-mcp means:
+//   - the e2e doesn't require that path to exist on the host;
+//   - tools/call takes ~200ms so concurrent calls on the same
+//     (user, tool_id) bucket overlap, letting the rate limiter actually
+//     observe concurrent arrivals and return 429.
 func rebuildServer() error {
 	modRoot := filepath.Dir(filepath.Dir(bin))
 	prev, err := os.Getwd()
@@ -272,10 +280,26 @@ func rebuildServer() error {
 		return err
 	}
 	defer func() { _ = os.Chdir(prev) }()
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/cbmem-team/")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	for _, pkg := range []string{"./cmd/cbmem-team/", "./cmd/mcp-stub/"} {
+		out := bin
+		if pkg == "./cmd/mcp-stub/" {
+			out = mcpStubPath()
+		}
+		cmd := exec.Command("go", "build", "-o", out, pkg)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// mcpStubPath is the on-disk path the server's -mcp-bin flag will point
+// at. We keep it next to the server binary so cleanup is trivial.
+func mcpStubPath() string {
+	stub := filepath.Join(filepath.Dir(bin), "mcp-stub.exe")
+	return stub
 }
 
 func isFreePort(addr string) bool {
