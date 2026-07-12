@@ -3,15 +3,66 @@
 > **版本**：v2（M3+M4 已合并 / 双轨数据库）
 > **适用读者**：运维 / 开发 / 客户端集成方
 > **前置阅读**：[`README.md`](./README.md)（架构图）、[`CONSOLE.md`](./CONSOLE.md)（控制台 API 速查）、[`BUILD.md`](./BUILD.md)（构建+部署）
+> **英文版**: [`manual.en.md`](./manual.en.md)（English version, also canonical)
 
 本文档面向**动手操作**——把项目从零启动到完整运行，按 5 个使用场景组织：
 
-1. [快速上手](#1-快速上手) — 5 分钟跑起来
-2. [前台 + 后台启动指南](#2-前台--后台启动指南) — 含 systemd / foreground / Docker
-3. [MCP 服务配置与连接](#3-mcp-服务配置与连接) — Cursor / Claude / Qoder
-4. [命令行工具总览](#4-命令行工具总览) — `cmd/` 下每个工具的功能、flag、用法
-5. [功能特性全景](#5-功能特性全景) — 按 M0..M4 里程碑的模块清单
-6. [常见问题排查 FAQ](#6-常见问题排查-faq)
+## 📑 目录
+
+- [1. 快速上手](#1-快速上手)
+  - [1.1 前置条件](#11-前置条件)
+  - [1.2 第一次启动（开发机 + SQLite 默认）](#12-第一次启动开发机--sqlite-默认)
+  - [1.3 健康检查](#13-健康检查)
+  - [1.4 创建第一个用户并签发 token](#14-创建第一个用户并签发-token)
+- [2. 前台 + 后台启动指南](#2-前台--后台启动指南)
+  - [2.1 启动模式总览](#21-启动模式总览)
+  - [2.2 前台模式（开发 / 调试）](#22-前台模式开发--调试)
+    - [2.2.1 必需 flag](#221-必需-flag)
+    - [2.2.2 可选 flag](#222-可选-flag)
+    - [2.2.3 完整开发机启动示例（SQLite 路径）](#223-完整开发机启动示例sqlite-路径)
+    - [2.2.4 完整生产机启动示例（MySQL 路径）](#224-完整生产机启动示例mysql-路径)
+  - [2.3 后台 systemd 部署（推荐生产）](#23-后台-systemd-部署推荐生产)
+  - [2.4 子命令（管理类，非 serve）](#24-子命令管理类非-serve)
+  - [2.5 构建产物说明](#25-构建产物说明)
+- [3. MCP 服务配置与连接](#3-mcp-服务配置与连接)
+  - [3.1 Cursor 客户端配置](#31-cursor-客户端配置)
+  - [3.2 Claude Desktop 客户端配置](#32-claude-desktop-客户端配置)
+  - [3.3 离线签发 JWT（不暴露 /admin）](#33-离线签发-jwt不暴露-admin)
+  - [3.4 端到端连通性验证](#34-端到端连通性验证)
+- [4. 命令行工具总览](#4-命令行工具总览)
+  - [4.1 生产级工具（部署到服务器）](#41-生产级工具部署到服务器)
+  - [4.2 运维 / 迁移工具（部署期 / 切换期使用）](#42-运维--迁移工具部署期--切换期使用)
+  - [4.3 端到端测试工具（仅 dev / CI）](#43-端到端测试工具仅-dev--ci)
+  - [4.4 调试工具](#44-调试工具)
+  - [4.5 Dev 工具（仅本地）](#45-dev-工具仅本地)
+  - [4.6 工具速查表](#46-工具速查表)
+- [5. 功能特性全景](#5-功能特性全景)
+  - [5.1 M0 — 基础 HTTP wrapper](#51-m0--基础-http-wrapper)
+  - [5.2 M0.5 — SQLite ↔ MySQL 双轨](#52-m05--sqlite--mysql-双轨)
+  - [5.3 M1 — 工具目录 + 调用日志（CON-01）](#53-m1--工具目录--调用日志con-01)
+  - [5.4 M2 — 工具限流 + Best Practices CRUD（CON-02）](#54-m2--工具限流--best-practices-crudcon-02)
+  - [5.5 M3 — 工作流引擎（CON-06）](#55-m3--工作流引擎con-06)
+  - [5.6 M4 — Repo Pipeline + BP Candidates（CON-07）](#56-m4--repo-pipeline--bp-candidatescon-07)
+  - [5.7 控制台前端（/console/）](#57-控制台前端console)
+  - [5.8 通用功能](#58-通用功能)
+- [6. 常见问题排查 FAQ](#6-常见问题排查-faq)
+  - [Q1: 编译报 undefined](#faq-q1)
+  - [Q2: MySQL 1061](#faq-q2)
+  - [Q3: 字符序](#faq-q3)
+  - [Q4: 401](#faq-q4)
+  - [Q5: Cursor 连不上](#faq-q5)
+  - [Q6: SQLite 锁死](#faq-q6)
+  - [Q7: 切换丢数据](#faq-q7)
+  - [Q8: ProtectHome](#faq-q8)
+  - [Q9: PowerShell curl](#faq-q9)
+  - [Q10: e2e 真伪](#faq-q10)
+  - [Q11: 磁盘](#faq-q11)
+  - [Q12: 自定义 BP](#faq-q12)
+  - [Q13: 传输失败](#faq-q13)
+  - [Q14: VitePress](#faq-q14)
+- [附录 A：环境变量与配置文件](#附录-a环境变量与配置文件)
+- [附录 B：相关文档](#附录-b相关文档)
+- [附录 C：版本与变更](#附录-c版本与变更)
 
 ---
 
@@ -608,6 +659,7 @@ CBMEM_MYSQL_DSN="..." go run ./cmd/e2e-v7   # 通过 env 覆盖
 
 ## 6. 常见问题排查 FAQ
 
+<a id="faq-q1"></a>
 ### Q1：编译报 `undefined: requestLogger` / `refreshTokenHandler` 等
 
 **原因**：GoLand 的 Run/Debug Configuration 用了单文件路径：
@@ -622,18 +674,21 @@ go build -o xxx main.go    # ❌ 只编译 main.go
 go build -o bin/cbmem-team ./cmd/cbmem-team    # ✅ 整包编译
 ```
 
+<a id="faq-q2"></a>
 ### Q2：MySQL 报错 `ERROR 1061 (42000): duplicate key name`
 
 **原因**：`CREATE INDEX IF NOT EXISTS` 在 MySQL 8.0 上不支持；重复跑 `schema-mysql.sql` 会撞同名索引。
 
 **修法**：直接用 `cbmem-team migrate-tables -mysql-dsn <dsn>`（它会先 `information_schema.statistics` 探测）；`schema-mysql.sql` 仅用于**全新数据库**。
 
+<a id="faq-q3"></a>
 ### Q3：MySQL `utf8mb4_0900_ai_ci` vs `utf8mb4_unicode_ci` 字符序不对齐
 
 **原因**：MySQL 8.0 默认 `utf8mb4_0900_ai_ci`，我们的 schema 强制 `utf8mb4_unicode_ci`。
 
 **修法**：在 `CREATE DATABASE` 后立即 `ALTER DATABASE cbmem CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`（`create-db` 工具已自动做这件事）。
 
+<a id="faq-q4"></a>
 ### Q4：`/mcp` 报 401 Unauthorized
 
 **排查路径**：
@@ -643,6 +698,7 @@ go build -o bin/cbmem-team ./cmd/cbmem-team    # ✅ 整包编译
 3. **JWT subject 是否是注册用户**：sub claim 必须在 `users` 表存在
 4. **admin token 不是这里用的**：`/mcp` 用的是用户 JWT，不是 `-admin-token`
 
+<a id="faq-q5"></a>
 ### Q5：Cursor 客户端连不上
 
 **排查路径**：
@@ -653,6 +709,7 @@ go build -o bin/cbmem-team ./cmd/cbmem-team    # ✅ 整包编译
 4. **URL 参数顺序**：`?as=alice&project=/code/foo`，**不能颠倒**——server 端严格按 query 解析
 5. **TLS**：Cursor 走 http（明文）也可以，但生产必须 https
 
+<a id="faq-q6"></a>
 ### Q6：SQLite 数据库锁死 / 写入超时
 
 **原因**：SQLite 单写者；并发 8 线程以上会触发 `database is locked`。
@@ -662,12 +719,14 @@ go build -o bin/cbmem-team ./cmd/cbmem-team    # ✅ 整包编译
 - **临时**：拉高 `busy_timeout`（默认 5s，可在 `-data` 同级加 PRAGMA）
 - **永久**：切到 MySQL 后端（`-mysql-dsn`）
 
+<a id="faq-q7"></a>
 ### Q7：MySQL 后端切回 SQLite 时丢数据
 
 **原因**：MySQL 写入不会回写 SQLite；切回 SQLite 后看到的是切换前的 SQLite 快照。
 
 **修法**：先 `migrate-sqlite-to-mysql` 反向 ETL（如果写了反向）；或保持 MySQL 单轨。
 
+<a id="faq-q8"></a>
 ### Q8：`codebase-memory-mcp` 在 `$HOME` 下时 systemd `ProtectHome=true` 启动失败
 
 **原因**：systemd unit 默认拒绝访问 `/home/<user>`；`codebase-memory-mcp` 二进制在那里就 exec 不到。
@@ -677,6 +736,7 @@ go build -o bin/cbmem-team ./cmd/cbmem-team    # ✅ 整包编译
 - 把二进制移到 `/usr/local/bin/codebase-memory-mcp`
 - unit 加 `ProtectHome=read-only`（仓库 `deploy/cbmem-team.service` 默认这么写）
 
+<a id="faq-q9"></a>
 ### Q9：批量 `curl -d` 在 PowerShell 下失败
 
 **原因**：PowerShell 的 `curl` 是 `Invoke-WebRequest`，会偷偷 mangle JSON body。
@@ -695,6 +755,7 @@ wsl curl -X POST http://...
 bash examples/smoke.sh
 ```
 
+<a id="faq-q10"></a>
 ### Q10：怎么看 e2e 是真的过了还是只表面过了？
 
 **答**：每个 e2e 工具都有**真值断言**，例如：
@@ -704,6 +765,7 @@ bash examples/smoke.sh
 
 如果想看每一步的细节，加 `-log debug` 重跑 `cbmem-team` 主服务。
 
+<a id="faq-q11"></a>
 ### Q11：磁盘增长异常
 
 **原因**：`tool_invocation_logs` 是写入最大的表（每次 MCP 调用一行）。
@@ -714,18 +776,21 @@ bash examples/smoke.sh
 - 监控：`du -sh /var/lib/cbmem-team/cbmem-team.db` 或 `du -sh /var/lib/cbmem-team/users/*`
 - 调参：写入策略可改成批量 + 异步
 
+<a id="faq-q12"></a>
 ### Q12：怎么添加自定义 BP / 工作流 / repo pipeline？
 
 - **BP**：`POST /api/console/v2/bps`（JSON：title/category/track/tools/...）
 - **工作流**：`POST /api/console/v2/workflows`（JSON：nodes 数组），然后 `POST /:id/publish`，最后 `POST /:id/run`
 - **Repo Pipeline**：`POST /api/console/v2/repos`（JSON：name/source/target），`POST /:id/activate` 后 `POST /:id/run`
 
+<a id="faq-q13"></a>
 ### Q13：部署到服务器时传输大文件失败
 
 **原因**：PuTTY 的 `pscp.exe` 在网络不稳定时丢字节。
 
 **修法**：用 OpenSSH `scp`，传输后 `sha256sum` 双向校验（必须相等再 install）。
 
+<a id="faq-q14"></a>
 ### Q14：`docs-site/` 里 VitePress 构建失败
 
 **前置**：Node 20+、pnpm 9+。
