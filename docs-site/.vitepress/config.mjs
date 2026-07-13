@@ -1,8 +1,85 @@
 import { defineConfig } from 'vitepress'
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 
 const require = createRequire(import.meta.url)
+const dayjsEsmPath = require.resolve('dayjs/esm/index.js')
+const dayjsRoot = dirname(require.resolve('dayjs'))
+
+// VitePress + element-plus need dayjs *plugins* (e.g. `dayjs/plugin/
+// customParseFormat.js`, imported by `ElTimePicker`). Those plugin files are
+// published as UMD (`module.exports = ...`) and the dayjs package is ESM-first,
+// so when served raw they expose **no `default` export** — surfacing in the
+// browser as:
+//   The requested module '…/dayjs/plugin/customParseFormat.js' does not
+//   provide an export named 'default'
+// Redirect every `dayjs/plugin/<name>` (with or without `.js`) to the proper
+// ESM build at `dayjs/esm/plugin/<name>/index.js`, which uses `export default`
+// and resolves correctly in the browser. (The bare `dayjs` import keeps using
+// the `dayjsEsmPath` alias declared below.)
+const dayjsEsmPluginResolver = () => ({
+  name: 'dayjs-esm-plugin-resolver',
+  enforce: 'pre',
+  resolveId(source) {
+    if (typeof source !== 'string' || !source.startsWith('dayjs/plugin/')) {
+      return null
+    }
+    const name = source.slice('dayjs/plugin/'.length).replace(/\.js$/, '')
+    const esmPath = join(dayjsRoot, 'esm/plugin', name, 'index.js')
+    if (existsSync(esmPath)) return esmPath
+    return null
+  },
+})
+
+// `vitepress-plugin-mermaid`'s `withMermaid` injects resolve aliases that map
+// dayjs plugin imports (e.g. `dayjs/plugin/advancedFormat.js`) to their
+// `esm/plugin/<name>` *directories* (dayjs/esm/plugin/advancedFormat). Vite
+// cannot read a directory, which surfaces as `EISDIR: illegal operation on a
+// directory`. We strip those `dayjs/plugin/*` aliases so the imports fall back
+// to the real CJS wrapper files at `dayjs/plugin/<name>.js` (which exist and
+// load fine in dev).
+// `withMermaid` also injects bare specifiers into `optimizeDeps.include`:
+//   "@braintree/sanitize-url", "dayjs", "debug",
+//   "cytoscape-cose-bilkent", "cytoscape"
+// These are now declared as direct dependencies in package.json, so pnpm
+// hoists them to the project root and esbuild can resolve them natively
+// (pre-bundling the CJS ones as ESM). That removes the previous
+// "Failed to resolve dependency" startup warnings and the
+// "does not provide an export named 'sanitizeUrl'" browser SyntaxError.
+
+const withMermaidWithoutDayjs = (config) => {
+  const result = withMermaid(config)
+  // `dayjs` is a direct dependency (resolvable from root) and is also covered
+  // by the bare `dayjs` alias below, so keep it OUT of optimizeDeps.include —
+  // otherwise esbuild marks the aliased entry as external and errors with
+  // "The entry point 'dayjs' cannot be marked as external".
+  if (Array.isArray(result.vite?.optimizeDeps?.include)) {
+    result.vite.optimizeDeps.include = result.vite.optimizeDeps.include.filter(
+      (dep) => String(dep) !== 'dayjs'
+    )
+  }
+  const alias = result.vite?.resolve?.alias
+  const entries = alias
+    ? (Array.isArray(alias)
+        ? alias
+        : Object.entries(alias).map(([find, replacement]) => ({ find, replacement })))
+    : []
+    const kept = entries.filter((a) => !String(a.find).startsWith('dayjs/plugin/'))
+    result.vite = result.vite || {}
+    result.vite.resolve = result.vite.resolve || {}
+    result.vite.resolve.alias = kept
+    // Redirect dayjs plugin subpath imports to their ESM builds (see
+    // dayjsEsmPluginResolver above) so element-plus dayjs plugins resolve with
+    // a proper default export in the browser.
+    result.vite.plugins = result.vite.plugins || []
+    if (!Array.isArray(result.vite.plugins)) {
+      result.vite.plugins = [result.vite.plugins]
+    }
+    result.vite.plugins.push(dayjsEsmPluginResolver())
+  return result
+}
 
 const i18n = {
   root: {
@@ -22,7 +99,7 @@ const i18n = {
   }
 }
 
-export default withMermaid(defineConfig({
+export default withMermaidWithoutDayjs(defineConfig({
   title: 'AI 开发 SOP',
   description: 'adsop-platform 全栈开发者 SOP 文档',
 
@@ -328,8 +405,17 @@ export default withMermaid(defineConfig({
   contributors: true,
 
   vite: {
+    resolve: {
+      // Only alias the bare `dayjs` import to its ESM entry so consumers get a
+      // proper `dayjs` function. `dayjs/plugin/*` subpaths are NOT aliased here
+      // — those are handled by real files (see withMermaidWithoutDayjs, which
+      // removes the broken directory aliases that `withMermaid` adds).
+      alias: [
+        { find: /^dayjs$/, replacement: dayjsEsmPath }
+      ]
+    },
     optimizeDeps: {
-      include: ['dayjs'],
+      exclude: ['dayjs', 'element-plus']
     },
     // Local dev proxy: forward console API calls to the cbmem-team backend.
     // In production the vitepress `dist/` is served by gin under /console,
