@@ -1,0 +1,172 @@
+{
+  "$schema": "adr-drawer-index-v1",
+  "description": "ADR ↔ MemPalace drawer 双向索引 · §5.10.3 P0-3 · 由 adr-sync.py 维护",
+  "generated_at": "2026-07-06T20:30:00Z",
+  "generator": "docs/cn/benchmark/p0-3-adr-doublewrite/scripts/adr-sync.py",
+  "decisions": {
+    "ADR-2024-0003": {
+      "decision_id": "dec-7f4e2a1c9b08",
+      "adr_id": "ADR-2024-0003",
+      "drawer_id": "drawer_a4f1c2",
+      "title": "向量库后端选型：ChromaDB 试点",
+      "status": "superseded",
+      "wing": "wing-org-decisions",
+      "room": "database",
+      "hall": "facts",
+      "supersedes": [],
+      "superseded_by": "ADR-2025-0001",
+      "linked_symbols": [
+        "adsop.module.kms.vectorstore.chroma_client.ChromaClient"
+      ],
+      "adr_path": "adrs/ADR-2024-0003.md",
+      "last_sync_direction": "drawer-to-adr",
+      "last_synced_at": "2026-07-06T20:30:00Z",
+      "warnings": []
+    },
+    "ADR-2025-0001": {
+      "decision_id": "dec-3b8d5f7a2c1e",
+      "adr_id": "ADR-2025-0001",
+      "drawer_id": "drawer_8f2c1a",
+      "title": "向量库后端选型：Qdrant 试点",
+      "status": "superseded",
+      "wing": "wing-org-decisions",
+      "room": "database",
+      "hall": "facts",
+      "supersedes": ["ADR-2024-0003"],
+      "superseded_by": "ADR-2026-0007",
+      "linked_symbols": [
+        "adsop.module.kms.vectorstore.qdrant_client.QdrantClient"
+      ],
+      "adr_path": "adrs/ADR-2025-0001.md",
+      "last_sync_direction": "bidirectional",
+      "last_synced_at": "2026-07-06T20:30:00Z",
+      "warnings": []
+    },
+    "ADR-2026-0007": {
+      "decision_id": "dec-c9d8b2e5f1a4",
+      "adr_id": "ADR-2026-0007",
+      "drawer_id": "drawer_8f2c1a_new",
+      "title": "向量库后端选型：PGVector",
+      "status": "accepted",
+      "wing": "wing-org-decisions",
+      "room": "database",
+      "hall": "facts",
+      "supersedes": ["ADR-2025-0001", "ADR-2024-0003"],
+      "superseded_by": null,
+      "linked_symbols": [
+        "adsop.module.kms.config.VectorStoreConfig",
+        "adsop.module.kms.service.VectorStoreService",
+        "adsop.module.kms.dao.VectorStoreMapper",
+        "adsop.module.case.service.CaseSearchService.hybridSearch",
+        "adsop.module.notify.service.NotificationService.deduplicate"
+      ],
+      "adr_path": "adrs/ADR-2026-0007.md",
+      "last_sync_direction": "bidirectional",
+      "last_synced_at": "2026-07-06T20:30:00Z",
+      "warnings": []
+    },
+    "ADR-2024-0012": {
+      "decision_id": "dec-8e2c5b9d4f7a",
+      "adr_id": "ADR-2024-0012",
+      "drawer_id": "drawer_2c91be",
+      "title": "鉴权框架：自研 JWT",
+      "status": "accepted",
+      "wing": "wing-team-backend",
+      "room": "auth",
+      "hall": "discoveries",
+      "supersedes": [],
+      "superseded_by": null,
+      "linked_symbols": [
+        "adsop.module.system.auth.JwtAuthFilter",
+        "adsop.module.system.auth.RbacService"
+      ],
+      "adr_path": "adrs/ADR-2024-0012.md",
+      "last_sync_direction": "adr-to-drawer",
+      "last_synced_at": "2026-07-06T20:30:00Z",
+      "warnings": []
+    },
+    "ADR-2025-0003": {
+      "decision_id": "dec-2a7f4c1e8b5d",
+      "adr_id": "ADR-2025-0003",
+      "drawer_id": "drawer_4a7e2d",
+      "title": "Redis 缓存策略：TTL + 主动刷新",
+      "status": "accepted",
+      "wing": "wing-team-backend",
+      "room": "cache",
+      "hall": "facts",
+      "supersedes": [],
+      "superseded_by": null,
+      "linked_symbols": [
+        "adsop.module.cache.ProactiveRefreshScheduler",
+        "adsop.module.cache.CacheTemplate"
+      ],
+      "adr_path": "adrs/ADR-2025-0003.md",
+      "last_sync_direction": "drawer-to-adr",
+      "last_synced_at": "2026-07-06T20:30:00Z",
+      "warnings": []
+    },
+    "ADR-2026-0002": {
+      "decision_id": "dec-5b1e9c4d7a2f",
+      "adr_id": "ADR-2026-0002",
+      "drawer_id": "drawer_d9b41f",
+      "title": "异步事件总线：Kafka + 业务事件统一封装",
+      "status": "accepted",
+      "wing": "wing-team-backend",
+      "room": "async",
+      "hall": "events",
+      "supersedes": [],
+      "superseded_by": null,
+      "linked_symbols": [
+        "adsop.module.eventbus.EventPublisher",
+        "adsop.module.order.event.OrderPaidEvent",
+        "adsop.module.notify.listener.OrderPaidListener",
+        "adsop.module.order.service.OrderService.markPaid"
+      ],
+      "adr_path": "adrs/ADR-2026-0002.md",
+      "last_sync_direction": "drawer-to-adr",
+      "last_synced_at": "2026-07-06T20:30:00Z",
+      "warnings": []
+    }
+  },
+  "evolution_chains": {
+    "vector-db": {
+      "topic": "向量库后端选型",
+      "chain": ["ADR-2024-0003", "ADR-2025-0001", "ADR-2026-0007"],
+      "depth": 3,
+      "current": "ADR-2026-0007"
+    },
+    "auth": {
+      "topic": "鉴权框架",
+      "chain": ["ADR-2024-0012"],
+      "depth": 1,
+      "current": "ADR-2024-0012"
+    },
+    "cache": {
+      "topic": "缓存策略",
+      "chain": ["ADR-2025-0003"],
+      "depth": 1,
+      "current": "ADR-2025-0003"
+    },
+    "async": {
+      "topic": "异步事件",
+      "chain": ["ADR-2026-0002"],
+      "depth": 1,
+      "current": "ADR-2026-0002"
+    }
+  },
+  "stats": {
+    "total_decisions": 6,
+    "by_status": {
+      "accepted": 4,
+      "superseded": 2
+    },
+    "by_topic": {
+      "vector-db": 3,
+      "auth": 1,
+      "cache": 1,
+      "async": 1
+    },
+    "linked_symbols_total": 17,
+    "drawers_total": 6
+  }
+}

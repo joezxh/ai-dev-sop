@@ -1,0 +1,43 @@
+# MemPlace Gateway 配置
+# 对应 §5.7.7 控制台实时视图 + §5.10.3 P0-3 ADR 双写同步
+
+server:
+  host: 0.0.0.0
+  port: 8888
+  workers: 2
+  reload: false
+  cors_origins: "*"
+
+mempalace:
+  url: http://192.168.110.60:8080/mcp
+  timeout_seconds: 15
+  retry:
+    max_attempts: 2
+    wait_min: 1
+    wait_max: 5
+
+codebase_mem:
+  bin: codebase-memory-mcp
+  timeout_seconds: 15
+  retry:
+    max_attempts: 2
+    wait_min: 1
+    wait_max: 5
+
+sync:
+  index_path: /data/memplace/index/adr-drawer-index.json
+  default_wing: wing-org-decisions
+  default_room: general
+  default_hall: facts
+  enable_background_reconcile: true
+  reconcile_interval_seconds: 600
+
+console:
+  enable_static: true
+  path: /app/gateway/console.html
+  refresh_interval_seconds: 5
+  ws_push_enabled: true
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

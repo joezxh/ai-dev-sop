@@ -103,6 +103,8 @@ export default withMermaidWithoutDayjs(defineConfig({
   title: 'AI 开发 SOP',
   description: 'adsop-platform 全栈开发者 SOP 文档',
 
+  rewrites: {},
+
   locales: {
     root: {
       label: '简体中文',
@@ -114,7 +116,7 @@ export default withMermaidWithoutDayjs(defineConfig({
           {
             text: '文档',
             items: [
-              { text: '指南', link: '/guide/intro' },
+              { text: '指南', link: '/guide/' },
               { text: 'SOP', link: '/sop/' },
               { text: '参考', link: '/reference/' },
               { text: '控制台', link: '/console/' }
@@ -132,106 +134,40 @@ export default withMermaidWithoutDayjs(defineConfig({
         sidebar: {
           '/sop/': [
             {
-              text: '概述',
+              text: 'SOP 入口',
               collapsible: true,
               items: [
-                { text: '总览', link: '/sop/' },
-                { text: '0.1 目标与用途', link: '/sop/overview/goals' },
-                { text: '0.2 角色与阶段', link: '/sop/overview/roles' },
-                { text: '0.3-0.4 流程图', link: '/sop/overview/flow' },
-                { text: '0.5 产出物', link: '/sop/overview/deliverables' },
-                { text: '0.6 核心收益', link: '/sop/overview/benefits' },
-                { text: '0.7 运营自动化', link: '/sop/overview/operations' },
-                { text: '0.8 实施状态', link: '/sop/overview/status' },
-                { text: '0.9 AI 架构', link: '/sop/overview/architecture' }
-              ]
-            },
-            {
-              text: '指南',
-              collapsible: true,
-              items: [
-                { text: '索引', link: '/guide/' },
-                { text: '快速入门', link: '/guide/intro' },
-                { text: 'Skill 安装', link: '/guide/skills' },
-                { text: '常见问题', link: '/guide/faq' },
+                { text: '研发 SOP 主体', link: '/sop/' },
+                { text: 'QA-Dev Skill', link: '/guide/intro' },
+                { text: 'AI Skill 字典', link: '/guide/skills' },
+                { text: 'Repo Wiki 技术参考', link: '/sop/repo-wiki-tech' },
                 { text: '更新日志', link: '/guide/changelog' }
               ]
             },
             {
-              text: '§1 准备',
+              text: '§4 Pipeline',
               collapsible: true,
               items: [
-                { text: '1.1 读取工程', link: '/sop/prepare/map-codebase' },
-                { text: '1.2 Skill 安装', link: '/sop/prepare/skill-install' },
-                { text: '1.3 Project Rules', link: '/sop/prepare/project-rules' },
-                { text: '1.4 IDE 配置', link: '/sop/prepare/ide-config' }
+                { text: '一句话 Pipeline', link: '/sop/one-sentence-pipeline' },
+                { text: '框架 Pipeline', link: '/sop/framework-pipeline' },
+                { text: '文档 Pipeline', link: '/sop/docs-pipeline' },
+                { text: '复制 Web', link: '/sop/copy-web-pipeline' },
+                { text: '复制 App', link: '/sop/copy-app-pipeline' },
+                { text: 'Java 升级迁移', link: '/sop/java-upgrade-pipeline' }
               ]
             },
             {
-              text: '§2 提示词生成',
+              text: '§5 范例开发文档',
               collapsible: true,
               items: [
-                { text: '2.1 已有工程提示词', link: '/sop/prompts/existing-project' },
-                { text: '2.2 需求转提示词', link: '/sop/prompts/demand-to-prompt' },
-                { text: '2.3 子模块补齐', link: '/sop/prompts/submodule' },
-                { text: '2.4 PRD 文档', link: '/sop/prompts/prd' },
-                { text: '2.5 一句话开发', link: '/sop/prompts/one-sentence' }
-              ]
-            },
-            {
-              text: '§3 测试开发',
-              collapsible: true,
-              items: [
-                { text: '3.1 全新开发', link: '/sop/testing/new-development' },
-                { text: '3.2 批量执行', link: '/sop/testing/batch-execution' },
-                { text: '3.3 测试执行', link: '/sop/testing/execution' }
-              ]
-            },
-            {
-              text: '§4 场景 SOP',
-              collapsible: true,
-              items: [
-                { text: '4.1 基线脚手架', link: '/sop/scenes/framework' },
-                { text: '4.2 一句话原型', link: '/sop/scenes/one-sentence' },
-                { text: '4.3 文档自动化', link: '/sop/scenes/docs-automation' },
-                { text: '4.4 复制 Web', link: '/sop/scenes/copy-web' },
-                { text: '4.5 复制 App', link: '/sop/scenes/copy-app' },
-                { text: '4.6 升级迁移', link: '/sop/scenes/upgrade' },
-                { text: '4.7 部署', link: '/sop/scenes/deploy' }
-              ]
-            },
-            {
-              text: '§5 双轨记忆',
-              collapsible: true,
-              items: [
-                { text: '5.1 架构总览', link: '/sop/memory/overview' },
-                { text: '5.2 服务端部署', link: '/sop/memory/deploy' },
-                { text: '5.3 多租户 Bridge', link: '/sop/memory/bridge' },
-                { text: '5.4 客户端配置', link: '/sop/memory/client' },
-                { text: '5.5 开发手册', link: '/sop/memory/dev-guide' },
-                { text: '5.6 管理手册', link: '/sop/memory/admin-guide' },
-                { text: '5.7 组织管理', link: '/sop/memory/org-guide' },
-                { text: '5.8 MCP 工具', link: '/sop/memory/tools' },
-                { text: '5.8.x 工具最佳实践', link: '/sop/memory/tools-best-practices' },
-                { text: '5.9 故障排查', link: '/sop/memory/troubleshooting' },
-                { text: '5.10 最佳实践', link: '/sop/memory/best-practices' },
-                { text: '5.11 总览索引', link: '/sop/memory/summary' },
-                { text: '5.12 Self-check', link: '/sop/memory/selfcheck' }
-              ]
-            },
-            {
-              text: '§6 文档编写',
-              collapsible: true,
-              items: [
-                { text: '6.1 产品设计', link: '/sop/writing/product-design' },
-                { text: '6.2 市场调研', link: '/sop/writing/market-research' },
-                { text: '6.3 模板使用', link: '/sop/writing/template-guide' }
+                { text: 'System 服务场景', link: '/sop/system-scene' },
+                { text: 'UAA 场景', link: '/sop/uaa-scene' }
               ]
             }
           ],
           '/reference/': [
             {
-              text: '配套文档',
+              text: '配套文档（指向 SOP 主体）',
               items: [
                 { text: '场景模板', link: '/reference/scene-template' },
                 { text: '一句话 Pipeline', link: '/reference/one-sentence-pipeline' },
@@ -240,6 +176,16 @@ export default withMermaidWithoutDayjs(defineConfig({
                 { text: '复制 Web Pipeline', link: '/reference/copy-web-pipeline' },
                 { text: '复制 App Pipeline', link: '/reference/copy-app-pipeline' },
                 { text: '升级 Pipeline', link: '/reference/java-upgrade-pipeline' }
+              ]
+            }
+          ],'/guide/': [
+            {
+              text: '使用指南',
+              items: [
+                { text: '全局开发SOP', link: '/guide/index' },
+                { text: '开发模板', link: '/guide/scene-template' },
+                { text: 'QA-Dev Skill', link: '/guide/intro' },
+                { text: 'AI Skill 字典', link: '/guide/skills' }
               ]
             }
           ]

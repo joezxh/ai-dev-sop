@@ -1,0 +1,16 @@
+/docs-site/.vitepress/
+/docs-site/node_modules/
+bin
+dist
+.cursor
+.qoder
+.vscode
+/ai-dev-sop.iml
+/tmp/
+.flattened-pom.xml
+target
+.DS_Store
+example
+.github
+.vitepress
+prev_dom

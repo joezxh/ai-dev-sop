@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MemPlace 控制台 · ADR 双写状态实时视图</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #131826;
+    --panel-light: #1c2235;
+    --border: #2a3147;
+    --text: #e4e8f1;
+    --text-dim: #8590a8;
+    --accent: #4f8ef7;
+    --accent-glow: #4f8ef744;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --danger: #f44336;
+    --info: #00bcd4;
+    --side-a: #4f8ef7;
+    --side-b: #b04ff7;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  header {
+    background: linear-gradient(135deg, #131826 0%, #1a1f33 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .title h1 {
+    font-size: 20px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--side-b));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .title .subtitle {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .pulse {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 0 var(--success);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 var(--success); }
+    70% { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    transition: border 0.2s;
+  }
+
+  .panel:hover { border-color: var(--accent); }
+
+  .panel h2 {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel h2 .icon {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* metric cards */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 0 16px 16px;
+  }
+
+  .metric {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric .label {
+    color: var(--text-dim);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .metric .value {
+    font-size: 32px;
+    font-weight: 700;
+    margin-top: 6px;
+    background: linear-gradient(135deg, var(--accent), var(--side-b));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .metric .footer {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .metric.danger .value { color: var(--danger); -webkit-text-fill-color: var(--danger); }
+  .metric.warning .value { color: var(--warning); -webkit-text-fill-color: var(--warning); }
+  .metric.success .value { color: var(--success); -webkit-text-fill-color: var(--success); }
+
+  /* status distribution */
+  .dist-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+  }
+
+  .dist-row .key {
+    width: 100px;
+    color: var(--text-dim);
+  }
+
+  .dist-row .bar {
+    flex: 1;
+    height: 6px;
+    background: var(--panel-light);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .dist-row .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--side-b));
+    transition: width 0.4s;
+  }
+
+  .dist-row .count {
+    width: 40px;
+    text-align: right;
+    font-weight: 600;
+  }
+
+  /* sync log */
+  .sync-log {
+    max-height: 380px;
+    overflow-y: auto;
+  }
+
+  .log-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--panel-light);
+    font-size: 12px;
+  }
+
+  .log-item:last-child { border-bottom: none; }
+
+  .log-item .ts { color: var(--text-dim); font-family: monospace; }
+  .log-item .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin: 0 6px;
+  }
+
+  .log-item .badge.a { background: var(--side-a); color: white; }
+  .log-item .badge.b { background: var(--side-b); color: white; }
+  .log-item .badge.ok { background: var(--success); color: white; }
+  .log-item .badge.fail { background: var(--danger); color: white; }
+  .log-item .badge.warn { background: var(--warning); color: white; }
+
+  .log-item .title { margin-top: 4px; }
+
+  /* evolution chain */
+  .chain {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    flex-wrap: wrap;
+  }
+
+  .chain-node {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--panel-light);
+    font-size: 11px;
+    font-family: monospace;
+  }
+
+  .chain-node.accepted { border-left: 3px solid var(--success); }
+  .chain-node.superseded { border-left: 3px solid var(--warning); color: var(--text-dim); }
+  .chain-arrow { color: var(--text-dim); }
+
+  /* failures */
+  .failure {
+    background: var(--panel-light);
+    border-left: 3px solid var(--danger);
+    padding: 10px 12px;
+    margin: 8px 0;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .failure .err {
+    color: var(--danger);
+    font-family: monospace;
+    margin-top: 4px;
+  }
+
+  /* footer */
+  footer {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* tools bar */
+  .tools {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    background: var(--panel-light);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+
+  .btn:hover { background: var(--accent); border-color: var(--accent); }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--panel-light); }
+  th { color: var(--text-dim); font-weight: 500; text-transform: uppercase; font-size: 10px; }
+  td code { font-family: monospace; color: var(--accent); }
+  .status-tag { padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+  .status-tag.accepted { background: var(--success); color: white; }
+  .status-tag.superseded { background: var(--warning); color: white; }
+  .status-tag.proposed { background: var(--info); color: white; }
+  .status-tag.deprecated { background: var(--text-dim); color: white; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <h1>MemPlace 控制台 · ADR 双写状态</h1>
+    <div class="subtitle">§5.7.7 实时视图 · §5.10.3 P0-3 · MemPalace × codebase-memory-mcp</div>
+  </div>
+  <div class="tools">
+    <button class="btn" onclick="window.location.reload()">刷新</button>
+    <button class="btn" onclick="triggerReconcile()">对账</button>
+    <button class="btn" onclick="openDocs()">API 文档</button>
+  </div>
+  <div class="status-pill">
+    <span class="pulse" id="pulse-dot"></span>
+    <span id="conn-status">连接中...</span>
+  </div>
+</header>
+
+<div class="metrics-row">
+  <div class="metric">
+    <div class="label">总决策数</div>
+    <div class="value" id="metric-total">—</div>
+    <div class="footer">双侧已同步决策</div>
+  </div>
+  <div class="metric success">
+    <div class="label">已接受</div>
+    <div class="value" id="metric-accepted">—</div>
+    <div class="footer">当前生效的 ADR</div>
+  </div>
+  <div class="metric warning">
+    <div class="label">已替代</div>
+    <div class="value" id="metric-superseded">—</div>
+    <div class="footer">历史 ADR</div>
+  </div>
+  <div class="metric danger">
+    <div class="label">同步失败</div>
+    <div class="value" id="metric-failures">—</div>
+    <div class="footer">最近 24 小时</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="panel">
+    <h2><span class="icon"></span>按状态分布</h2>
+    <div id="dist-status"></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="icon"></span>按同步方向分布</h2>
+    <div id="dist-direction"></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="icon"></span>演进链</h2>
+    <div id="chains">加载中...</div>
+  </div>
+</div>
+
+<div class="layout" style="grid-template-columns: 2fr 1fr;">
+  <div class="panel">
+    <h2><span class="icon"></span>最近同步历史</h2>
+    <div class="sync-log" id="sync-log">加载中...</div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="icon"></span>最近失败</h2>
+    <div id="failures">加载中...</div>
+  </div>
+</div>
+
+<div class="layout" style="grid-template-columns: 1fr;">
+  <div class="panel">
+    <h2><span class="icon"></span>所有决策 · 最近同步优先</h2>
+    <div style="max-height: 400px; overflow-y: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>decision_id</th>
+            <th>title</th>
+            <th>status</th>
+            <th>wing</th>
+            <th>last_sync</th>
+            <th>warnings</th>
+          </tr>
+        </thead>
+        <tbody id="decisions-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<footer>
+  MemPlace Gateway v0.1.0 · <span id="last-update">—</span> · 数据每 5 秒刷新 · WebSocket 实时推送
+</footer>
+
+<script>
+const API_BASE = window.location.origin;
+let ws = null;
+
+function formatTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('zh-CN', { hour12: false });
+}
+
+function formatTimeShort(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+function statusBadge(s) {
+  return `<span class="status-tag ${s}">${s}</span>`;
+}
+
+function directionBadge(d) {
+  if (!d) return '';
+  const map = {
+    'drawer-to-adr': 'A',
+    'adr-to-drawer': 'B',
+    'bidirectional': '↔'
+  };
+  return `<span class="badge ${d.includes('drawer-to-adr') ? 'a' : (d.includes('adr-to-drawer') ? 'b' : 'ok')}">${map[d] || d}</span>`;
+}
+
+async function fetchStatus() {
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/decisions/status`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    console.error('fetchStatus error', e);
+    return null;
+  }
+}
+
+async function fetchDecisions(page = 1) {
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/decisions?page=${page}&page_size=50`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    console.error('fetchDecisions error', e);
+    return null;
+  }
+}
+
+async function fetchReconcile() {
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/decisions/reconcile`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function renderMetrics(s) {
+  if (!s) return;
+  document.getElementById('metric-total').textContent = s.total_decisions ?? 0;
+  document.getElementById('metric-accepted').textContent = s.by_status?.accepted ?? 0;
+  document.getElementById('metric-superseded').textContent = s.by_status?.superseded ?? 0;
+  document.getElementById('metric-failures').textContent = s.recent_failures?.length ?? 0;
+}
+
+function renderDist(elId, dist, total) {
+  const el = document.getElementById(elId);
+  if (!dist || Object.keys(dist).length === 0) {
+    el.innerHTML = '<div style="color: var(--text-dim);">无数据</div>';
+    return;
+  }
+  const max = Math.max(...Object.values(dist));
+  const html = Object.entries(dist).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
+    const pct = max > 0 ? (v / max * 100).toFixed(0) : 0;
+    return `<div class="dist-row">
+      <div class="key">${k}</div>
+      <div class="bar"><div class="bar-fill" style="width: ${pct}%"></div></div>
+      <div class="count">${v}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+}
+
+function renderChains(s) {
+  const el = document.getElementById('chains');
+  const chains = s.evolution_chains || {};
+  if (Object.keys(chains).length === 0) {
+    el.innerHTML = '<div style="color: var(--text-dim);">无演进链</div>';
+    return;
+  }
+  const html = Object.entries(chains).map(([head, leaves]) => {
+    return `<div class="chain">
+      <span class="chain-node accepted">${head}</span>
+      ${leaves.map(l => `<span class="chain-arrow">→</span><span class="chain-node superseded">${l}</span>`).join('')}
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+}
+
+function renderSyncLog(s) {
+  const el = document.getElementById('sync-log');
+  const recent = s.recent_syncs || [];
+  if (recent.length === 0) {
+    el.innerHTML = '<div style="color: var(--text-dim);">无同步历史</div>';
+    return;
+  }
+  const html = recent.map(r => {
+    const lastResult = r.last_sync_result || {};
+    const ok = lastResult.errors && lastResult.errors.length > 0 ? 'fail' : 'ok';
+    return `<div class="log-item">
+      <span class="ts">${formatTimeShort(r.last_synced_at)}</span>
+      ${directionBadge(r.last_sync_direction)}
+      <span class="badge ${ok}">${ok.toUpperCase()}</span>
+      <div class="title">${r.title || '—'} <code style="color: var(--text-dim);">${r.decision_id}</code></div>
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+}
+
+function renderFailures(s) {
+  const el = document.getElementById('failures');
+  const failures = s.recent_failures || [];
+  if (failures.length === 0) {
+    el.innerHTML = '<div style="color: var(--success);">✓ 无失败</div>';
+    return;
+  }
+  const html = failures.map(f => {
+    return `<div class="failure">
+      <div>${f.title || '—'}</div>
+      <div class="err">${(f.errors || []).join('; ')}</div>
+      <div style="color: var(--text-dim); font-size: 10px; margin-top: 4px;">${formatTime(f.at)}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+}
+
+async function renderDecisions() {
+  const data = await fetchDecisions(1);
+  const tbody = document.getElementById('decisions-tbody');
+  if (!data) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color: var(--text-dim);">加载失败</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.decisions.map(d => {
+    const w = d.warnings && d.warnings.length > 0 ? `<span class="badge warn">${d.warnings.length}</span>` : '—';
+    return `<tr>
+      <td><code>${d.decision_id}</code></td>
+      <td>${d.title || '—'}</td>
+      <td>${statusBadge(d.status)}</td>
+      <td>${d.wing || '—'}</td>
+      <td>${formatTimeShort(d.last_synced_at)}</td>
+      <td>${w}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="color: var(--text-dim);">无数据</td></tr>';
+}
+
+async function refresh() {
+  const s = await fetchStatus();
+  if (s) {
+    renderMetrics(s);
+    renderDist('dist-status', s.by_status);
+    renderDist('dist-direction', s.by_direction);
+    renderChains(s);
+    renderSyncLog(s);
+    renderFailures(s);
+    document.getElementById('last-update').textContent = formatTime(s.checked_at);
+    document.getElementById('conn-status').textContent = '在线';
+  } else {
+    document.getElementById('conn-status').textContent = '离线';
+  }
+  await renderDecisions();
+}
+
+async function triggerReconcile() {
+  const r = await fetchReconcile();
+  if (r) {
+    alert(`对账完成：共 ${r.total_inconsistent} 条不一致。\n详情见 ${API_BASE}/api/v1/decisions/reconcile`);
+    refresh();
+  } else {
+    alert('对账失败');
+  }
+}
+
+function openDocs() {
+  window.open(`${API_BASE}/docs`, '_blank');
+}
+
+function connectWS() {
+  const wsUrl = API_BASE.replace('http', 'ws') + '/ws';
+  try {
+    ws = new WebSocket(wsUrl);
+    ws.onopen = () => {
+      console.log('WS connected');
+      document.getElementById('pulse-dot').style.background = 'var(--success)';
+    };
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'status_snapshot' || msg.type === 'sync_completed' || msg.type === 'sync_failed') {
+          refresh();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    ws.onclose = () => {
+      console.log('WS closed, reconnecting in 5s...');
+      document.getElementById('pulse-dot').style.background = 'var(--danger)';
+      setTimeout(connectWS, 5000);
+    };
+    ws.onerror = (e) => {
+      console.error('WS error', e);
+    };
+  } catch (e) {
+    console.error('WS init failed', e);
+  }
+}
+
+connectWS();
+refresh();
+setInterval(refresh, 5000);
+
+</script>
+</body>
+</html>

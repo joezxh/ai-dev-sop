@@ -1,0 +1,66 @@
+# Docker Compose · MemPlace 统一网关
+# 启动 MemPalace + MemPlace 网关 + （可选）codebase-memory-mcp
+
+version: "3.9"
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ============================================================
+  # MemPalace 服务端（A 侧，自然语言记忆）
+  # ============================================================
+  mempalace:
+    image: mempalace/mempalace:0.8.3
+    container_name: mempalace
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - mempalace-data:/data
+    environment:
+      MP_VECTOR_BACKEND: pgvector
+      MP_PG_URL: postgres://mempalace:CHANGE_ME@pg-host:5432/mempalace
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================
+  # MemPlace 统一网关（P0-1 / P0-3 / P2-1）
+  # ============================================================
+  memplace-gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: memplace-gateway
+    restart: unless-stopped
+    depends_on:
+      mempalace:
+        condition: service_healthy
+    ports:
+      - "8888:8888"
+    volumes:
+      - memplace-data:/data/memplace
+    environment:
+      MP_PORT: "8888"
+      MP_HOST: "0.0.0.0"
+      MP_MEMPALACE_URL: http://mempalace:8080/mcp
+      MP_CODEBASE_MEM_BIN: codebase-memory-mcp
+      MP_CORS_ORIGINS: "*"
+      MP_INDEX_PATH: /data/memplace/index/adr-drawer-index.json
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mempalace-data:
+  memplace-data:
