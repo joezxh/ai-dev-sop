@@ -229,7 +229,7 @@ export const SummarizeDistillAPI = {
 // ---------------------------------------------------------------------------
 
 export const AIToolsAPI = {
-  list: () => apiCore<any[]>('/ai-tools'),
+  list: (teamId: string) => apiCore<any[]>('/ai-tools?team_id=' + encodeURIComponent(teamId)),
   create: (body: any) => apiCore<any>('/ai-tools', { method: 'POST', body: JSON.stringify(body) }),
   get: (id: string) => apiCore<any>('/ai-tools/' + id),
   update: (id: string, body: any) =>
