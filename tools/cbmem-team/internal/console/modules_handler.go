@@ -333,7 +333,7 @@ func (h *ModuleHandlers) assertProjectAccess(c *gin.Context, projectID string) b
 	// self-contained.
 	var teamID string
 	if err := h.DB.QueryRowContext(ctx,
-		`SELECT team_id FROM projects WHERE id = ? AND deleted = 0`, projectID,
+		`SELECT team_id FROM pm_projects WHERE id = ? AND deleted = 0`, projectID,
 	).Scan(&teamID); err != nil {
 		Fail(c, http.StatusNotFound, 4040059, "project not found")
 		return false
@@ -364,7 +364,7 @@ func (h *ModuleHandlers) assertProjectWrite(c *gin.Context, projectID string) bo
 	}
 	var teamID, ownerID string
 	if err := h.DB.QueryRowContext(ctx,
-		`SELECT team_id, IFNULL(owner_id,'') FROM projects WHERE id = ? AND deleted = 0`, projectID,
+		`SELECT team_id, IFNULL(owner_id,'') FROM pm_projects WHERE id = ? AND deleted = 0`, projectID,
 	).Scan(&teamID, &ownerID); err != nil {
 		Fail(c, http.StatusNotFound, 4040061, "project not found")
 		return false

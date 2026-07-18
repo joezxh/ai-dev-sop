@@ -43,7 +43,7 @@ func TestCaptureSimpleMessage(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		var n int
-		_ = db.QueryRowContext(context.TODO(), `SELECT COUNT(*) FROM session_turns`).Scan(&n)
+		_ = db.QueryRowContext(context.TODO(), `SELECT COUNT(*) FROM ai_session_turns`).Scan(&n)
 		if n > 0 {
 			break
 		}
@@ -51,7 +51,7 @@ func TestCaptureSimpleMessage(t *testing.T) {
 	}
 
 	var cnt int
-	if err := db.QueryRowContext(context.TODO(), `SELECT COUNT(*) FROM session_turns`).Scan(&cnt); err != nil {
+	if err := db.QueryRowContext(context.TODO(), `SELECT COUNT(*) FROM ai_session_turns`).Scan(&cnt); err != nil {
 		t.Fatalf("count turns: %v", err)
 	}
 	if cnt == 0 {
@@ -60,7 +60,7 @@ func TestCaptureSimpleMessage(t *testing.T) {
 
 	var sid, role, content string
 	if err := db.QueryRowContext(context.TODO(),
-		`SELECT session_id, role, content FROM session_turns ORDER BY id DESC LIMIT 1`,
+		`SELECT session_id, role, content FROM ai_session_turns ORDER BY id DESC LIMIT 1`,
 	).Scan(&sid, &role, &content); err != nil {
 		t.Fatalf("scan turn: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestCaptureNonMessageBypasses(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	var n int
-	if err := db.QueryRowContext(context.TODO(), `SELECT COUNT(*) FROM session_turns`).Scan(&n); err != nil {
+	if err := db.QueryRowContext(context.TODO(), `SELECT COUNT(*) FROM ai_session_turns`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if n != 0 {

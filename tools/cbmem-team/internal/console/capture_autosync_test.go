@@ -121,7 +121,7 @@ func TestCaptureAutoSyncPushesAllTurns(t *testing.T) {
 	var synced int
 	for time.Now().Before(deadline) {
 		_ = db.QueryRowContext(context.TODO(),
-			`SELECT mempalace_synced_turns FROM sessions WHERE id = ?`,
+			`SELECT mempalace_synced_turns FROM ai_sessions WHERE id = ?`,
 			"sess_bob_"+shortHash("bob|/tmp/demo")).Scan(&synced)
 		if synced == 3 {
 			break
@@ -191,7 +191,7 @@ func TestCaptureAutoSyncIdempotentOnRetry(t *testing.T) {
 	var synced int
 	for time.Now().Before(deadline) {
 		_ = db.QueryRowContext(context.TODO(),
-			`SELECT mempalace_synced_turns FROM sessions WHERE id = ?`,
+			`SELECT mempalace_synced_turns FROM ai_sessions WHERE id = ?`,
 			"sess_carol_"+shortHash("carol|/tmp/x")).Scan(&synced)
 		if synced == 2 {
 			break
@@ -209,7 +209,7 @@ func TestCaptureAutoSyncIdempotentOnRetry(t *testing.T) {
 	// last_error must be NULL after a successful retry.
 	var lastErr *string
 	if err := db.QueryRowContext(context.TODO(),
-		`SELECT mempalace_last_error FROM sessions WHERE id = ?`,
+		`SELECT mempalace_last_error FROM ai_sessions WHERE id = ?`,
 		"sess_carol_"+shortHash("carol|/tmp/x")).Scan(&lastErr); err != nil {
 		t.Fatalf("read last_error: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestCaptureAutoSyncDoesNotBlockOnOutage(t *testing.T) {
 	var lastErr *string
 	for time.Now().Before(deadline) {
 		_ = db.QueryRowContext(context.TODO(),
-			`SELECT mempalace_synced_turns, mempalace_last_error FROM sessions WHERE id = ?`,
+			`SELECT mempalace_synced_turns, mempalace_last_error FROM ai_sessions WHERE id = ?`,
 			"sess_dave_"+shortHash("dave|/tmp/y")).Scan(&synced, &lastErr)
 		if lastErr != nil && *lastErr != "" {
 			break
@@ -313,7 +313,7 @@ func TestCaptureNoMemPalaceSkipsSync(t *testing.T) {
 
 	var synced sql.NullInt32
 	_ = db.QueryRowContext(context.TODO(),
-		`SELECT mempalace_synced_turns FROM sessions WHERE id = ?`,
+		`SELECT mempalace_synced_turns FROM ai_sessions WHERE id = ?`,
 		"sess_erin_"+shortHash("erin|/tmp/z")).Scan(&synced)
 	if synced.Valid && synced.Int32 != 0 {
 		t.Fatalf("expected synced=0 with nil MemPalace, got %v", synced)

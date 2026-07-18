@@ -46,12 +46,12 @@ var timeNow = func() time.Time { return time.Now().UTC() }
 // (v1 tables → v1+v2 co-existing → v2-cleanup) is preserved.
 //
 // Phase order:
-//   1. Create new v2-only tables
-//   2. Add new columns on v1 tables (idempotent ALTER)
-//   3. Backfill legacy rows with sentinel defaults
-//   4. Add new indexes
-//   5. Drop v1-only columns that are no longer used
-//   6. Seed built-in memory templates
+//  1. Create new v2-only tables
+//  2. Add new columns on v1 tables (idempotent ALTER)
+//  3. Backfill legacy rows with sentinel defaults
+//  4. Add new indexes
+//  5. Drop v1-only columns that are no longer used
+//  6. Seed built-in memory templates
 //
 // Returns the first non-recoverable error; soft failures are logged via
 // the supplied warn callback (or fmt.Printf when nil).
@@ -190,9 +190,9 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 
 	// 4. users.username backfill.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE users SET username = id WHERE username = '' OR username IS NULL`,
+		`UPDATE sys_users SET username = id WHERE username = '' OR username IS NULL`,
 	); err != nil {
-		return fmt.Errorf("backfill users.username: %w", err)
+		return fmt.Errorf("backfill sys_users.username: %w", err)
 	}
 
 	// 4b. users.password_hash backfill. v1 had no password column, so
@@ -200,16 +200,16 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 	//     Stamp the sentinel so handlers can detect "must reset" rows
 	//     without joining a separate column.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE users SET password_hash = '!v1-legacy-must-reset!'
+		`UPDATE sys_users SET password_hash = '!v1-legacy-must-reset!'
 		   WHERE password_hash = ''`,
 	); err != nil {
-		return fmt.Errorf("backfill users.password_hash: %w", err)
+		return fmt.Errorf("backfill sys_users.password_hash: %w", err)
 	}
 
 	// 5. users must_change_password=1 for any row that still has a sentinel
 	//    hash (i.e. carried over from v1 with no real password).
 	if _, err := db.ExecContext(ctx,
-		`UPDATE users SET must_change_password = 1
+		`UPDATE sys_users SET must_change_password = 1
 		   WHERE password_hash = '!v1-legacy-must-reset!'`,
 	); err != nil {
 		return fmt.Errorf("force must_change_password for legacy users: %w", err)
@@ -219,30 +219,30 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 	//    the literal default ('') need touching; new rows from a v2
 	//    frontend already carry the column.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE projects SET team_id = ?, status = 'ready', description = description
+		`UPDATE pm_projects SET team_id = ?, status = 'ready', description = description
 		   WHERE team_id IS NULL OR team_id = ''`,
 		legacyTeamID,
 	); err != nil {
-		return fmt.Errorf("backfill projects.team_id: %w", err)
+		return fmt.Errorf("backfill pm_projects.team_id: %w", err)
 	}
 	if _, err := db.ExecContext(ctx,
-		`UPDATE projects SET slug = name WHERE slug = '' OR slug IS NULL`,
+		`UPDATE pm_projects SET slug = name WHERE slug = '' OR slug IS NULL`,
 	); err != nil {
-		return fmt.Errorf("backfill projects.slug: %w", err)
+		return fmt.Errorf("backfill pm_projects.slug: %w", err)
 	}
 
 	// 7. sessions.team_id / module_id backfill.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE sessions SET team_id = ? WHERE team_id IS NULL OR team_id = ''`,
+		`UPDATE ai_sessions SET team_id = ? WHERE team_id IS NULL OR team_id = ''`,
 		legacyTeamID,
 	); err != nil {
-		return fmt.Errorf("backfill sessions.team_id: %w", err)
+		return fmt.Errorf("backfill ai_sessions.team_id: %w", err)
 	}
 	if _, err := db.ExecContext(ctx,
-		`UPDATE sessions SET module_id = ? WHERE module_id IS NULL OR module_id = ''`,
+		`UPDATE ai_sessions SET module_id = ? WHERE module_id IS NULL OR module_id = ''`,
 		"mod_legacy",
 	); err != nil {
-		return fmt.Errorf("backfill sessions.module_id: %w", err)
+		return fmt.Errorf("backfill ai_sessions.module_id: %w", err)
 	}
 
 	return nil
@@ -286,7 +286,7 @@ func (db *DB) migrateV2Phase4(ctx context.Context, warn func(string, ...any)) er
 // need the column recreation dance. For those we leave the column in
 // place and warn; handlers ignore unknown columns.
 func (db *DB) migrateV2Phase5(ctx context.Context, warn func(string, ...any)) error {
-	has, err := db.columnExists(ctx, "users", "project_paths")
+	has, err := db.columnExists(ctx, "sys_users", "project_paths")
 	if err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (db *DB) v2DDL() ddlBundle {
 // deploy/sql/v2_schema.sqlite.sql.
 var sqliteV2DDL = ddlBundle{
 	createTables: []string{
-		`CREATE TABLE IF NOT EXISTS teams (
+		`CREATE TABLE IF NOT EXISTS pm_teams (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             slug TEXT NOT NULL UNIQUE,
@@ -410,18 +410,18 @@ var sqliteV2DDL = ddlBundle{
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             deleted INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
+            FOREIGN KEY (owner_id) REFERENCES sys_users(id) ON DELETE SET NULL ON UPDATE CASCADE
         )`,
-		`CREATE TABLE IF NOT EXISTS team_members (
+		`CREATE TABLE IF NOT EXISTS pm_team_members (
             team_id TEXT NOT NULL,
             user_id TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'developer',
             joined_at DATETIME NOT NULL,
             PRIMARY KEY (team_id, user_id),
-            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE ON UPDATE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+            FOREIGN KEY (team_id) REFERENCES pm_teams(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE ON UPDATE CASCADE
         )`,
-		`CREATE TABLE IF NOT EXISTS modules (
+		`CREATE TABLE IF NOT EXISTS pm_modules (
             id TEXT PRIMARY KEY,
             project_id TEXT NOT NULL,
             parent_id TEXT,
@@ -433,10 +433,10 @@ var sqliteV2DDL = ddlBundle{
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             deleted INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE ON UPDATE CASCADE,
-            FOREIGN KEY (parent_id) REFERENCES modules(id) ON DELETE CASCADE ON UPDATE CASCADE
+            FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES pm_modules(id) ON DELETE CASCADE ON UPDATE CASCADE
         )`,
-		`CREATE TABLE IF NOT EXISTS memory_templates (
+		`CREATE TABLE IF NOT EXISTS ai_memories_templates (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
@@ -444,7 +444,7 @@ var sqliteV2DDL = ddlBundle{
             body_template TEXT NOT NULL DEFAULT '',
             is_builtin INTEGER NOT NULL DEFAULT 0
         )`,
-		`CREATE TABLE IF NOT EXISTS memories (
+		`CREATE TABLE IF NOT EXISTS ai_memories (
             id TEXT PRIMARY KEY,
             team_id TEXT NOT NULL,
             project_id TEXT NOT NULL,
@@ -458,7 +458,7 @@ var sqliteV2DDL = ddlBundle{
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             deleted INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (template_id) REFERENCES memory_templates(id) ON DELETE SET NULL
+            FOREIGN KEY (template_id) REFERENCES ai_memories_templates(id) ON DELETE SET NULL
         )`,
 		`CREATE TABLE IF NOT EXISTS ai_tools (
             id TEXT PRIMARY KEY,
@@ -476,7 +476,7 @@ var sqliteV2DDL = ddlBundle{
             enabled INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
-            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE ON UPDATE CASCADE
+            FOREIGN KEY (team_id) REFERENCES pm_teams(id) ON DELETE CASCADE ON UPDATE CASCADE
         )`,
 		`CREATE TABLE IF NOT EXISTS ai_tool_invocations (
             id TEXT PRIMARY KEY,
@@ -493,21 +493,21 @@ var sqliteV2DDL = ddlBundle{
             finished_at DATETIME,
             error TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (tool_id) REFERENCES ai_tools(id),
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (team_id) REFERENCES teams(id),
-            FOREIGN KEY (project_id) REFERENCES projects(id),
-            FOREIGN KEY (module_id) REFERENCES modules(id)
+            FOREIGN KEY (user_id) REFERENCES sys_users(id),
+            FOREIGN KEY (team_id) REFERENCES pm_teams(id),
+            FOREIGN KEY (project_id) REFERENCES pm_projects(id),
+            FOREIGN KEY (module_id) REFERENCES pm_modules(id)
         )`,
-		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+		`CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             token_hash TEXT NOT NULL,
             issued_at DATETIME NOT NULL,
             expires_at DATETIME NOT NULL,
             revoked_at DATETIME,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE
         )`,
-		`CREATE TABLE IF NOT EXISTS audit_logs (
+		`CREATE TABLE IF NOT EXISTS sys_audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts DATETIME NOT NULL,
             user_id TEXT,
@@ -519,75 +519,75 @@ var sqliteV2DDL = ddlBundle{
 	},
 
 	addColumns: []addColumnSpec{
-		// users (v1 → v2)
-		{"users", "username", `ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT ''`},
-		{"users", "password_hash", `ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''`},
-		{"users", "email", `ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`},
-		{"users", "default_team_id", `ALTER TABLE users ADD COLUMN default_team_id TEXT`},
-		{"users", "role", `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'developer'`},
-		{"users", "must_change_password", `ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 1`},
-		{"users", "updated_at", `ALTER TABLE users ADD COLUMN updated_at DATETIME`},
-		{"users", "last_login_at", `ALTER TABLE users ADD COLUMN last_login_at DATETIME`},
+		// sys_users (v1 → v2)
+		{"sys_users", "username", `ALTER TABLE sys_users ADD COLUMN username TEXT NOT NULL DEFAULT ''`},
+		{"sys_users", "password_hash", `ALTER TABLE sys_users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''`},
+		{"sys_users", "email", `ALTER TABLE sys_users ADD COLUMN email TEXT NOT NULL DEFAULT ''`},
+		{"sys_users", "default_team_id", `ALTER TABLE sys_users ADD COLUMN default_team_id TEXT`},
+		{"sys_users", "role", `ALTER TABLE sys_users ADD COLUMN role TEXT NOT NULL DEFAULT 'developer'`},
+		{"sys_users", "must_change_password", `ALTER TABLE sys_users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 1`},
+		{"sys_users", "updated_at", `ALTER TABLE sys_users ADD COLUMN updated_at DATETIME`},
+		{"sys_users", "last_login_at", `ALTER TABLE sys_users ADD COLUMN last_login_at DATETIME`},
 
-		// projects (v1 → v2)
-		{"projects", "team_id", `ALTER TABLE projects ADD COLUMN team_id TEXT`},
-		{"projects", "slug", `ALTER TABLE projects ADD COLUMN slug TEXT NOT NULL DEFAULT ''`},
-		{"projects", "description", `ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''`},
-		{"projects", "git_url", `ALTER TABLE projects ADD COLUMN git_url TEXT NOT NULL DEFAULT ''`},
-		{"projects", "git_branch", `ALTER TABLE projects ADD COLUMN git_branch TEXT NOT NULL DEFAULT ''`},
-		{"projects", "git_commit_sha", `ALTER TABLE projects ADD COLUMN git_commit_sha TEXT NOT NULL DEFAULT ''`},
-		{"projects", "status", `ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'`},
+		// pm_projects (v1 → v2)
+		{"pm_projects", "team_id", `ALTER TABLE pm_projects ADD COLUMN team_id TEXT`},
+		{"pm_projects", "slug", `ALTER TABLE pm_projects ADD COLUMN slug TEXT NOT NULL DEFAULT ''`},
+		{"pm_projects", "description", `ALTER TABLE pm_projects ADD COLUMN description TEXT NOT NULL DEFAULT ''`},
+		{"pm_projects", "git_url", `ALTER TABLE pm_projects ADD COLUMN git_url TEXT NOT NULL DEFAULT ''`},
+		{"pm_projects", "git_branch", `ALTER TABLE pm_projects ADD COLUMN git_branch TEXT NOT NULL DEFAULT ''`},
+		{"pm_projects", "git_commit_sha", `ALTER TABLE pm_projects ADD COLUMN git_commit_sha TEXT NOT NULL DEFAULT ''`},
+		{"pm_projects", "status", `ALTER TABLE pm_projects ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'`},
 		// M3 (added late, after v2 migration already shipped on some
 		// installs): owner_id was always in the v2 CREATE TABLE but
 		// the ALTER path for v1 upgrades never added it. Idempotent
 		// via the IF NOT EXISTS clause.
-		{"projects", "owner_id", `ALTER TABLE projects ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''`},
+		{"pm_projects", "owner_id", `ALTER TABLE pm_projects ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''`},
 
-		// sessions (v1 → v2): team_id, module_id (NOT NULL after backfill), auto-sync columns
-		{"sessions", "team_id", `ALTER TABLE sessions ADD COLUMN team_id TEXT NOT NULL DEFAULT ''`},
-		{"sessions", "module_id", `ALTER TABLE sessions ADD COLUMN module_id TEXT NOT NULL DEFAULT ''`},
-		{"sessions", "mempalace_synced_turns", `ALTER TABLE sessions ADD COLUMN mempalace_synced_turns INTEGER NOT NULL DEFAULT 0`},
-		{"sessions", "mempalace_last_synced_at", `ALTER TABLE sessions ADD COLUMN mempalace_last_synced_at DATETIME`},
-		{"sessions", "mempalace_last_error", `ALTER TABLE sessions ADD COLUMN mempalace_last_error TEXT NOT NULL DEFAULT ''`},
+		// ai_sessions (v1 → v2): team_id, module_id (NOT NULL after backfill), auto-sync columns
+		{"ai_sessions", "team_id", `ALTER TABLE ai_sessions ADD COLUMN team_id TEXT NOT NULL DEFAULT ''`},
+		{"ai_sessions", "module_id", `ALTER TABLE ai_sessions ADD COLUMN module_id TEXT NOT NULL DEFAULT ''`},
+		{"ai_sessions", "mempalace_synced_turns", `ALTER TABLE ai_sessions ADD COLUMN mempalace_synced_turns INTEGER NOT NULL DEFAULT 0`},
+		{"ai_sessions", "mempalace_last_synced_at", `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_synced_at DATETIME`},
+		{"ai_sessions", "mempalace_last_error", `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_error TEXT NOT NULL DEFAULT ''`},
 	},
 
-	legacyTeamSQL: `INSERT OR IGNORE INTO teams (id, name, slug, description, owner_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
-	legacyProjectSQL: `INSERT OR IGNORE INTO projects (id, team_id, name, slug, description, path, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-	legacyModuleSQL:  `INSERT OR IGNORE INTO modules (id, project_id, name, description, is_leaf, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+	legacyTeamSQL:    `INSERT OR IGNORE INTO pm_teams (id, name, slug, description, owner_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+	legacyProjectSQL: `INSERT OR IGNORE INTO pm_projects (id, team_id, name, slug, description, path, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+	legacyModuleSQL:  `INSERT OR IGNORE INTO pm_modules (id, project_id, name, description, is_leaf, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
 
 	createIndexes: []indexCreateSpec{
-		{"teams", "idx_teams_slug", `CREATE INDEX IF NOT EXISTS idx_teams_slug ON teams(slug)`},
-		{"team_members", "idx_team_members_user", `CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`},
-		{"projects", "idx_projects_team", `CREATE INDEX IF NOT EXISTS idx_projects_team ON projects(team_id)`},
-		{"projects", "idx_projects_status", `CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)`},
+		{"pm_teams", "idx_pm_teams_slug", `CREATE INDEX IF NOT EXISTS idx_pm_teams_slug ON pm_teams(slug)`},
+		{"pm_team_members", "idx_pm_team_members_user", `CREATE INDEX IF NOT EXISTS idx_pm_team_members_user ON pm_team_members(user_id)`},
+		{"pm_projects", "idx_pm_projects_team", `CREATE INDEX IF NOT EXISTS idx_pm_projects_team ON pm_projects(team_id)`},
+		{"pm_projects", "idx_pm_projects_status", `CREATE INDEX IF NOT EXISTS idx_pm_projects_status ON pm_projects(status)`},
 		// M3: enforce (team_id, slug) uniqueness via a UNIQUE index.
 		// The v2 CREATE TABLE never ran on a v1 → v2 upgraded DB, so
 		// the table-level UNIQUE constraint is missing here. The
 		// UNIQUE INDEX is equivalent for read paths and idempotent.
-		{"projects", "uk_projects_team_slug", `CREATE UNIQUE INDEX IF NOT EXISTS uk_projects_team_slug ON projects(team_id, slug)`},
-		{"modules", "idx_modules_project", `CREATE INDEX IF NOT EXISTS idx_modules_project ON modules(project_id)`},
-		{"modules", "idx_modules_parent", `CREATE INDEX IF NOT EXISTS idx_modules_parent ON modules(parent_id)`},
-		{"modules", "idx_modules_is_leaf", `CREATE INDEX IF NOT EXISTS idx_modules_is_leaf ON modules(is_leaf)`},
+		{"pm_projects", "uk_pm_projects_team_slug", `CREATE UNIQUE INDEX IF NOT EXISTS uk_pm_projects_team_slug ON pm_projects(team_id, slug)`},
+		{"pm_modules", "idx_pm_modules_project", `CREATE INDEX IF NOT EXISTS idx_pm_modules_project ON pm_modules(project_id)`},
+		{"pm_modules", "idx_pm_modules_parent", `CREATE INDEX IF NOT EXISTS idx_pm_modules_parent ON pm_modules(parent_id)`},
+		{"pm_modules", "idx_pm_modules_is_leaf", `CREATE INDEX IF NOT EXISTS idx_pm_modules_is_leaf ON pm_modules(is_leaf)`},
 		// M4: enforce (project_id, parent_id, name) uniqueness via a
-		// UNIQUE INDEX — same rationale as uk_projects_team_slug.
+		// UNIQUE INDEX — same rationale as uk_pm_projects_team_slug.
 		// SQLite treats NULL != NULL in unique indexes so two root
 		// modules can share a name within a project; that matches
 		// the intent (root modules act as a flat namespace within a
 		// project, children must be unique under their parent).
-		{"modules", "uk_modules_project_parent_name", `CREATE UNIQUE INDEX IF NOT EXISTS uk_modules_project_parent_name ON modules(project_id, parent_id, name)`},
-		{"sessions", "idx_sessions_team", `CREATE INDEX IF NOT EXISTS idx_sessions_team ON sessions(team_id)`},
-		{"sessions", "idx_sessions_module", `CREATE INDEX IF NOT EXISTS idx_sessions_module ON sessions(module_id)`},
-		{"sessions", "idx_sessions_mempalace_pending", `CREATE INDEX IF NOT EXISTS idx_sessions_mempalace_pending ON sessions(mempalace_synced_turns, turn_count)`},
-		{"memories", "idx_memories_team", `CREATE INDEX IF NOT EXISTS idx_memories_team ON memories(team_id)`},
-		{"memories", "idx_memories_module", `CREATE INDEX IF NOT EXISTS idx_memories_module ON memories(module_id)`},
-		{"memories", "idx_memories_user", `CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id)`},
+		{"pm_modules", "uk_pm_modules_project_parent_name", `CREATE UNIQUE INDEX IF NOT EXISTS uk_pm_modules_project_parent_name ON pm_modules(project_id, parent_id, name)`},
+		{"ai_sessions", "idx_ai_sessions_team", `CREATE INDEX IF NOT EXISTS idx_ai_sessions_team ON ai_sessions(team_id)`},
+		{"ai_sessions", "idx_ai_sessions_module", `CREATE INDEX IF NOT EXISTS idx_ai_sessions_module ON ai_sessions(module_id)`},
+		{"ai_sessions", "idx_ai_sessions_mempalace_pending", `CREATE INDEX IF NOT EXISTS idx_ai_sessions_mempalace_pending ON ai_sessions(mempalace_synced_turns, turn_count)`},
+		{"ai_memories", "idx_ai_memories_team", `CREATE INDEX IF NOT EXISTS idx_ai_memories_team ON ai_memories(team_id)`},
+		{"ai_memories", "idx_ai_memories_module", `CREATE INDEX IF NOT EXISTS idx_ai_memories_module ON ai_memories(module_id)`},
+		{"ai_memories", "idx_ai_memories_user", `CREATE INDEX IF NOT EXISTS idx_ai_memories_user ON ai_memories(user_id)`},
 		{"ai_tools", "idx_ai_tools_team", `CREATE INDEX IF NOT EXISTS idx_ai_tools_team ON ai_tools(team_id)`},
 		{"ai_tool_invocations", "idx_invocations_tool", `CREATE INDEX IF NOT EXISTS idx_invocations_tool ON ai_tool_invocations(tool_id)`},
 		{"ai_tool_invocations", "idx_invocations_user", `CREATE INDEX IF NOT EXISTS idx_invocations_user ON ai_tool_invocations(user_id)`},
-		{"refresh_tokens", "idx_refresh_tokens_user", `CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id)`},
-		{"refresh_tokens", "idx_refresh_tokens_hash", `CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash)`},
-		{"audit_logs", "idx_audit_ts", `CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts DESC)`},
-		{"audit_logs", "idx_audit_user", `CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id)`},
+		{"sys_refresh_tokens", "idx_sys_refresh_tokens_user", `CREATE INDEX IF NOT EXISTS idx_sys_refresh_tokens_user ON sys_refresh_tokens(user_id)`},
+		{"sys_refresh_tokens", "idx_sys_refresh_tokens_hash", `CREATE INDEX IF NOT EXISTS idx_sys_refresh_tokens_hash ON sys_refresh_tokens(token_hash)`},
+		{"sys_audit_logs", "idx_sys_audit_ts", `CREATE INDEX IF NOT EXISTS idx_sys_audit_ts ON sys_audit_logs(ts DESC)`},
+		{"sys_audit_logs", "idx_sys_audit_user", `CREATE INDEX IF NOT EXISTS idx_sys_audit_user ON sys_audit_logs(user_id)`},
 	},
 
 	// SQLite 3.35+ supports DROP COLUMN; older versions return "" so we
@@ -597,10 +597,10 @@ var sqliteV2DDL = ddlBundle{
 		// always emit the DROP and let it fail silently on old engines.
 		// The isAlreadyExists / sqlite "error in DROP COLUMN" path is
 		// caught in phase 5 and downgraded to a warn.
-		return `ALTER TABLE users DROP COLUMN project_paths`
+		return `ALTER TABLE sys_users DROP COLUMN project_paths`
 	}(),
 
-	upsertTemplateSQL: `INSERT INTO memory_templates (id, name, description, fields_json, body_template, is_builtin)
+	upsertTemplateSQL: `INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
 	                    VALUES (?,?,?,?,?,?)
 	                    ON CONFLICT(id) DO UPDATE SET
 	                        name=excluded.name,
@@ -613,7 +613,7 @@ var sqliteV2DDL = ddlBundle{
 // statements mirror deploy/sql/v2_schema.mysql.sql.
 var mysqlV2DDL = ddlBundle{
 	createTables: []string{
-		`CREATE TABLE IF NOT EXISTS teams (
+		`CREATE TABLE IF NOT EXISTS pm_teams (
             id VARCHAR(128) NOT NULL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             slug VARCHAR(128) NOT NULL,
@@ -622,16 +622,16 @@ var mysqlV2DDL = ddlBundle{
             created_at DATETIME(0) NOT NULL,
             updated_at DATETIME(0) NOT NULL,
             deleted TINYINT(1) NOT NULL DEFAULT 0,
-            UNIQUE KEY uk_teams_slug (slug)
+            UNIQUE KEY uk_pm_teams_slug (slug)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS team_members (
+		`CREATE TABLE IF NOT EXISTS pm_team_members (
             team_id VARCHAR(128) NOT NULL,
             user_id VARCHAR(128) NOT NULL,
             role VARCHAR(32) NOT NULL DEFAULT 'developer',
             joined_at DATETIME(0) NOT NULL,
             PRIMARY KEY (team_id, user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS modules (
+		`CREATE TABLE IF NOT EXISTS pm_modules (
             id VARCHAR(128) NOT NULL PRIMARY KEY,
             project_id VARCHAR(128) NOT NULL,
             parent_id VARCHAR(128) NULL,
@@ -644,7 +644,7 @@ var mysqlV2DDL = ddlBundle{
             updated_at DATETIME(0) NOT NULL,
             deleted TINYINT(1) NOT NULL DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS memory_templates (
+		`CREATE TABLE IF NOT EXISTS ai_memories_templates (
             id VARCHAR(128) NOT NULL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             description TEXT NOT NULL,
@@ -652,7 +652,7 @@ var mysqlV2DDL = ddlBundle{
             body_template MEDIUMTEXT NOT NULL,
             is_builtin TINYINT(1) NOT NULL DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS memories (
+		`CREATE TABLE IF NOT EXISTS ai_memories (
             id VARCHAR(128) NOT NULL PRIMARY KEY,
             team_id VARCHAR(128) NOT NULL,
             project_id VARCHAR(128) NOT NULL,
@@ -700,7 +700,7 @@ var mysqlV2DDL = ddlBundle{
             finished_at DATETIME(0) NULL,
             error TEXT NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+		`CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
             id VARCHAR(128) NOT NULL PRIMARY KEY,
             user_id VARCHAR(128) NOT NULL,
             token_hash VARCHAR(255) NOT NULL,
@@ -708,7 +708,7 @@ var mysqlV2DDL = ddlBundle{
             expires_at DATETIME(0) NOT NULL,
             revoked_at DATETIME(0) NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS audit_logs (
+		`CREATE TABLE IF NOT EXISTS sys_audit_logs (
             id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
             ts DATETIME(0) NOT NULL,
             user_id VARCHAR(128) NULL,
@@ -720,68 +720,68 @@ var mysqlV2DDL = ddlBundle{
 	},
 
 	addColumns: []addColumnSpec{
-		{"users", "username", `ALTER TABLE users ADD COLUMN username VARCHAR(128) NOT NULL DEFAULT ''`},
-		{"users", "password_hash", `ALTER TABLE users ADD COLUMN password_hash VARCHAR(255) NOT NULL DEFAULT ''`},
-		{"users", "email", `ALTER TABLE users ADD COLUMN email VARCHAR(255) NOT NULL DEFAULT ''`},
-		{"users", "default_team_id", `ALTER TABLE users ADD COLUMN default_team_id VARCHAR(128) NULL`},
-		{"users", "role", `ALTER TABLE users ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT 'developer'`},
-		{"users", "must_change_password", `ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1`},
-		{"users", "updated_at", `ALTER TABLE users ADD COLUMN updated_at DATETIME(0) NULL`},
-		{"users", "last_login_at", `ALTER TABLE users ADD COLUMN last_login_at DATETIME(0) NULL`},
+		{"sys_users", "username", `ALTER TABLE sys_users ADD COLUMN username VARCHAR(128) NOT NULL DEFAULT ''`},
+		{"sys_users", "password_hash", `ALTER TABLE sys_users ADD COLUMN password_hash VARCHAR(255) NOT NULL DEFAULT ''`},
+		{"sys_users", "email", `ALTER TABLE sys_users ADD COLUMN email VARCHAR(255) NOT NULL DEFAULT ''`},
+		{"sys_users", "default_team_id", `ALTER TABLE sys_users ADD COLUMN default_team_id VARCHAR(128) NULL`},
+		{"sys_users", "role", `ALTER TABLE sys_users ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT 'developer'`},
+		{"sys_users", "must_change_password", `ALTER TABLE sys_users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1`},
+		{"sys_users", "updated_at", `ALTER TABLE sys_users ADD COLUMN updated_at DATETIME(0) NULL`},
+		{"sys_users", "last_login_at", `ALTER TABLE sys_users ADD COLUMN last_login_at DATETIME(0) NULL`},
 
-		{"projects", "team_id", `ALTER TABLE projects ADD COLUMN team_id VARCHAR(128) NULL`},
-		{"projects", "slug", `ALTER TABLE projects ADD COLUMN slug VARCHAR(128) NOT NULL DEFAULT ''`},
-		{"projects", "description", `ALTER TABLE projects ADD COLUMN description TEXT NOT NULL`},
-		{"projects", "git_url", `ALTER TABLE projects ADD COLUMN git_url VARCHAR(512) NOT NULL DEFAULT ''`},
-		{"projects", "git_branch", `ALTER TABLE projects ADD COLUMN git_branch VARCHAR(128) NOT NULL DEFAULT ''`},
-		{"projects", "git_commit_sha", `ALTER TABLE projects ADD COLUMN git_commit_sha VARCHAR(64) NOT NULL DEFAULT ''`},
-		{"projects", "status", `ALTER TABLE projects ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'ready'`},
+		{"pm_projects", "team_id", `ALTER TABLE pm_projects ADD COLUMN team_id VARCHAR(128) NULL`},
+		{"pm_projects", "slug", `ALTER TABLE pm_projects ADD COLUMN slug VARCHAR(128) NOT NULL DEFAULT ''`},
+		{"pm_projects", "description", `ALTER TABLE pm_projects ADD COLUMN description TEXT NOT NULL`},
+		{"pm_projects", "git_url", `ALTER TABLE pm_projects ADD COLUMN git_url VARCHAR(512) NOT NULL DEFAULT ''`},
+		{"pm_projects", "git_branch", `ALTER TABLE pm_projects ADD COLUMN git_branch VARCHAR(128) NOT NULL DEFAULT ''`},
+		{"pm_projects", "git_commit_sha", `ALTER TABLE pm_projects ADD COLUMN git_commit_sha VARCHAR(64) NOT NULL DEFAULT ''`},
+		{"pm_projects", "status", `ALTER TABLE pm_projects ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'ready'`},
 		// M3: same late-arrival ALTER as the SQLite variant.
-		{"projects", "owner_id", `ALTER TABLE projects ADD COLUMN owner_id VARCHAR(128) NOT NULL DEFAULT ''`},
+		{"pm_projects", "owner_id", `ALTER TABLE pm_projects ADD COLUMN owner_id VARCHAR(128) NOT NULL DEFAULT ''`},
 
-		{"sessions", "team_id", `ALTER TABLE sessions ADD COLUMN team_id VARCHAR(128) NOT NULL DEFAULT ''`},
-		{"sessions", "module_id", `ALTER TABLE sessions ADD COLUMN module_id VARCHAR(128) NOT NULL DEFAULT ''`},
-		{"sessions", "mempalace_synced_turns", `ALTER TABLE sessions ADD COLUMN mempalace_synced_turns INT NOT NULL DEFAULT 0`},
-		{"sessions", "mempalace_last_synced_at", `ALTER TABLE sessions ADD COLUMN mempalace_last_synced_at DATETIME(0) NULL`},
-		{"sessions", "mempalace_last_error", `ALTER TABLE sessions ADD COLUMN mempalace_last_error TEXT NOT NULL`},
+		{"ai_sessions", "team_id", `ALTER TABLE ai_sessions ADD COLUMN team_id VARCHAR(128) NOT NULL DEFAULT ''`},
+		{"ai_sessions", "module_id", `ALTER TABLE ai_sessions ADD COLUMN module_id VARCHAR(128) NOT NULL DEFAULT ''`},
+		{"ai_sessions", "mempalace_synced_turns", `ALTER TABLE ai_sessions ADD COLUMN mempalace_synced_turns INT NOT NULL DEFAULT 0`},
+		{"ai_sessions", "mempalace_last_synced_at", `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_synced_at DATETIME(0) NULL`},
+		{"ai_sessions", "mempalace_last_error", `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_error TEXT NOT NULL`},
 	},
 
-	legacyTeamSQL: `INSERT IGNORE INTO teams (id, name, slug, description, owner_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
-	legacyProjectSQL: `INSERT IGNORE INTO projects (id, team_id, name, slug, description, path, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-	legacyModuleSQL: `INSERT IGNORE INTO modules (id, project_id, name, description, is_leaf, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+	legacyTeamSQL:    `INSERT IGNORE INTO pm_teams (id, name, slug, description, owner_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+	legacyProjectSQL: `INSERT IGNORE INTO pm_projects (id, team_id, name, slug, description, path, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+	legacyModuleSQL:  `INSERT IGNORE INTO pm_modules (id, project_id, name, description, is_leaf, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
 
 	createIndexes: []indexCreateSpec{
-		{"team_members", "idx_team_members_user", `CREATE INDEX idx_team_members_user ON team_members(user_id)`},
-		{"projects", "idx_projects_team", `CREATE INDEX idx_projects_team ON projects(team_id)`},
-		{"projects", "idx_projects_status", `CREATE INDEX idx_projects_status ON projects(status)`},
+		{"pm_team_members", "idx_pm_team_members_user", `CREATE INDEX idx_pm_team_members_user ON pm_team_members(user_id)`},
+		{"pm_projects", "idx_pm_projects_team", `CREATE INDEX idx_pm_projects_team ON pm_projects(team_id)`},
+		{"pm_projects", "idx_pm_projects_status", `CREATE INDEX idx_pm_projects_status ON pm_projects(status)`},
 		// M3: enforce (team_id, slug) uniqueness — see the SQLite
 		// analogue above for the rationale.
-		{"projects", "uk_projects_team_slug", `CREATE UNIQUE INDEX uk_projects_team_slug ON projects(team_id, slug)`},
-		{"modules", "idx_modules_project", `CREATE INDEX idx_modules_project ON modules(project_id)`},
-		{"modules", "idx_modules_parent", `CREATE INDEX idx_modules_parent ON modules(parent_id)`},
-		{"modules", "idx_modules_is_leaf", `CREATE INDEX idx_modules_is_leaf ON modules(is_leaf)`},
+		{"pm_projects", "uk_pm_projects_team_slug", `CREATE UNIQUE INDEX uk_pm_projects_team_slug ON pm_projects(team_id, slug)`},
+		{"pm_modules", "idx_pm_modules_project", `CREATE INDEX idx_pm_modules_project ON pm_modules(project_id)`},
+		{"pm_modules", "idx_pm_modules_parent", `CREATE INDEX idx_pm_modules_parent ON pm_modules(parent_id)`},
+		{"pm_modules", "idx_pm_modules_is_leaf", `CREATE INDEX idx_pm_modules_is_leaf ON pm_modules(is_leaf)`},
 		// M4: same composite UNIQUE as the SQLite variant.
-		{"modules", "uk_modules_project_parent_name", `CREATE UNIQUE INDEX uk_modules_project_parent_name ON modules(project_id, parent_id, name)`},
-		{"sessions", "idx_sessions_team", `CREATE INDEX idx_sessions_team ON sessions(team_id)`},
-		{"sessions", "idx_sessions_module", `CREATE INDEX idx_sessions_module ON sessions(module_id)`},
-		{"sessions", "idx_sessions_mempalace_pending", `CREATE INDEX idx_sessions_mempalace_pending ON sessions(mempalace_synced_turns, turn_count)`},
-		{"memories", "idx_memories_team", `CREATE INDEX idx_memories_team ON memories(team_id)`},
-		{"memories", "idx_memories_module", `CREATE INDEX idx_memories_module ON memories(module_id)`},
-		{"memories", "idx_memories_user", `CREATE INDEX idx_memories_user ON memories(user_id)`},
+		{"pm_modules", "uk_pm_modules_project_parent_name", `CREATE UNIQUE INDEX uk_pm_modules_project_parent_name ON pm_modules(project_id, parent_id, name)`},
+		{"ai_sessions", "idx_ai_sessions_team", `CREATE INDEX idx_ai_sessions_team ON ai_sessions(team_id)`},
+		{"ai_sessions", "idx_ai_sessions_module", `CREATE INDEX idx_ai_sessions_module ON ai_sessions(module_id)`},
+		{"ai_sessions", "idx_ai_sessions_mempalace_pending", `CREATE INDEX idx_ai_sessions_mempalace_pending ON ai_sessions(mempalace_synced_turns, turn_count)`},
+		{"ai_memories", "idx_ai_memories_team", `CREATE INDEX idx_ai_memories_team ON ai_memories(team_id)`},
+		{"ai_memories", "idx_ai_memories_module", `CREATE INDEX idx_ai_memories_module ON ai_memories(module_id)`},
+		{"ai_memories", "idx_ai_memories_user", `CREATE INDEX idx_ai_memories_user ON ai_memories(user_id)`},
 		{"ai_tools", "idx_ai_tools_team", `CREATE INDEX idx_ai_tools_team ON ai_tools(team_id)`},
 		{"ai_tool_invocations", "idx_invocations_tool", `CREATE INDEX idx_invocations_tool ON ai_tool_invocations(tool_id)`},
 		{"ai_tool_invocations", "idx_invocations_user", `CREATE INDEX idx_invocations_user ON ai_tool_invocations(user_id)`},
-		{"refresh_tokens", "idx_refresh_tokens_user", `CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id)`},
-		{"refresh_tokens", "idx_refresh_tokens_hash", `CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash)`},
-		{"audit_logs", "idx_audit_ts", `CREATE INDEX idx_audit_ts ON audit_logs(ts)`},
-		{"audit_logs", "idx_audit_user", `CREATE INDEX idx_audit_user ON audit_logs(user_id)`},
+		{"sys_refresh_tokens", "idx_sys_refresh_tokens_user", `CREATE INDEX idx_sys_refresh_tokens_user ON sys_refresh_tokens(user_id)`},
+		{"sys_refresh_tokens", "idx_sys_refresh_tokens_hash", `CREATE INDEX idx_sys_refresh_tokens_hash ON sys_refresh_tokens(token_hash)`},
+		{"sys_audit_logs", "idx_sys_audit_ts", `CREATE INDEX idx_sys_audit_ts ON sys_audit_logs(ts)`},
+		{"sys_audit_logs", "idx_sys_audit_user", `CREATE INDEX idx_sys_audit_user ON sys_audit_logs(user_id)`},
 	},
 
 	// MySQL 8.0.29+ supports DROP COLUMN; older versions fail silently
 	// at runtime and the warn() downgrade in migrateV2Phase5 hides it.
-	dropProjectPaths: `ALTER TABLE users DROP COLUMN project_paths`,
+	dropProjectPaths: `ALTER TABLE sys_users DROP COLUMN project_paths`,
 
-	upsertTemplateSQL: `INSERT INTO memory_templates (id, name, description, fields_json, body_template, is_builtin)
+	upsertTemplateSQL: `INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
 	                    VALUES (?,?,?,?,?,?)
 	                    ON DUPLICATE KEY UPDATE
 	                        name=VALUES(name),

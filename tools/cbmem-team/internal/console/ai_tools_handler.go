@@ -335,7 +335,7 @@ func (h *AIToolHandlers) Invoke() gin.HandlerFunc {
 		if workingDir == "" {
 			var p string
 			if err := h.DB.QueryRowContext(ctx,
-				`SELECT path FROM projects WHERE id = ? AND deleted = 0`, req.ProjectID,
+				`SELECT path FROM pm_projects WHERE id = ? AND deleted = 0`, req.ProjectID,
 			).Scan(&p); err == nil {
 				workingDir = p
 			}
@@ -344,13 +344,13 @@ func (h *AIToolHandlers) Invoke() gin.HandlerFunc {
 		// Without this the invocation INSERT fails with FK violations.
 		var projCount, modCount int
 		if err := h.DB.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM projects WHERE id = ? AND deleted = 0`, req.ProjectID,
+			`SELECT COUNT(*) FROM pm_projects WHERE id = ? AND deleted = 0`, req.ProjectID,
 		).Scan(&projCount); err != nil || projCount == 0 {
 			Fail(c, http.StatusBadRequest, 4000210, "project not found")
 			return
 		}
 		if err := h.DB.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM modules WHERE id = ? AND deleted = 0`, req.ModuleID,
+			`SELECT COUNT(*) FROM pm_modules WHERE id = ? AND deleted = 0`, req.ModuleID,
 		).Scan(&modCount); err != nil || modCount == 0 {
 			Fail(c, http.StatusBadRequest, 4000211, "module not found")
 			return

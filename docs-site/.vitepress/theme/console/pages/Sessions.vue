@@ -110,7 +110,7 @@ const columns = [
 ]
 
 async function loadTeams() {
-  try { teams.value = await TeamsAPI.list() } catch {}
+  try { const r = await TeamsAPI.list(); teams.value = r?.list || r || [] } catch {}
 }
 
 async function onTeamChange() {

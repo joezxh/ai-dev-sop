@@ -378,7 +378,7 @@ func (h *memTestHarness) teamIDFromLeaf(t *testing.T, leafID string) string {
 	t.Helper()
 	var teamID string
 	err := h.DB.QueryRowContext(context.Background(),
-		`SELECT p.team_id FROM modules m JOIN projects p ON p.id = m.project_id WHERE m.id = ?`,
+		`SELECT p.team_id FROM pm_modules m JOIN pm_projects p ON p.id = m.project_id WHERE m.id = ?`,
 		leafID,
 	).Scan(&teamID)
 	if err != nil {

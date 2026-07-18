@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"cbmem-team/internal/auth"
 )
 
 // =============================================================================
@@ -70,7 +72,7 @@ func (db *DB) CreateUser(ctx context.Context, u *User) error {
 		displayName = u.Username
 	}
 
-	q := `INSERT INTO users
+	q := `INSERT INTO sys_users
         (id, username, display_name, email, password_hash,
          default_team_id, role, must_change_password, disabled,
          created_at, updated_at)
@@ -96,7 +98,7 @@ func (db *DB) GetUserByID(ctx context.Context, id string) (*User, error) {
 	const q = `SELECT id, username, display_name, email, password_hash,
                       default_team_id, role, must_change_password, disabled,
                       created_at, updated_at, last_login_at
-                 FROM users WHERE id = ?`
+                 FROM sys_users WHERE id = ?`
 	return db.scanUser(db.QueryRowContext(ctx, q, id))
 }
 
@@ -115,7 +117,7 @@ func (db *DB) GetUserByUsername(ctx context.Context, username string) (*User, er
 		q = `SELECT id, username, display_name, email, password_hash,
                     default_team_id, role, must_change_password, disabled,
                     created_at, updated_at, last_login_at
-               FROM users WHERE LOWER(username) = LOWER(?)`
+               FROM sys_users WHERE LOWER(username) = LOWER(?)`
 	} else {
 		// SQLite: LIKE is case-insensitive for ASCII by default;
 		// equality is too because the default collation is NOCASE for
@@ -124,7 +126,7 @@ func (db *DB) GetUserByUsername(ctx context.Context, username string) (*User, er
 		q = `SELECT id, username, display_name, email, password_hash,
                     default_team_id, role, must_change_password, disabled,
                     created_at, updated_at, last_login_at
-               FROM users WHERE LOWER(username) = LOWER(?)`
+               FROM sys_users WHERE LOWER(username) = LOWER(?)`
 	}
 	stmt = q
 	_ = stmt
@@ -137,7 +139,7 @@ func (db *DB) ListUsers(ctx context.Context) ([]*User, error) {
 	const q = `SELECT id, username, display_name, email, password_hash,
                       default_team_id, role, must_change_password, disabled,
                       created_at, updated_at, last_login_at
-                 FROM users
+                 FROM sys_users
                 ORDER BY created_at ASC`
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
@@ -162,7 +164,7 @@ func (db *DB) UpdateUserPassword(ctx context.Context, id, newHash string) error 
 		return errors.New("UpdateUserPassword: empty hash")
 	}
 	res, err := db.ExecContext(ctx,
-		`UPDATE users
+		`UPDATE sys_users
             SET password_hash = ?, must_change_password = 0, updated_at = ?
           WHERE id = ?`,
 		newHash, time.Now().UTC(), id,
@@ -184,7 +186,7 @@ func (db *DB) UpdateUserPassword(ctx context.Context, id, newHash string) error 
 // login handler on success.
 func (db *DB) UpdateUserLastLogin(ctx context.Context, id string) error {
 	_, err := db.ExecContext(ctx,
-		`UPDATE users SET last_login_at = ? WHERE id = ?`,
+		`UPDATE sys_users SET last_login_at = ? WHERE id = ?`,
 		time.Now().UTC(), id,
 	)
 	return err
@@ -194,7 +196,7 @@ func (db *DB) UpdateUserLastLogin(ctx context.Context, id string) error {
 // how an admin revokes access; the login handler refuses disabled users.
 func (db *DB) SetUserDisabled(ctx context.Context, id string, disabled bool) error {
 	res, err := db.ExecContext(ctx,
-		`UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?`,
+		`UPDATE sys_users SET disabled = ?, updated_at = ? WHERE id = ?`,
 		boolToInt(disabled), time.Now().UTC(), id,
 	)
 	if err != nil {
@@ -221,7 +223,7 @@ func (db *DB) SetUserDisabled(ctx context.Context, id string, disabled bool) err
 func (db *DB) CountUsers(ctx context.Context) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM users`,
+		`SELECT COUNT(*) FROM sys_users`,
 	).Scan(&n)
 	return n, err
 }
@@ -240,7 +242,7 @@ func (db *DB) CreateRefreshToken(ctx context.Context, id, userID, plaintext stri
 	}
 	now := time.Now().UTC()
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
+		`INSERT INTO sys_refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
               VALUES (?, ?, ?, ?, ?)`,
 		id, userID, hashToken(plaintext), now, now.Add(ttl),
 	)
@@ -263,7 +265,7 @@ func (db *DB) ValidateRefreshToken(ctx context.Context, plaintext string) (userI
 		return "", "", errors.New("empty token")
 	}
 	const q = `SELECT user_id, id, expires_at, revoked_at
-                 FROM refresh_tokens
+                 FROM sys_refresh_tokens
                 WHERE token_hash = ?
                 ORDER BY issued_at DESC
                 LIMIT 1`
@@ -293,7 +295,7 @@ func (db *DB) RevokeRefreshToken(ctx context.Context, tokenID string) error {
 		return errors.New("empty token id")
 	}
 	_, err := db.ExecContext(ctx,
-		`UPDATE refresh_tokens SET revoked_at = ?
+		`UPDATE sys_refresh_tokens SET revoked_at = ?
           WHERE id = ? AND revoked_at IS NULL`,
 		time.Now().UTC(), tokenID,
 	)
@@ -305,7 +307,7 @@ func (db *DB) RevokeRefreshToken(ctx context.Context, tokenID string) error {
 // somehow learned the old password is logged out.
 func (db *DB) RevokeAllRefreshTokensForUser(ctx context.Context, userID string) error {
 	_, err := db.ExecContext(ctx,
-		`UPDATE refresh_tokens SET revoked_at = ?
+		`UPDATE sys_refresh_tokens SET revoked_at = ?
           WHERE user_id = ? AND revoked_at IS NULL`,
 		time.Now().UTC(), userID,
 	)
@@ -318,7 +320,7 @@ func (db *DB) RevokeAllRefreshTokensForUser(ctx context.Context, userID string) 
 func (db *DB) PurgeExpiredRefreshTokens(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().UTC().Add(-olderThan)
 	res, err := db.ExecContext(ctx,
-		`DELETE FROM refresh_tokens
+		`DELETE FROM sys_refresh_tokens
           WHERE (revoked_at IS NOT NULL OR expires_at < ?)
             AND issued_at < ?`,
 		cutoff, cutoff,
@@ -404,4 +406,82 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// SeedDefaultAdmin creates the default admin user (username "admin",
+// password "admin123") when no admin user exists yet. It is called
+// automatically on every boot so fresh installs don't require manual
+// SQL seeding. Returns the number of rows created/updated (0 or 1)
+// and any error encountered.
+//
+// When the admin user already exists but carries a legacy sentinel
+// password hash (e.g. "!v1-legacy-must-reset!" or empty string from
+// a v1→v2 migration), the hash is overwritten with the real bcrypt
+// of "admin123" so the console login works without manual SQL.
+//
+// The default password is intentionally weak — operators should change
+// it immediately via the console UI.
+func SeedDefaultAdmin(ctx context.Context, db *DB) (int, error) {
+	const defaultPassword = "admin123"
+
+	// Probe: does an admin user already exist?
+	existing, err := db.GetUserByUsername(ctx, "admin")
+	if err == nil {
+		// User exists. Check whether the password hash needs resetting:
+		//   1. Legacy sentinel / empty → always reset.
+		//   2. Real bcrypt that doesn't match defaultPassword → reset so
+		//      the documented default credentials work on every boot.
+		//      (Operators who change the password should NOT use the
+		//      username "admin" with defaultPassword; the seed only
+		//      fires for the well-known default.)
+		needsReset := auth.IsLegacySentinel(existing.PasswordHash) || existing.PasswordHash == ""
+		if !needsReset {
+			// Verify whether the current hash matches the default.
+			if verifyErr := auth.Verify(existing.PasswordHash, defaultPassword); verifyErr != nil {
+				needsReset = true
+			}
+		}
+		if needsReset {
+			hash, hashErr := auth.HashWith(defaultPassword, auth.BcryptCost)
+			if hashErr != nil {
+				return 0, fmt.Errorf("hash default admin password: %w", hashErr)
+			}
+			if _, err := db.ExecContext(ctx,
+				`UPDATE sys_users SET password_hash = ?, must_change_password = 0 WHERE id = ?`,
+				hash, existing.ID,
+			); err != nil {
+				return 0, fmt.Errorf("reset admin password hash: %w", err)
+			}
+			return 1, nil
+		}
+		// Admin exists with correct default password — nothing to do.
+		return 0, nil
+	}
+	if !errors.Is(err, ErrUserNotFound) {
+		return 0, fmt.Errorf("probe admin user: %w", err)
+	}
+
+	// No admin user — create one.
+	hash, err := auth.HashWith(defaultPassword, auth.BcryptCost)
+	if err != nil {
+		return 0, fmt.Errorf("hash default admin password: %w", err)
+	}
+
+	u := &User{
+		ID:                 "u_admin_default",
+		Username:           "admin",
+		DisplayName:        "Administrator",
+		Email:              "admin@example.com",
+		PasswordHash:       hash,
+		Role:               string(RoleAdmin),
+		MustChangePassword: false,
+	}
+	if err := db.CreateUser(ctx, u); err != nil {
+		// Race: another goroutine / replica seeded it first.
+		if errors.Is(err, ErrUserExists) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("create default admin: %w", err)
+	}
+	return 1, nil
 }

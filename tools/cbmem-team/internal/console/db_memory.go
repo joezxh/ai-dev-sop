@@ -37,11 +37,11 @@ var (
 // rejected at the storage boundary so the CHECK constraint and the
 // UI stay in sync.
 var validHalls = map[string]bool{
-	"facts":        true,
-	"events":       true,
-	"discoveries":  true,
-	"preferences":  true,
-	"advice":       true,
+	"facts":       true,
+	"events":      true,
+	"discoveries": true,
+	"preferences": true,
+	"advice":      true,
 }
 
 // Default hall when callers don't specify one.
@@ -57,7 +57,7 @@ const defaultHall = "facts"
 // templates are returned.
 func (db *DB) ListMemoryTemplates(ctx context.Context, builtinOnly bool) ([]*MemoryTemplate, error) {
 	q := `SELECT id, name, description, fields_json, body_template, is_builtin
-            FROM memory_templates`
+            FROM ai_memories_templates`
 	if builtinOnly {
 		q += ` WHERE is_builtin = 1`
 	}
@@ -81,7 +81,7 @@ func (db *DB) ListMemoryTemplates(ctx context.Context, builtinOnly bool) ([]*Mem
 // GetMemoryTemplate returns one template by id.
 func (db *DB) GetMemoryTemplate(ctx context.Context, id string) (*MemoryTemplate, error) {
 	const q = `SELECT id, name, description, fields_json, body_template, is_builtin
-                 FROM memory_templates WHERE id = ?`
+                 FROM ai_memories_templates WHERE id = ?`
 	row := db.QueryRowContext(ctx, q, id)
 	return scanMemoryTemplate(row)
 }
@@ -97,7 +97,7 @@ func (db *DB) CreateMemoryTemplate(ctx context.Context, t *MemoryTemplate) error
 		return errors.New("CreateMemoryTemplate: name required")
 	}
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO memory_templates (id, name, description, fields_json, body_template, is_builtin)
+		`INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
          VALUES (?, ?, ?, ?, ?, 0)`,
 		t.ID, t.Name, t.Description, t.FieldsJSON, t.BodyTemplate,
 	); err != nil {
@@ -189,7 +189,7 @@ func (db *DB) CreateMemory(ctx context.Context, m *Memory) error {
 		templateID = sql.NullString{String: m.TemplateID, Valid: true}
 	}
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO memories
+		`INSERT INTO ai_memories
             (id, team_id, project_id, module_id, user_id, title, content,
              template_id, tags_json, hall, created_at, updated_at, deleted)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -207,7 +207,7 @@ func (db *DB) CreateMemory(ctx context.Context, m *Memory) error {
 func (db *DB) GetMemory(ctx context.Context, id string) (*Memory, error) {
 	const q = `SELECT id, team_id, project_id, module_id, user_id, title, content,
                       template_id, tags_json, hall, created_at, updated_at, deleted
-                 FROM memories WHERE id = ? AND deleted = 0`
+                 FROM ai_memories WHERE id = ? AND deleted = 0`
 	row := db.QueryRowContext(ctx, q, id)
 	return scanMemory(row)
 }
@@ -224,7 +224,7 @@ func (db *DB) ListMemories(ctx context.Context, f MemoryFilter) ([]*Memory, int,
 	where, args := memoriesWhere(f)
 	q := `SELECT id, team_id, project_id, module_id, user_id, title, content,
                  template_id, tags_json, hall, created_at, updated_at, deleted
-            FROM memories` + where +
+            FROM ai_memories` + where +
 		` ORDER BY updated_at DESC LIMIT ? OFFSET ?`
 	args = append(args, f.Limit, f.Offset)
 	rows, err := db.QueryContext(ctx, q, args...)
@@ -243,7 +243,7 @@ func (db *DB) ListMemories(ctx context.Context, f MemoryFilter) ([]*Memory, int,
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
-	cntQ := "SELECT COUNT(*) FROM memories" + where
+	cntQ := "SELECT COUNT(*) FROM ai_memories" + where
 	var total int
 	if err := db.QueryRowContext(ctx, cntQ, args[:len(args)-2]...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count memories: %w", err)
@@ -268,7 +268,7 @@ func (db *DB) UpdateMemory(ctx context.Context, id string, title, content, hall 
 		tagsJSON = sql.NullString{String: j, Valid: true}
 	}
 	res, err := db.ExecContext(ctx,
-		`UPDATE memories
+		`UPDATE ai_memories
             SET title    = COALESCE(?, title),
                 content  = COALESCE(?, content),
                 hall     = COALESCE(?, hall),
@@ -291,7 +291,7 @@ func (db *DB) UpdateMemory(ctx context.Context, id string, title, content, hall 
 // SoftDeleteMemory flips deleted=1.
 func (db *DB) SoftDeleteMemory(ctx context.Context, id string) error {
 	res, err := db.ExecContext(ctx,
-		`UPDATE memories SET deleted = 1, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE ai_memories SET deleted = 1, updated_at = ? WHERE id = ? AND deleted = 0`,
 		time.Now().UTC(), id,
 	)
 	if err != nil {
@@ -310,7 +310,7 @@ func (db *DB) SoftDeleteMemory(ctx context.Context, id string) error {
 func (db *DB) CountMemoriesUnderModule(ctx context.Context, moduleID string) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM memories WHERE module_id = ? AND deleted = 0`,
+		`SELECT COUNT(*) FROM ai_memories WHERE module_id = ? AND deleted = 0`,
 		moduleID,
 	).Scan(&n)
 	return n, err
@@ -324,7 +324,7 @@ func (db *DB) MemoryAccessibleByUser(ctx context.Context, memoryID, userID, role
 	}
 	var teamID string
 	err := db.QueryRowContext(ctx,
-		`SELECT team_id FROM memories WHERE id = ? AND deleted = 0`, memoryID,
+		`SELECT team_id FROM ai_memories WHERE id = ? AND deleted = 0`, memoryID,
 	).Scan(&teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -363,7 +363,7 @@ func (db *DB) CreateSummarizeTask(ctx context.Context, t *SummarizeTask) error {
 		t.Status = "pending"
 	}
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO summarize_tasks (id, user_id, source_ids, depth, target_wing, status, result_json, created_at)
+		`INSERT INTO ai_summarize_tasks (id, user_id, source_ids, depth, target_wing, status, result_json, created_at)
          VALUES (?, ?, ?, ?, ?, ?, '', ?)`,
 		t.ID, t.UserID, t.SourceIDs, t.Depth, t.TargetWing, t.Status, t.CreatedAt,
 	); err != nil {
@@ -376,7 +376,7 @@ func (db *DB) CreateSummarizeTask(ctx context.Context, t *SummarizeTask) error {
 func (db *DB) GetSummarizeTask(ctx context.Context, id string) (*SummarizeTask, error) {
 	const q = `SELECT id, IFNULL(user_id,''), source_ids, depth, target_wing, status,
                       result_json, created_at, finished_at
-                 FROM summarize_tasks WHERE id = ?`
+                 FROM ai_summarize_tasks WHERE id = ?`
 	row := db.QueryRowContext(ctx, q, id)
 	return scanSummarizeTask(row)
 }
@@ -391,7 +391,7 @@ func (db *DB) ListSummarizeTasks(ctx context.Context, userID string, limit int) 
 	}
 	q := `SELECT id, IFNULL(user_id,''), source_ids, depth, target_wing, status,
                   result_json, created_at, finished_at
-             FROM summarize_tasks`
+             FROM ai_summarize_tasks`
 	args := []any{}
 	if userID != "" {
 		q += ` WHERE user_id = ?`
@@ -428,7 +428,7 @@ func (db *DB) CreateDistillTask(ctx context.Context, t *DistillTask) error {
 		t.Status = "pending"
 	}
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO distill_tasks (id, user_id, source_ids, rules_json, status, result_json, mempalace_synced, target_wing, created_at)
+		`INSERT INTO ai_distill_tasks (id, user_id, source_ids, rules_json, status, result_json, mempalace_synced, target_wing, created_at)
          VALUES (?, ?, ?, ?, ?, '', 0, ?, ?)`,
 		t.ID, t.UserID, t.SourceIDs, t.RulesJSON, t.Status, t.TargetWing, t.CreatedAt,
 	); err != nil {
@@ -441,7 +441,7 @@ func (db *DB) CreateDistillTask(ctx context.Context, t *DistillTask) error {
 func (db *DB) GetDistillTask(ctx context.Context, id string) (*DistillTask, error) {
 	const q = `SELECT id, IFNULL(user_id,''), source_ids, rules_json, status, result_json,
                       mempalace_synced, target_wing, created_at, finished_at
-                 FROM distill_tasks WHERE id = ?`
+                 FROM ai_distill_tasks WHERE id = ?`
 	row := db.QueryRowContext(ctx, q, id)
 	return scanDistillTask(row)
 }
@@ -456,7 +456,7 @@ func (db *DB) ListDistillTasks(ctx context.Context, userID string, limit int) ([
 	}
 	q := `SELECT id, IFNULL(user_id,''), source_ids, rules_json, status, result_json,
                   mempalace_synced, target_wing, created_at, finished_at
-             FROM distill_tasks`
+             FROM ai_distill_tasks`
 	args := []any{}
 	if userID != "" {
 		q += ` WHERE user_id = ?`

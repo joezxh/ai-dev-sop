@@ -72,7 +72,7 @@ func (db *DB) CreateModule(ctx context.Context, m *Module) error {
 	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO modules
+		`INSERT INTO pm_modules
             (id, project_id, parent_id, name, path, description, "order", is_leaf, created_at, updated_at, deleted)
          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 0)`,
 		m.ID, m.ProjectID, nullableParent(m.ParentID), m.Name, m.Path,
@@ -109,7 +109,7 @@ func flipLeafInTx(ctx context.Context, tx *sql.Tx, id string, leaf bool) error {
 		v = 1
 	}
 	res, err := tx.ExecContext(ctx,
-		`UPDATE modules SET is_leaf = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE pm_modules SET is_leaf = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
 		v, time.Now().UTC(), id,
 	)
 	if err != nil {
@@ -129,7 +129,7 @@ func (db *DB) GetModuleByID(ctx context.Context, id string) (*Module, error) {
 	const q = `SELECT id, IFNULL(project_id,''), parent_id, name, IFNULL(path,''),
                       IFNULL(description,''), "order",
                       is_leaf, created_at, updated_at, deleted
-                 FROM modules WHERE id = ? AND deleted = 0`
+                 FROM pm_modules WHERE id = ? AND deleted = 0`
 	row := db.QueryRowContext(ctx, q, id)
 	return db.scanModule(row)
 }
@@ -141,7 +141,7 @@ func (db *DB) ListModulesByProject(ctx context.Context, projectID string) ([]*Mo
 	const q = `SELECT id, IFNULL(project_id,''), parent_id, name, IFNULL(path,''),
                       IFNULL(description,''), "order",
                       is_leaf, created_at, updated_at, deleted
-                 FROM modules
+                 FROM pm_modules
                 WHERE deleted = 0 AND project_id = ?
                 ORDER BY (parent_id IS NULL) DESC, parent_id, "order", name`
 	rows, err := db.QueryContext(ctx, q, projectID)
@@ -172,7 +172,7 @@ func (db *DB) ListChildModules(ctx context.Context, parentID string) ([]*Module,
 			`SELECT id, IFNULL(project_id,''), parent_id, name, IFNULL(path,''),
                     IFNULL(description,''), "order",
                     is_leaf, created_at, updated_at, deleted
-               FROM modules
+               FROM pm_modules
               WHERE deleted = 0 AND parent_id IS NULL
               ORDER BY "order", name`)
 	} else {
@@ -180,7 +180,7 @@ func (db *DB) ListChildModules(ctx context.Context, parentID string) ([]*Module,
 			`SELECT id, IFNULL(project_id,''), parent_id, name, IFNULL(path,''),
                     IFNULL(description,''), "order",
                     is_leaf, created_at, updated_at, deleted
-               FROM modules
+               FROM pm_modules
               WHERE deleted = 0 AND parent_id = ?
               ORDER BY "order", name`, parentID)
 	}
@@ -204,7 +204,7 @@ func (db *DB) ListChildModules(ctx context.Context, parentID string) ([]*Module,
 func (db *DB) UpdateModule(ctx context.Context, id string, name, path, description *string, order *int) error {
 	now := time.Now().UTC()
 	res, err := db.ExecContext(ctx,
-		`UPDATE modules
+		`UPDATE pm_modules
             SET name        = COALESCE(?, name),
                 path        = COALESCE(?, path),
                 description = COALESCE(?, description),
@@ -268,7 +268,7 @@ func (db *DB) MoveModule(ctx context.Context, id string, newParentID *string) er
 	// it has no more children).
 	var oldParent sql.NullString
 	if err := tx.QueryRowContext(ctx,
-		`SELECT parent_id FROM modules WHERE id = ? AND deleted = 0`, id,
+		`SELECT parent_id FROM pm_modules WHERE id = ? AND deleted = 0`, id,
 	).Scan(&oldParent); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrModuleNotFound
@@ -279,7 +279,7 @@ func (db *DB) MoveModule(ctx context.Context, id string, newParentID *string) er
 	// Apply move.
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx,
-		`UPDATE modules SET parent_id = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE pm_modules SET parent_id = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
 		nullableParent(newParentID), now, id,
 	)
 	if err != nil {
@@ -295,7 +295,7 @@ func (db *DB) MoveModule(ctx context.Context, id string, newParentID *string) er
 	if oldParent.Valid {
 		var cnt int
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM modules WHERE parent_id = ? AND deleted = 0`,
+			`SELECT COUNT(*) FROM pm_modules WHERE parent_id = ? AND deleted = 0`,
 			oldParent.String,
 		).Scan(&cnt); err != nil {
 			return fmt.Errorf("count oldParent children: %w", err)
@@ -327,7 +327,7 @@ func isDescendantInTx(ctx context.Context, tx *sql.Tx, root, target string, maxD
 		next := make([]string, 0, len(current)*2)
 		for _, pid := range current {
 			rows, err := tx.QueryContext(ctx,
-				`SELECT id FROM modules WHERE parent_id = ? AND deleted = 0`,
+				`SELECT id FROM pm_modules WHERE parent_id = ? AND deleted = 0`,
 				pid,
 			)
 			if err != nil {
@@ -371,10 +371,10 @@ func (db *DB) DeleteModule(ctx context.Context, id string, cascade bool) error {
 	// Refuse if dependents exist.
 	var sessCount, memCount int
 	_ = tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM sessions WHERE module_id = ?`, id,
+		`SELECT COUNT(*) FROM ai_sessions WHERE module_id = ?`, id,
 	).Scan(&sessCount)
 	_ = tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM memories WHERE module_id = ?`, id,
+		`SELECT COUNT(*) FROM ai_memories WHERE module_id = ?`, id,
 	).Scan(&memCount)
 	if sessCount+memCount > 0 {
 		return ErrModuleInUse
@@ -383,7 +383,7 @@ func (db *DB) DeleteModule(ctx context.Context, id string, cascade bool) error {
 	if !cascade {
 		var childCount int
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM modules WHERE parent_id = ? AND deleted = 0`, id,
+			`SELECT COUNT(*) FROM pm_modules WHERE parent_id = ? AND deleted = 0`, id,
 		).Scan(&childCount); err != nil {
 			return fmt.Errorf("count children: %w", err)
 		}
@@ -407,14 +407,14 @@ func (db *DB) DeleteModule(ctx context.Context, id string, cascade bool) error {
 	// Refresh leaf flag of the now-orphaned parent.
 	var parent sql.NullString
 	if err := tx.QueryRowContext(ctx,
-		`SELECT parent_id FROM modules WHERE id = ?`, id,
+		`SELECT parent_id FROM pm_modules WHERE id = ?`, id,
 	).Scan(&parent); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	if parent.Valid {
 		var cnt int
 		_ = tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM modules WHERE parent_id = ? AND deleted = 0`, parent.String,
+			`SELECT COUNT(*) FROM pm_modules WHERE parent_id = ? AND deleted = 0`, parent.String,
 		).Scan(&cnt)
 		_ = flipLeafInTx(ctx, tx, parent.String, cnt == 0)
 	}
@@ -434,7 +434,7 @@ var ErrModuleInUse = errors.New("module still referenced by sessions or memories
 func softDeleteOne(ctx context.Context, tx *sql.Tx, id string) error {
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx,
-		`UPDATE modules SET deleted = 1, is_leaf = 0, updated_at = ?
+		`UPDATE pm_modules SET deleted = 1, is_leaf = 0, updated_at = ?
 		   WHERE id = ? AND deleted = 0`,
 		now, id,
 	)
@@ -459,7 +459,7 @@ func softDeleteSubtree(ctx context.Context, tx *sql.Tx, root string) error {
 		head := queue[0]
 		queue = queue[1:]
 		res, err := tx.ExecContext(ctx,
-			`UPDATE modules SET deleted = 1, is_leaf = 0, updated_at = ?
+			`UPDATE pm_modules SET deleted = 1, is_leaf = 0, updated_at = ?
 			   WHERE id = ? AND deleted = 0`,
 			now, head,
 		)
@@ -471,7 +471,7 @@ func softDeleteSubtree(ctx context.Context, tx *sql.Tx, root string) error {
 			continue
 		}
 		rows, err := tx.QueryContext(ctx,
-			`SELECT id FROM modules WHERE parent_id = ? AND deleted = 0`, head,
+			`SELECT id FROM pm_modules WHERE parent_id = ? AND deleted = 0`, head,
 		)
 		if err != nil {
 			return fmt.Errorf("descend %s: %w", head, err)
@@ -549,7 +549,7 @@ func buildChildrenBounded(byParent map[string][]*Module, parent string, depth, m
 func (db *DB) CountChildren(ctx context.Context, id string) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM modules WHERE parent_id = ? AND deleted = 0`, id,
+		`SELECT COUNT(*) FROM pm_modules WHERE parent_id = ? AND deleted = 0`, id,
 	).Scan(&n)
 	return n, err
 }
@@ -565,7 +565,7 @@ func (db *DB) CountDescendants(ctx context.Context, id string) (int, error) {
 		next := make([]string, 0, len(queue))
 		for _, p := range queue {
 			rows, err := db.QueryContext(ctx,
-				`SELECT id FROM modules WHERE parent_id = ? AND deleted = 0`, p,
+				`SELECT id FROM pm_modules WHERE parent_id = ? AND deleted = 0`, p,
 			)
 			if err != nil {
 				return total, err
@@ -603,7 +603,7 @@ func (db *DB) CountDescendants(ctx context.Context, id string) (int, error) {
 func (db *DB) LookupDefaultLeafModule(ctx context.Context, projectID string) (string, error) {
 	var id string
 	err := db.QueryRowContext(ctx,
-		`SELECT id FROM modules
+		`SELECT id FROM pm_modules
 		  WHERE deleted = 0 AND project_id = ? AND is_leaf = 1
 		  ORDER BY created_at ASC LIMIT 1`,
 		projectID,
@@ -634,7 +634,7 @@ func (db *DB) RequireLeafModule(ctx context.Context, id string) error {
 	var isLeaf int
 	var deleted int
 	err := db.QueryRowContext(ctx,
-		`SELECT is_leaf, deleted FROM modules WHERE id = ?`, id,
+		`SELECT is_leaf, deleted FROM pm_modules WHERE id = ?`, id,
 	).Scan(&isLeaf, &deleted)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -660,7 +660,7 @@ func (db *DB) ModuleAccessibleByUser(ctx context.Context, moduleID, userID, role
 	}
 	var projectID string
 	err := db.QueryRowContext(ctx,
-		`SELECT project_id FROM modules WHERE id = ? AND deleted = 0`, moduleID,
+		`SELECT project_id FROM pm_modules WHERE id = ? AND deleted = 0`, moduleID,
 	).Scan(&projectID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -670,7 +670,7 @@ func (db *DB) ModuleAccessibleByUser(ctx context.Context, moduleID, userID, role
 	}
 	var teamID string
 	err = db.QueryRowContext(ctx,
-		`SELECT team_id FROM projects WHERE id = ? AND deleted = 0`, projectID,
+		`SELECT team_id FROM pm_projects WHERE id = ? AND deleted = 0`, projectID,
 	).Scan(&teamID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

@@ -32,10 +32,10 @@ func TestMigrateV2FreshInstall(t *testing.T) {
 		desc string
 		stmt string
 	}{
-		{"team_legacy", `SELECT 1 FROM teams WHERE id = 'team_legacy'`},
-		{"mod_legacy", `SELECT 1 FROM modules WHERE id = 'mod_legacy'`},
+		{"team_legacy", `SELECT 1 FROM pm_teams WHERE id = 'team_legacy'`},
+		{"mod_legacy", `SELECT 1 FROM pm_modules WHERE id = 'mod_legacy'`},
 		{"memory_templates builtin count >= 5",
-			`SELECT COUNT(*) FROM memory_templates WHERE is_builtin = 1`},
+			`SELECT COUNT(*) FROM ai_memories_templates WHERE is_builtin = 1`},
 	} {
 		var row int
 		if err := db.QueryRowContext(ctx, q.stmt).Scan(&row); err != nil {
@@ -46,7 +46,7 @@ func TestMigrateV2FreshInstall(t *testing.T) {
 	// Verify builtin template count.
 	var n int
 	if err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM memory_templates WHERE is_builtin = 1`,
+		`SELECT COUNT(*) FROM ai_memories_templates WHERE is_builtin = 1`,
 	).Scan(&n); err != nil {
 		t.Fatalf("count builtin: %v", err)
 	}

@@ -80,7 +80,7 @@ func (db *DB) ListSessions(ctx context.Context, f SessionFilter) ([]*Session, in
                   started_at, ended_at,
                   tool_count, turn_count, IFNULL(summary,''),
                   mempalace_synced_turns, mempalace_last_synced_at, IFNULL(mempalace_last_error,'')
-             FROM sessions` + where +
+             FROM ai_sessions` + where +
 		` ORDER BY started_at DESC LIMIT ? OFFSET ?`
 	args = append(args, f.Limit, f.Offset)
 	rows, err := db.QueryContext(ctx, q, args...)
@@ -100,7 +100,7 @@ func (db *DB) ListSessions(ctx context.Context, f SessionFilter) ([]*Session, in
 		return nil, 0, err
 	}
 
-	cntQ := "SELECT COUNT(*) FROM sessions" + where
+	cntQ := "SELECT COUNT(*) FROM ai_sessions" + where
 	var total int
 	if err := db.QueryRowContext(ctx, cntQ, args[:len(args)-2]...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count sessions: %w", err)
@@ -157,7 +157,7 @@ func (db *DB) GetSession(ctx context.Context, id string) (*Session, error) {
                       started_at, ended_at,
                       tool_count, turn_count, IFNULL(summary,''),
                       mempalace_synced_turns, mempalace_last_synced_at, IFNULL(mempalace_last_error,'')
-                 FROM sessions WHERE id = ?`
+                 FROM ai_sessions WHERE id = ?`
 	row := db.QueryRowContext(ctx, q, id)
 	return scanSessionRow(row)
 }
@@ -165,7 +165,7 @@ func (db *DB) GetSession(ctx context.Context, id string) (*Session, error) {
 // ListSessionTurns returns the turns of a session ordered by turn_no.
 func (db *DB) ListSessionTurns(ctx context.Context, sessionID string) ([]*SessionTurn, error) {
 	const q = `SELECT id, session_id, turn_no, role, content, IFNULL(tools_json,''), ts
-                 FROM session_turns
+                 FROM ai_session_turns
                 WHERE session_id = ?
                 ORDER BY turn_no ASC, id ASC`
 	rows, err := db.QueryContext(ctx, q, sessionID)
@@ -201,7 +201,7 @@ func (db *DB) AggregateSessions(ctx context.Context, f SessionFilter) (*SessionS
 	var sessTotal, turnTotal, toolTotal int64
 	if err := db.QueryRowContext(ctx,
 		`SELECT COUNT(*), IFNULL(SUM(turn_count),0), IFNULL(SUM(tool_count),0)
-		   FROM sessions`+where, args...,
+		   FROM ai_sessions`+where, args...,
 	).Scan(&sessTotal, &turnTotal, &toolTotal); err != nil {
 		return nil, fmt.Errorf("aggregate totals: %w", err)
 	}
@@ -211,7 +211,7 @@ func (db *DB) AggregateSessions(ctx context.Context, f SessionFilter) (*SessionS
 
 	// Top users
 	rows, err := db.QueryContext(ctx,
-		`SELECT user_id, COUNT(*) c FROM sessions`+where+
+		`SELECT user_id, COUNT(*) c FROM ai_sessions`+where+
 			` GROUP BY user_id ORDER BY c DESC LIMIT 5`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("top users: %w", err)
@@ -230,7 +230,7 @@ func (db *DB) AggregateSessions(ctx context.Context, f SessionFilter) (*SessionS
 
 	// Top projects
 	rows2, err := db.QueryContext(ctx,
-		`SELECT IFNULL(project_id,''), COUNT(*) c FROM sessions`+where+
+		`SELECT IFNULL(project_id,''), COUNT(*) c FROM ai_sessions`+where+
 			` GROUP BY project_id ORDER BY c DESC LIMIT 5`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("top projects: %w", err)
@@ -252,7 +252,7 @@ func (db *DB) AggregateSessions(ctx context.Context, f SessionFilter) (*SessionS
 	// (memory creator surfaces "module X has 12 sessions") consume
 	// it directly via the typed payload.
 	rows3, err := db.QueryContext(ctx,
-		`SELECT IFNULL(module_id,''), COUNT(*) c FROM sessions`+where+
+		`SELECT IFNULL(module_id,''), COUNT(*) c FROM ai_sessions`+where+
 			` GROUP BY module_id ORDER BY c DESC LIMIT 10`, args...)
 	if err == nil {
 		for rows3.Next() {
@@ -274,7 +274,7 @@ func (db *DB) AggregateSessions(ctx context.Context, f SessionFilter) (*SessionS
 func (db *DB) CountSessionsByModule(ctx context.Context, moduleID string) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM sessions WHERE module_id = ? AND module_id != ''`,
+		`SELECT COUNT(*) FROM ai_sessions WHERE module_id = ? AND module_id != ''`,
 		moduleID,
 	).Scan(&n)
 	return n, err
@@ -286,7 +286,7 @@ func (db *DB) CountSessionsByModule(ctx context.Context, moduleID string) (int, 
 func (db *DB) CountMemoriesByModule(ctx context.Context, moduleID string) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM memories WHERE module_id = ? AND deleted = 0`,
+		`SELECT COUNT(*) FROM ai_memories WHERE module_id = ? AND deleted = 0`,
 		moduleID,
 	).Scan(&n)
 	return n, err
@@ -332,7 +332,7 @@ func scanSessionRow(s scanner) (*Session, error) {
 // the new value (idempotent). Returns rows affected for the caller.
 func (db *DB) SetSessionModule(ctx context.Context, sessionID, moduleID string) (int64, error) {
 	res, err := db.ExecContext(ctx,
-		`UPDATE sessions SET module_id = ? WHERE id = ? AND (module_id = '' OR module_id = ?)`,
+		`UPDATE ai_sessions SET module_id = ? WHERE id = ? AND (module_id = '' OR module_id = ?)`,
 		moduleID, sessionID, moduleID,
 	)
 	if err != nil {

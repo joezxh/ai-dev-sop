@@ -119,6 +119,15 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		if err := cfg.DB.MigrateV2(context.Background(), nil); err != nil {
 			panic("console: migrate v2: " + err.Error())
 		}
+
+		// Seed the default admin user (admin / admin123) when no admin
+		// exists yet. Runs after MigrateV2 so the password_hash column
+		// is guaranteed to exist.
+		if n, err := SeedDefaultAdmin(context.Background(), cfg.DB); err != nil {
+			fmt.Printf("seed default admin: %v\n", err)
+		} else if n > 0 {
+			fmt.Printf("seeded default admin user (admin / admin123)\n")
+		}
 	}
 
 	api := r.Group("/api/console")
@@ -168,92 +177,90 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	sessions.GET("/:id", SessionDetailHandler(cfg.DB))
 	protected.GET("/sessions-stats", SessionsStatsHandler(cfg.DB))
 
-	// M1: tool directory + invocation dashboard. Mounted under
-	// /api/console/v2/* so existing /api/console/* routes are not disturbed.
-	v2 := protected.Group("/v2")
+	// /api/console/v2 — shared prefix for session-auth (M1/M2) and
+	// JWT-auth (M3+) routes. The group itself carries NO auth middleware;
+	// each sub-group applies its own.
+	v2 := api.Group("/v2")
 	{
-		v2.GET("/tools", ListToolsHandler(cfg.DB))
-		v2.GET("/invocations/recent", RecentInvocationsHandler(cfg.DB))
-		v2.GET("/dashboard/summary", DashboardSummaryHandler(cfg.DB))
-
-		// M2: per-tool rate-limit admin (T2.2). Six routes:
-		//   GET    /v2/rate-limits                     list all configured tools
-		//   GET    /v2/tools/:id/rate-limit            fetch single (or defaults)
-		//   PUT    /v2/tools/:id/rate-limit            overwrite
-		//   DELETE /v2/tools/:id/rate-limit            reset to defaults
-		//   POST   /v2/tools/:id/rate-limit/reset      force-clear in-memory state
-		v2.GET("/rate-limits", ListRateLimitsHandler(cfg.DB))
-		v2.GET("/tools/:id/rate-limit", GetRateLimitHandler(cfg.DB))
-		v2.PUT("/tools/:id/rate-limit", PutRateLimitHandler(cfg.DB))
-		v2.DELETE("/tools/:id/rate-limit", DeleteRateLimitHandler(cfg.DB))
-		v2.POST("/tools/:id/rate-limit/reset", ResetRateLimitHandler())
-
-		// M2: best-practice CRUD + version history + association graph.
-		// Mounted under the same v2 namespace; the tool detail UI in M2
-		// will hit these via /api/console/v2/bps/*
-		bps := v2.Group("/bps")
+		// Session-authenticated routes (M1/M2). v2sess inherits
+		// RequireSession from the protected-style sub-group.
+		v2sess := v2.Group("")
+		v2sess.Use(RequireSession(cfg.Session))
 		{
-			bps.GET("", ListBPsHandler(cfg.DB))
-			bps.POST("", CreateBPHandler(cfg.DB))
-			bps.GET("/:id", GetBPHandler(cfg.DB))
-			bps.PUT("/:id", UpdateBPHandler(cfg.DB))
-			bps.POST("/:id/publish", PublishBPHandler(cfg.DB))
-			bps.GET("/:id/versions", ListBPVersionsHandler(cfg.DB))
-			bps.GET("/:id/versions/:n", GetBPVersionHandler(cfg.DB))
-			bps.GET("/:id/graph", BPGraphHandler(cfg.DB))
+			// M1: tool directory + invocation dashboard.
+			v2sess.GET("/tools", ListToolsHandler(cfg.DB))
+			v2sess.GET("/invocations/recent", RecentInvocationsHandler(cfg.DB))
+			v2sess.GET("/dashboard/summary", DashboardSummaryHandler(cfg.DB))
+
+			// M2: per-tool rate-limit admin (T2.2).
+			v2sess.GET("/rate-limits", ListRateLimitsHandler(cfg.DB))
+			v2sess.GET("/tools/:id/rate-limit", GetRateLimitHandler(cfg.DB))
+			v2sess.PUT("/tools/:id/rate-limit", PutRateLimitHandler(cfg.DB))
+			v2sess.DELETE("/tools/:id/rate-limit", DeleteRateLimitHandler(cfg.DB))
+			v2sess.POST("/tools/:id/rate-limit/reset", ResetRateLimitHandler())
+
+			// M2: best-practice CRUD + version history + association graph.
+			bps := v2sess.Group("/bps")
+			{
+				bps.GET("", ListBPsHandler(cfg.DB))
+				bps.POST("", CreateBPHandler(cfg.DB))
+				bps.GET("/:id", GetBPHandler(cfg.DB))
+				bps.PUT("/:id", UpdateBPHandler(cfg.DB))
+				bps.POST("/:id/publish", PublishBPHandler(cfg.DB))
+				bps.GET("/:id/versions", ListBPVersionsHandler(cfg.DB))
+				bps.GET("/:id/versions/:n", GetBPVersionHandler(cfg.DB))
+				bps.GET("/:id/graph", BPGraphHandler(cfg.DB))
+			}
+
+			// M3: workflow CRUD + run/simulate + impact dashboard + tickets.
+			wfs := v2sess.Group("/workflows")
+			{
+				wfs.GET("", ListWorkflowsHandler(cfg.DB))
+				wfs.POST("", CreateWorkflowHandler(cfg.DB))
+				wfs.GET("/:id", GetWorkflowHandler(cfg.DB))
+				wfs.PUT("/:id", UpdateWorkflowHandler(cfg.DB))
+				wfs.POST("/:id/publish", PublishWorkflowHandler(cfg.DB))
+				wfs.POST("/:id/archive", ArchiveWorkflowHandler(cfg.DB))
+				wfs.POST("/:id/run", RunWorkflowHandler(cfg.DB))
+				wfs.GET("/:id/runs", ListWorkflowRunsHandler(cfg.DB))
+			}
+
+			v2sess.GET("/dashboard/high-risk", HighRiskDashboardHandler(cfg.DB))
+			v2sess.GET("/dashboard/high-risk/summary", HighRiskSummaryHandler(cfg.DB))
+
+			tickets := v2sess.Group("/tickets")
+			{
+				tickets.GET("", ListTicketsHandler(cfg.DB))
+				tickets.POST("", CreateTicketHandler(cfg.DB))
+				tickets.POST("/auto-open", AutoOpenTicketHandler(cfg.DB))
+				tickets.GET("/:id", GetTicketHandler(cfg.DB))
+				tickets.POST("/:id/resolve", ResolveTicketHandler(cfg.DB))
+				tickets.POST("/:id/wont-fix", WontFixTicketHandler(cfg.DB))
+			}
+
+			// M4: repo pipeline CRUD + run/simulate + bp_candidates review.
+			rpRuntime := DefaultRuntime()
+			repos := v2sess.Group("/repos")
+			{
+				repos.GET("", ListRepoPipelinesHandler(cfg.DB))
+				repos.POST("", CreateRepoPipelineHandler(cfg.DB))
+				repos.GET("/runs/:run_id", GetRepoPipelineRunHandler(cfg.DB))
+				repos.GET("/candidates", ListBPCandidatesHandler(cfg.DB))
+				repos.GET("/candidates/:id", GetBPCandidateHandler(cfg.DB))
+				repos.POST("/candidates/:id/accept", AcceptBPCandidateHandler(cfg.DB))
+				repos.POST("/candidates/:id/reject", RejectBPCandidateHandler(cfg.DB))
+				repos.POST("/candidates/:id/merge", MergeBPCandidateHandler(cfg.DB))
+				repos.GET("/:id", GetRepoPipelineHandler(cfg.DB))
+				repos.PUT("/:id", UpdateRepoPipelineHandler(cfg.DB))
+				repos.POST("/:id/activate", ActivateRepoPipelineHandler(cfg.DB))
+				repos.POST("/:id/archive", ArchiveRepoPipelineHandler(cfg.DB))
+				repos.POST("/:id/run", RunRepoPipelineHandler(cfg.DB, rpRuntime))
+				repos.GET("/:id/runs", ListRepoPipelineRunsHandler(cfg.DB))
+			}
 		}
 
-		// M3: workflow CRUD + run/simulate + impact dashboard + tickets.
-		// All routes live under the existing v2 namespace; the editor UI
-		// (planned for a separate delivery) hits these endpoints.
-		wfs := v2.Group("/workflows")
-		{
-			wfs.GET("", ListWorkflowsHandler(cfg.DB))
-			wfs.POST("", CreateWorkflowHandler(cfg.DB))
-			wfs.GET("/:id", GetWorkflowHandler(cfg.DB))
-			wfs.PUT("/:id", UpdateWorkflowHandler(cfg.DB))
-			wfs.POST("/:id/publish", PublishWorkflowHandler(cfg.DB))
-			wfs.POST("/:id/archive", ArchiveWorkflowHandler(cfg.DB))
-			wfs.POST("/:id/run", RunWorkflowHandler(cfg.DB))
-			wfs.GET("/:id/runs", ListWorkflowRunsHandler(cfg.DB))
-		}
-
-		v2.GET("/dashboard/high-risk", HighRiskDashboardHandler(cfg.DB))
-		v2.GET("/dashboard/high-risk/summary", HighRiskSummaryHandler(cfg.DB))
-
-		tickets := v2.Group("/tickets")
-		{
-			tickets.GET("", ListTicketsHandler(cfg.DB))
-			tickets.POST("", CreateTicketHandler(cfg.DB))
-			tickets.POST("/auto-open", AutoOpenTicketHandler(cfg.DB))
-			tickets.GET("/:id", GetTicketHandler(cfg.DB))
-			tickets.POST("/:id/resolve", ResolveTicketHandler(cfg.DB))
-			tickets.POST("/:id/wont-fix", WontFixTicketHandler(cfg.DB))
-		}
-
-		// M4: repo pipeline CRUD + run/simulate + bp_candidates review.
-		rpRuntime := DefaultRuntime()
-		repos := v2.Group("/repos")
-		{
-			repos.GET("", ListRepoPipelinesHandler(cfg.DB))
-			repos.POST("", CreateRepoPipelineHandler(cfg.DB))
-			repos.GET("/runs/:run_id", GetRepoPipelineRunHandler(cfg.DB))
-			repos.GET("/candidates", ListBPCandidatesHandler(cfg.DB))
-			repos.GET("/candidates/:id", GetBPCandidateHandler(cfg.DB))
-			repos.POST("/candidates/:id/accept", AcceptBPCandidateHandler(cfg.DB))
-			repos.POST("/candidates/:id/reject", RejectBPCandidateHandler(cfg.DB))
-			repos.POST("/candidates/:id/merge", MergeBPCandidateHandler(cfg.DB))
-			repos.GET("/:id", GetRepoPipelineHandler(cfg.DB))
-			repos.PUT("/:id", UpdateRepoPipelineHandler(cfg.DB))
-			repos.POST("/:id/activate", ActivateRepoPipelineHandler(cfg.DB))
-			repos.POST("/:id/archive", ArchiveRepoPipelineHandler(cfg.DB))
-			repos.POST("/:id/run", RunRepoPipelineHandler(cfg.DB, rpRuntime))
-			repos.GET("/:id/runs", ListRepoPipelineRunsHandler(cfg.DB))
-		}
-
-		// M3 (Team / Project v2). All routes require JWT (the v1
-		// `protected` group uses session-cookies; this is the v2
-		// path: bearer JWT). Middleware order:
+		// JWT-authenticated routes (M3+). Only JWT middleware, no
+		// session cookie required. Middleware order:
 		//   1. CORS (already on /api/console)
 		//   2. JWT (sets user_id / role / jti in ctx)
 		//   3. handler-level role checks via RequireRoleAtLeast
@@ -281,103 +288,97 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		// they share the JWT verifier and "user_id / role" context.
 		if cfg.Teams != nil || cfg.Projects != nil || cfg.Modules != nil || cfg.SessionsV2 != nil ||
 			cfg.MemoryTemplates != nil || cfg.Memories != nil || cfg.SummarizeDistillV2 != nil ||
-			cfg.AITools != nil { // M4: Modules/SessionsV2; M5: MemoryTemplates/Memories/SummarizeDistillV2; M6: AITools
-			m3 := v2.Group("")
+			cfg.AITools != nil {
+			v2jwt := v2.Group("")
 			if cfg.JWTVerifier != nil {
-				m3.Use(cfg.JWTVerifier.Middleware())
+				v2jwt.Use(cfg.JWTVerifier.Middleware())
 			}
 			if cfg.Teams != nil {
-				m3.GET("/teams", cfg.Teams.ListTeams())
-				m3.POST("/teams", cfg.Teams.CreateTeam())
-				m3.GET("/teams/:id", cfg.Teams.GetTeam())
-				m3.PUT("/teams/:id", cfg.Teams.UpdateTeam())
-				m3.DELETE("/teams/:id", cfg.Teams.DeleteTeam())
+				v2jwt.GET("/teams", cfg.Teams.ListTeams())
+				v2jwt.POST("/teams", cfg.Teams.CreateTeam())
+				v2jwt.GET("/teams/:id", cfg.Teams.GetTeam())
+				v2jwt.PUT("/teams/:id", cfg.Teams.UpdateTeam())
+				v2jwt.DELETE("/teams/:id", cfg.Teams.DeleteTeam())
 
-				m3.GET("/teams/:id/members", cfg.Teams.ListMembers())
-				m3.POST("/teams/:id/members", cfg.Teams.AddMember())
-				m3.PUT("/teams/:id/members/:uid", cfg.Teams.UpdateMember())
-				m3.DELETE("/teams/:id/members/:uid", cfg.Teams.RemoveMember())
+				v2jwt.GET("/teams/:id/members", cfg.Teams.ListMembers())
+				v2jwt.POST("/teams/:id/members", cfg.Teams.AddMember())
+				v2jwt.PUT("/teams/:id/members/:uid", cfg.Teams.UpdateMember())
+				v2jwt.DELETE("/teams/:id/members/:uid", cfg.Teams.RemoveMember())
 
 				if cfg.Projects != nil {
-					m3.GET("/teams/:id/projects", cfg.Projects.ListProjects())
-					m3.POST("/teams/:id/projects", cfg.Projects.CreateProject())
+					v2jwt.GET("/teams/:id/projects", cfg.Projects.ListProjects())
+					v2jwt.POST("/teams/:id/projects", cfg.Projects.CreateProject())
 				}
 			}
 			if cfg.Projects != nil {
-			m3.GET("/projects/:pid", cfg.Projects.GetProject())
-			m3.PUT("/projects/:pid", cfg.Projects.UpdateProject())
-			m3.DELETE("/projects/:pid", cfg.Projects.DeleteProject())
-			m3.POST("/projects/:pid/clone", cfg.Projects.CloneProject())
-			m3.GET("/projects/:pid/index-status", cfg.Projects.IndexStatus())
-			m3.POST("/projects/:pid/reindex", cfg.Projects.Reindex())
+				v2jwt.GET("/projects/:pid", cfg.Projects.GetProject())
+				v2jwt.PUT("/projects/:pid", cfg.Projects.UpdateProject())
+				v2jwt.DELETE("/projects/:pid", cfg.Projects.DeleteProject())
+				v2jwt.POST("/projects/:pid/clone", cfg.Projects.CloneProject())
+				v2jwt.GET("/projects/:pid/index-status", cfg.Projects.IndexStatus())
+				v2jwt.POST("/projects/:pid/reindex", cfg.Projects.Reindex())
 
 				// M4: module tree under a project + per-module endpoints.
-				// Reuses the same JWT verifier the M3 routes use.
 				if cfg.Modules != nil {
-					m3.GET("/projects/:pid/modules", cfg.Modules.ListModules())
-					m3.POST("/projects/:pid/modules", cfg.Modules.CreateModule())
-					m3.GET("/projects/:pid/modules/tree", cfg.Modules.Tree())
+					v2jwt.GET("/projects/:pid/modules", cfg.Modules.ListModules())
+					v2jwt.POST("/projects/:pid/modules", cfg.Modules.CreateModule())
+					v2jwt.GET("/projects/:pid/modules/tree", cfg.Modules.Tree())
 				}
 			}
 			if cfg.Modules != nil {
-				m3.GET("/modules/:id", cfg.Modules.GetModule())
-				m3.PUT("/modules/:id", cfg.Modules.UpdateModule())
-				m3.DELETE("/modules/:id", cfg.Modules.DeleteModule())
-				m3.POST("/modules/:id/move", cfg.Modules.MoveModule())
+				v2jwt.GET("/modules/:id", cfg.Modules.GetModule())
+				v2jwt.PUT("/modules/:id", cfg.Modules.UpdateModule())
+				v2jwt.DELETE("/modules/:id", cfg.Modules.DeleteModule())
+				v2jwt.POST("/modules/:id/move", cfg.Modules.MoveModule())
 			}
-            if cfg.SessionsV2 != nil {
-                m3.GET("/sessions", cfg.SessionsV2.ListSessions())
-                m3.GET("/sessions/stats", cfg.SessionsV2.Stats())
-                m3.GET("/sessions/:id", cfg.SessionsV2.GetSession())
-                if cfg.Projects != nil {
-                    // Project-scoped recent sessions feeds the project
-                    // detail "recent conversations" tile.
-                    m3.GET("/projects/:pid/sessions", cfg.SessionsV2.ProjectSessions())
-                }
-            }
-            // M5 — memory templates (read-only + admin create +
-            // render). All authenticated users can list/render;
-            // only admin can POST a new template.
-            if cfg.MemoryTemplates != nil {
-                m3.GET("/memory-templates", cfg.MemoryTemplates.List())
-                m3.GET("/memory-templates/:id", cfg.MemoryTemplates.Get())
-                m3.POST("/memory-templates/:id/render", cfg.MemoryTemplates.Render())
-                m3.POST("/memory-templates", cfg.MemoryTemplates.Create())
-            }
-            // M5 — memories (CRUD + tags). RBAC handled in handler.
-            if cfg.Memories != nil {
-                m3.GET("/memories", cfg.Memories.List())
-                m3.POST("/memories", cfg.Memories.Create())
-                m3.GET("/memories/:id", cfg.Memories.Get())
-                m3.PUT("/memories/:id", cfg.Memories.Update())
-                m3.DELETE("/memories/:id", cfg.Memories.Delete())
-                m3.POST("/memories/:id/tags", cfg.Memories.AddTag())
-                if cfg.Modules != nil {
-                    m3.GET("/modules/:id/memories", cfg.Memories.ModuleMemories())
-                }
-            }
-            // M5 — summarize/distill v2 task lifecycle (JWT-wrapped).
-            if cfg.SummarizeDistillV2 != nil {
-                m3.GET("/summarize-tasks", cfg.SummarizeDistillV2.ListSummarize())
-                m3.POST("/summarize-tasks", cfg.SummarizeDistillV2.CreateSummarize())
-                m3.GET("/summarize-tasks/:id", cfg.SummarizeDistillV2.GetSummarize())
-                m3.GET("/distill-tasks", cfg.SummarizeDistillV2.ListDistill())
-                m3.POST("/distill-tasks", cfg.SummarizeDistillV2.CreateDistill())
-                m3.GET("/distill-tasks/:id", cfg.SummarizeDistillV2.GetDistill())
-            }
-            // M6 — AI tool catalogue + invoke + audit. RBAC enforced
-            // in handler; routes are JWT-gated via the parent group.
-            if cfg.AITools != nil {
-                m3.GET("/ai-tools", cfg.AITools.List())
-                m3.POST("/ai-tools", cfg.AITools.Create())
-                m3.GET("/ai-tools/:id", cfg.AITools.Get())
-                m3.PUT("/ai-tools/:id", cfg.AITools.Update())
-                m3.DELETE("/ai-tools/:id", cfg.AITools.Delete())
-                m3.POST("/ai-tools/:id/invoke", cfg.AITools.Invoke())
-                m3.GET("/ai-tools/:id/invocations", cfg.AITools.ListInvocations())
-                m3.GET("/ai-tools/invocations/:inv_id", cfg.AITools.GetInvocation())
-            }
-        }
+			if cfg.SessionsV2 != nil {
+				v2jwt.GET("/sessions", cfg.SessionsV2.ListSessions())
+				v2jwt.GET("/sessions/stats", cfg.SessionsV2.Stats())
+				v2jwt.GET("/sessions/:id", cfg.SessionsV2.GetSession())
+				if cfg.Projects != nil {
+					v2jwt.GET("/projects/:pid/sessions", cfg.SessionsV2.ProjectSessions())
+				}
+			}
+			// M5 — memory templates.
+			if cfg.MemoryTemplates != nil {
+				v2jwt.GET("/memory-templates", cfg.MemoryTemplates.List())
+				v2jwt.GET("/memory-templates/:id", cfg.MemoryTemplates.Get())
+				v2jwt.POST("/memory-templates/:id/render", cfg.MemoryTemplates.Render())
+				v2jwt.POST("/memory-templates", cfg.MemoryTemplates.Create())
+			}
+			// M5 — memories (CRUD + tags). RBAC handled in handler.
+			if cfg.Memories != nil {
+				v2jwt.GET("/memories", cfg.Memories.List())
+				v2jwt.POST("/memories", cfg.Memories.Create())
+				v2jwt.GET("/memories/:id", cfg.Memories.Get())
+				v2jwt.PUT("/memories/:id", cfg.Memories.Update())
+				v2jwt.DELETE("/memories/:id", cfg.Memories.Delete())
+				v2jwt.POST("/memories/:id/tags", cfg.Memories.AddTag())
+				if cfg.Modules != nil {
+					v2jwt.GET("/modules/:id/memories", cfg.Memories.ModuleMemories())
+				}
+			}
+			// M5 — summarize/distill v2 task lifecycle (JWT-wrapped).
+			if cfg.SummarizeDistillV2 != nil {
+				v2jwt.GET("/summarize-tasks", cfg.SummarizeDistillV2.ListSummarize())
+				v2jwt.POST("/summarize-tasks", cfg.SummarizeDistillV2.CreateSummarize())
+				v2jwt.GET("/summarize-tasks/:id", cfg.SummarizeDistillV2.GetSummarize())
+				v2jwt.GET("/distill-tasks", cfg.SummarizeDistillV2.ListDistill())
+				v2jwt.POST("/distill-tasks", cfg.SummarizeDistillV2.CreateDistill())
+				v2jwt.GET("/distill-tasks/:id", cfg.SummarizeDistillV2.GetDistill())
+			}
+			// M6 — AI tool catalogue + invoke + audit.
+			if cfg.AITools != nil {
+				v2jwt.GET("/ai-tools", cfg.AITools.List())
+				v2jwt.POST("/ai-tools", cfg.AITools.Create())
+				v2jwt.GET("/ai-tools/:id", cfg.AITools.Get())
+				v2jwt.PUT("/ai-tools/:id", cfg.AITools.Update())
+				v2jwt.DELETE("/ai-tools/:id", cfg.AITools.Delete())
+				v2jwt.POST("/ai-tools/:id/invoke", cfg.AITools.Invoke())
+				v2jwt.GET("/ai-tools/:id/invocations", cfg.AITools.ListInvocations())
+				v2jwt.GET("/ai-tools/invocations/:inv_id", cfg.AITools.GetInvocation())
+			}
+		}
 	}
 
 	// M2 single-file UI. Public so a curl smoke can hit it without a

@@ -237,7 +237,7 @@ func TestProjectIndexStatusIndexed(t *testing.T) {
 	// Directly insert a project with the specific path (since API auto-generates path)
 	now := time.Now().UTC()
 	_, err := db.ExecContext(context.Background(),
-		`INSERT INTO projects (id, name, path, wing, mcp_bin, creator_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
+		`INSERT INTO pm_projects (id, name, path, wing, mcp_bin, creator_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
 		"proj_test_idx", "test-idx", dir, "", "codebase-memory-mcp", "", now, now)
 	if err != nil {
 		t.Fatal(err)

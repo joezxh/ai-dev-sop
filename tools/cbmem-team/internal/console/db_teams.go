@@ -87,7 +87,7 @@ func (db *DB) CreateTeam(ctx context.Context, t *Team) error {
 		owner = sql.NullString{String: t.OwnerID, Valid: true}
 	}
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO teams (id, name, slug, description, owner_id, created_at, updated_at)
+		`INSERT INTO pm_teams (id, name, slug, description, owner_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.Name, t.Slug, t.Description, owner, t.CreatedAt, t.UpdatedAt,
 	); err != nil {
@@ -105,7 +105,7 @@ func (db *DB) CreateTeam(ctx context.Context, t *Team) error {
 func (db *DB) GetTeamByID(ctx context.Context, id string) (*Team, error) {
 	const q = `SELECT id, name, slug, description,
                       IFNULL(owner_id,''), created_at, updated_at, deleted
-                 FROM teams WHERE id = ? AND deleted = 0`
+                 FROM pm_teams WHERE id = ? AND deleted = 0`
 	row := db.QueryRowContext(ctx, q, id)
 	return db.scanTeam(row)
 }
@@ -118,11 +118,11 @@ func (db *DB) GetTeamBySlug(ctx context.Context, slug string) (*Team, error) {
 	if db.driver == "mysql" {
 		q = `SELECT id, name, slug, description,
                      IFNULL(owner_id,''), created_at, updated_at, deleted
-                FROM teams WHERE LOWER(slug) = LOWER(?) AND deleted = 0`
+                FROM pm_teams WHERE LOWER(slug) = LOWER(?) AND deleted = 0`
 	} else {
 		q = `SELECT id, name, slug, description,
                      IFNULL(owner_id,''), created_at, updated_at, deleted
-                FROM teams WHERE LOWER(slug) = LOWER(?) AND deleted = 0`
+                FROM pm_teams WHERE LOWER(slug) = LOWER(?) AND deleted = 0`
 	}
 	row := db.QueryRowContext(ctx, q, slug)
 	return db.scanTeam(row)
@@ -134,7 +134,7 @@ func (db *DB) GetTeamBySlug(ctx context.Context, slug string) (*Team, error) {
 func (db *DB) ListTeams(ctx context.Context) ([]*Team, error) {
 	const q = `SELECT id, name, slug, description,
                       IFNULL(owner_id,''), created_at, updated_at, deleted
-                 FROM teams
+                 FROM pm_teams
                 WHERE deleted = 0
                 ORDER BY name ASC`
 	rows, err := db.QueryContext(ctx, q)
@@ -159,8 +159,8 @@ func (db *DB) ListTeams(ctx context.Context) ([]*Team, error) {
 func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]*Team, error) {
 	const q = `SELECT t.id, t.name, t.slug, t.description,
                       IFNULL(t.owner_id,''), t.created_at, t.updated_at, t.deleted
-                 FROM teams t
-                 LEFT JOIN team_members m ON m.team_id = t.id AND m.user_id = ?
+                 FROM pm_teams t
+                 LEFT JOIN pm_team_members m ON m.team_id = t.id AND m.user_id = ?
                 WHERE t.deleted = 0 AND (m.user_id IS NOT NULL OR t.owner_id = ?)
                 ORDER BY t.name ASC`
 	rows, err := db.QueryContext(ctx, q, userID, userID)
@@ -184,7 +184,7 @@ func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]*Team, err
 func (db *DB) UpdateTeam(ctx context.Context, id string, name, description *string) error {
 	now := time.Now().UTC()
 	res, err := db.ExecContext(ctx,
-		`UPDATE teams
+		`UPDATE pm_teams
             SET name = COALESCE(?, name),
                 description = COALESCE(?, description),
                 updated_at = ?
@@ -210,7 +210,7 @@ func (db *DB) UpdateTeam(ctx context.Context, id string, name, description *stri
 func (db *DB) DeleteTeam(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	res, err := db.ExecContext(ctx,
-		`UPDATE teams SET deleted = 1, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE pm_teams SET deleted = 1, updated_at = ? WHERE id = ? AND deleted = 0`,
 		now, id,
 	)
 	if err != nil {
@@ -228,7 +228,7 @@ func (db *DB) DeleteTeam(ctx context.Context, id string) error {
 func (db *DB) CountProjectsInTeam(ctx context.Context, teamID string) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM projects WHERE team_id = ? AND deleted = 0`,
+		`SELECT COUNT(*) FROM pm_projects WHERE team_id = ? AND deleted = 0`,
 		teamID,
 	).Scan(&n)
 	return n, err
@@ -238,7 +238,7 @@ func (db *DB) CountProjectsInTeam(ctx context.Context, teamID string) (int, erro
 func (db *DB) CountMembersInTeam(ctx context.Context, teamID string) (int, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM team_members WHERE team_id = ?`,
+		`SELECT COUNT(*) FROM pm_team_members WHERE team_id = ?`,
 		teamID,
 	).Scan(&n)
 	return n, err
@@ -259,7 +259,7 @@ func (db *DB) AddTeamMember(ctx context.Context, teamID, userID string, role Pro
 	}
 	now := time.Now().UTC()
 	res, err := db.ExecContext(ctx,
-		`INSERT INTO team_members (team_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO pm_team_members (team_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)`,
 		teamID, userID, string(role), now,
 	)
 	if err != nil {
@@ -279,7 +279,7 @@ func (db *DB) AddTeamMember(ctx context.Context, teamID, userID string, role Pro
 // UpdateTeamMemberRole changes an existing member's role.
 func (db *DB) UpdateTeamMemberRole(ctx context.Context, teamID, userID string, role ProjectRole) error {
 	res, err := db.ExecContext(ctx,
-		`UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?`,
+		`UPDATE pm_team_members SET role = ? WHERE team_id = ? AND user_id = ?`,
 		string(role), teamID, userID,
 	)
 	if err != nil {
@@ -295,7 +295,7 @@ func (db *DB) UpdateTeamMemberRole(ctx context.Context, teamID, userID string, r
 // RemoveTeamMember deletes the (team_id, user_id) row.
 func (db *DB) RemoveTeamMember(ctx context.Context, teamID, userID string) error {
 	res, err := db.ExecContext(ctx,
-		`DELETE FROM team_members WHERE team_id = ? AND user_id = ?`,
+		`DELETE FROM pm_team_members WHERE team_id = ? AND user_id = ?`,
 		teamID, userID,
 	)
 	if err != nil {
@@ -314,8 +314,8 @@ func (db *DB) RemoveTeamMember(ctx context.Context, teamID, userID string) error
 func (db *DB) ListTeamMembers(ctx context.Context, teamID string) ([]*TeamMember, error) {
 	const q = `SELECT tm.team_id, tm.user_id, IFNULL(u.username,''),
                       tm.role, tm.joined_at
-                 FROM team_members tm
-                 LEFT JOIN users u ON u.id = tm.user_id
+                 FROM pm_team_members tm
+                 LEFT JOIN sys_users u ON u.id = tm.user_id
                 WHERE tm.team_id = ?
                 ORDER BY tm.joined_at ASC`
 	rows, err := db.QueryContext(ctx, q, teamID)
@@ -338,8 +338,8 @@ func (db *DB) ListTeamMembers(ctx context.Context, teamID string) ([]*TeamMember
 func (db *DB) GetTeamMember(ctx context.Context, teamID, userID string) (*TeamMember, error) {
 	const q = `SELECT tm.team_id, tm.user_id, IFNULL(u.username,''),
                       tm.role, tm.joined_at
-                 FROM team_members tm
-                 LEFT JOIN users u ON u.id = tm.user_id
+                 FROM pm_team_members tm
+                 LEFT JOIN sys_users u ON u.id = tm.user_id
                 WHERE tm.team_id = ? AND tm.user_id = ?`
 	m := &TeamMember{}
 	err := db.QueryRowContext(ctx, q, teamID, userID).Scan(
@@ -361,8 +361,8 @@ func (db *DB) GetTeamMember(ctx context.Context, teamID, userID string) (*TeamMe
 func (db *DB) IsTeamMember(ctx context.Context, teamID, userID string) (bool, error) {
 	var n int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM teams t
-		    LEFT JOIN team_members m
+		`SELECT COUNT(*) FROM pm_teams t
+		    LEFT JOIN pm_team_members m
 		            ON m.team_id = t.id AND m.user_id = ?
 		  WHERE t.id = ? AND (m.user_id IS NOT NULL OR t.owner_id = ?)`,
 		userID, teamID, userID,
@@ -404,7 +404,7 @@ func (db *DB) CreateProjectV2(ctx context.Context, p *Project) error {
 	}
 
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO projects (id, team_id, name, slug, description, path,
+		`INSERT INTO pm_projects (id, team_id, name, slug, description, path,
                               git_url, git_branch, git_commit_sha, status,
                               created_at, updated_at, deleted)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -418,7 +418,7 @@ func (db *DB) CreateProjectV2(ctx context.Context, p *Project) error {
 			// projects.path. fkCheck used to query "projects" which
 			// was a self-referencing bug (no project existed yet);
 			// query the actual reference table instead.
-			if errors.Is(db.fkCheck(ctx, "teams", "id", p.TeamID), ErrFKMissing) {
+			if errors.Is(db.fkCheck(ctx, "pm_teams", "id", p.TeamID), ErrFKMissing) {
 				return fmt.Errorf("team %s not found", p.TeamID)
 			}
 			return ErrProjectExists
@@ -435,7 +435,7 @@ func (db *DB) GetProjectV2ByID(ctx context.Context, id string) (*Project, error)
                       IFNULL(git_url,''), IFNULL(git_branch,''),
                       IFNULL(git_commit_sha,''), status,
                       created_at, updated_at, deleted
-                 FROM projects WHERE id = ? AND deleted = 0`
+                 FROM pm_projects WHERE id = ? AND deleted = 0`
 	row := db.QueryRowContext(ctx, q, id)
 	return db.scanProjectV2(row)
 }
@@ -448,7 +448,7 @@ func (db *DB) GetProjectV2ByTeamSlug(ctx context.Context, teamID, slug string) (
                       IFNULL(git_url,''), IFNULL(git_branch,''),
                       IFNULL(git_commit_sha,''), status,
                       created_at, updated_at, deleted
-                 FROM projects WHERE team_id = ? AND slug = ?`
+                 FROM pm_projects WHERE team_id = ? AND slug = ?`
 	row := db.QueryRowContext(ctx, q, teamID, slug)
 	return db.scanProjectV2(row)
 }
@@ -467,7 +467,7 @@ func (db *DB) ListProjectsV2(ctx context.Context, teamID string) ([]*Project, er
                     IFNULL(git_url,''), IFNULL(git_branch,''),
                     IFNULL(git_commit_sha,''), status,
                     created_at, updated_at, deleted
-               FROM projects
+               FROM pm_projects
               WHERE deleted = 0
               ORDER BY created_at DESC`)
 	} else {
@@ -476,7 +476,7 @@ func (db *DB) ListProjectsV2(ctx context.Context, teamID string) ([]*Project, er
                     IFNULL(git_url,''), IFNULL(git_branch,''),
                     IFNULL(git_commit_sha,''), status,
                     created_at, updated_at, deleted
-               FROM projects
+               FROM pm_projects
               WHERE deleted = 0 AND team_id = ?
               ORDER BY created_at DESC`, teamID)
 	}
@@ -502,7 +502,7 @@ func (db *DB) ListProjectsV2(ctx context.Context, teamID string) ([]*Project, er
 func (db *DB) UpdateProjectV2(ctx context.Context, id string, name, description, gitBranch *string) error {
 	now := time.Now().UTC()
 	res, err := db.ExecContext(ctx,
-		`UPDATE projects
+		`UPDATE pm_projects
             SET name = COALESCE(?, name),
                 description = COALESCE(?, description),
                 git_branch = COALESCE(?, git_branch),
@@ -525,7 +525,7 @@ func (db *DB) UpdateProjectV2(ctx context.Context, id string, name, description,
 // pipeline (cloning → ready / error).
 func (db *DB) SetProjectStatus(ctx context.Context, id, status string) error {
 	res, err := db.ExecContext(ctx,
-		`UPDATE projects SET status = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE pm_projects SET status = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
 		status, time.Now().UTC(), id,
 	)
 	if err != nil {
@@ -542,7 +542,7 @@ func (db *DB) SetProjectStatus(ctx context.Context, id, status string) error {
 // can display "currently checked out at <sha>".
 func (db *DB) SetProjectGitCommit(ctx context.Context, id, sha string) error {
 	res, err := db.ExecContext(ctx,
-		`UPDATE projects SET git_commit_sha = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE pm_projects SET git_commit_sha = ?, updated_at = ? WHERE id = ? AND deleted = 0`,
 		sha, time.Now().UTC(), id,
 	)
 	if err != nil {
@@ -560,7 +560,7 @@ func (db *DB) SetProjectGitCommit(ctx context.Context, id, sha string) error {
 func (db *DB) DeleteProjectV2(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	res, err := db.ExecContext(ctx,
-		`UPDATE projects SET deleted = 1, updated_at = ? WHERE id = ? AND deleted = 0`,
+		`UPDATE pm_projects SET deleted = 1, updated_at = ? WHERE id = ? AND deleted = 0`,
 		now, id,
 	)
 	if err != nil {
@@ -586,7 +586,7 @@ func (db *DB) ProjectAccessibleByUser(ctx context.Context, projectID, userID, ro
 	}
 	var teamID string
 	err := db.QueryRowContext(ctx,
-		`SELECT team_id FROM projects WHERE id = ? AND deleted = 0`,
+		`SELECT team_id FROM pm_projects WHERE id = ? AND deleted = 0`,
 		projectID,
 	).Scan(&teamID)
 	if err != nil {

@@ -148,7 +148,7 @@ func (h *MemoryHandlers) Create() gin.HandlerFunc {
 		// id, so we derive the rest.
 		var teamID string
 		if err := h.DB.QueryRowContext(ctx,
-			`SELECT p.team_id FROM modules m JOIN projects p ON p.id = m.project_id
+			`SELECT p.team_id FROM pm_modules m JOIN pm_projects p ON p.id = m.project_id
 			   WHERE m.id = ? AND m.deleted = 0 AND p.deleted = 0`,
 			req.ModuleID,
 		).Scan(&teamID); err != nil {
@@ -367,7 +367,7 @@ func (h *MemoryHandlers) assertMemoryWrite(c *gin.Context, teamID string) bool {
 func deriveProjectIDFromModule(ctx context.Context, db *DB, moduleID string) string {
 	var pid string
 	_ = db.QueryRowContext(ctx,
-		`SELECT project_id FROM modules WHERE id = ? AND deleted = 0`, moduleID,
+		`SELECT project_id FROM pm_modules WHERE id = ? AND deleted = 0`, moduleID,
 	).Scan(&pid)
 	return pid
 }

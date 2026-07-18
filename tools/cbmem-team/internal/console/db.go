@@ -64,7 +64,7 @@ func (db *DB) Migrate(ctx context.Context, extra ...ExtraSchema) error {
 
 func (db *DB) migrateConsole(ctx context.Context) error {
 	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS users (
+		`CREATE TABLE IF NOT EXISTS sys_users (
             id TEXT PRIMARY KEY,
             display_name TEXT,
             project_paths TEXT,
@@ -73,7 +73,7 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             created_at DATETIME,
             updated_at DATETIME
         )`,
-		`CREATE TABLE IF NOT EXISTS projects (
+		`CREATE TABLE IF NOT EXISTS pm_projects (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             path TEXT NOT NULL UNIQUE,
@@ -84,8 +84,8 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             updated_at DATETIME NOT NULL,
             deleted INTEGER DEFAULT 0
         )`,
-		`CREATE INDEX IF NOT EXISTS idx_projects_creator ON projects(creator_id)`,
-`CREATE TABLE IF NOT EXISTS sessions (
+		`CREATE INDEX IF NOT EXISTS idx_pm_projects_creator ON pm_projects(creator_id)`,
+`CREATE TABLE IF NOT EXISTS ai_sessions (
            id TEXT PRIMARY KEY,
            user_id TEXT NOT NULL,
            project_id TEXT,
@@ -99,11 +99,11 @@ func (db *DB) migrateConsole(ctx context.Context) error {
            mempalace_last_synced_at DATETIME,
            mempalace_last_error TEXT
        )`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_mempalace_pending ON sessions(mempalace_synced_turns, turn_count) WHERE mempalace_synced_turns < turn_count`,
-		`CREATE TABLE IF NOT EXISTS session_turns (
+		`CREATE INDEX IF NOT EXISTS idx_ai_sessions_user ON ai_sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_sessions_project ON ai_sessions(project_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_sessions_started ON ai_sessions(started_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_sessions_mempalace_pending ON ai_sessions(mempalace_synced_turns, turn_count) WHERE mempalace_synced_turns < turn_count`,
+		`CREATE TABLE IF NOT EXISTS ai_session_turns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
             turn_no INTEGER NOT NULL,
@@ -112,8 +112,8 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             tools_json TEXT,
             ts DATETIME NOT NULL
         )`,
-		`CREATE INDEX IF NOT EXISTS idx_session_turns_session ON session_turns(session_id)`,
-		`CREATE TABLE IF NOT EXISTS summarize_tasks (
+		`CREATE INDEX IF NOT EXISTS idx_ai_session_turns_session ON ai_session_turns(session_id)`,
+		`CREATE TABLE IF NOT EXISTS ai_summarize_tasks (
             id TEXT PRIMARY KEY,
             user_id TEXT,
             source_ids TEXT,
@@ -124,7 +124,7 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             created_at DATETIME NOT NULL,
             finished_at DATETIME
         )`,
-		`CREATE TABLE IF NOT EXISTS distill_tasks (
+		`CREATE TABLE IF NOT EXISTS ai_distill_tasks (
             id TEXT PRIMARY KEY,
             user_id TEXT,
             source_ids TEXT,
@@ -136,7 +136,7 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             created_at DATETIME NOT NULL,
             finished_at DATETIME
         )`,
-		`CREATE TABLE IF NOT EXISTS console_sessions (
+		`CREATE TABLE IF NOT EXISTS sys_console_sessions (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             created_at DATETIME NOT NULL,
@@ -145,7 +145,7 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             ip TEXT,
             ua TEXT
         )`,
-		`CREATE INDEX IF NOT EXISTS idx_console_sessions_expires ON console_sessions(expires_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_sys_console_sessions_expires ON sys_console_sessions(expires_at)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.ExecContext(ctx, s); err != nil {
@@ -233,12 +233,12 @@ func (db *DB) indexExists(ctx context.Context, table, name string) (bool, error)
 // mysqlConsoleIndexes is the ordered list of CREATE INDEX statements that
 // accompany mysqlConsoleDDL. Adding a new table? Add its indexes here too.
 var mysqlConsoleIndexes = []indexSpec{
-	{"projects", "idx_projects_creator", `CREATE INDEX idx_projects_creator ON projects(creator_id)`},
-	{"sessions", "idx_sessions_user", `CREATE INDEX idx_sessions_user ON sessions(user_id)`},
-	{"sessions", "idx_sessions_project", `CREATE INDEX idx_sessions_project ON sessions(project_id)`},
-	{"sessions", "idx_sessions_started", `CREATE INDEX idx_sessions_started ON sessions(started_at DESC)`},
-	{"session_turns", "idx_session_turns_session", `CREATE INDEX idx_session_turns_session ON session_turns(session_id)`},
-	{"console_sessions", "idx_console_sessions_expires", `CREATE INDEX idx_console_sessions_expires ON console_sessions(expires_at)`},
+	{"pm_projects", "idx_pm_projects_creator", `CREATE INDEX idx_pm_projects_creator ON pm_projects(creator_id)`},
+	{"ai_sessions", "idx_ai_sessions_user", `CREATE INDEX idx_ai_sessions_user ON ai_sessions(user_id)`},
+	{"ai_sessions", "idx_ai_sessions_project", `CREATE INDEX idx_ai_sessions_project ON ai_sessions(project_id)`},
+	{"ai_sessions", "idx_ai_sessions_started", `CREATE INDEX idx_ai_sessions_started ON ai_sessions(started_at DESC)`},
+	{"ai_session_turns", "idx_ai_session_turns_session", `CREATE INDEX idx_ai_session_turns_session ON ai_session_turns(session_id)`},
+	{"sys_console_sessions", "idx_sys_console_sessions_expires", `CREATE INDEX idx_sys_console_sessions_expires ON sys_console_sessions(expires_at)`},
 }
 
 // mysqlConsoleDDL is the MySQL 8.0 rewrite of the SQLite DDL above.
@@ -254,7 +254,7 @@ var mysqlConsoleIndexes = []indexSpec{
 //   - INDEX IF NOT EXISTS not supported in MySQL — we use plain CREATE INDEX
 //     and rely on CREATE TABLE IF NOT EXISTS idempotency.
 var mysqlConsoleDDL = []string{
-	`CREATE TABLE IF NOT EXISTS users (
+	`CREATE TABLE IF NOT EXISTS sys_users (
         id VARCHAR(128) NOT NULL PRIMARY KEY,
         display_name VARCHAR(255),
         project_paths TEXT,
@@ -263,7 +263,7 @@ var mysqlConsoleDDL = []string{
         created_at DATETIME,
         updated_at DATETIME
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-	`CREATE TABLE IF NOT EXISTS projects (
+	`CREATE TABLE IF NOT EXISTS pm_projects (
         id VARCHAR(128) NOT NULL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         path VARCHAR(512) NOT NULL UNIQUE,
@@ -274,7 +274,7 @@ var mysqlConsoleDDL = []string{
         updated_at DATETIME NOT NULL,
         deleted TINYINT(1) DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-`CREATE TABLE IF NOT EXISTS sessions (
+`CREATE TABLE IF NOT EXISTS ai_sessions (
        id VARCHAR(128) NOT NULL PRIMARY KEY,
        user_id VARCHAR(128) NOT NULL,
        project_id VARCHAR(128),
@@ -288,7 +288,7 @@ var mysqlConsoleDDL = []string{
        mempalace_last_synced_at DATETIME,
        mempalace_last_error TEXT
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-	`CREATE TABLE IF NOT EXISTS session_turns (
+	`CREATE TABLE IF NOT EXISTS ai_session_turns (
         id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         session_id VARCHAR(128) NOT NULL,
         turn_no INT NOT NULL,
@@ -297,7 +297,7 @@ var mysqlConsoleDDL = []string{
         tools_json TEXT,
         ts DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-	`CREATE TABLE IF NOT EXISTS summarize_tasks (
+	`CREATE TABLE IF NOT EXISTS ai_summarize_tasks (
         id VARCHAR(128) NOT NULL PRIMARY KEY,
         user_id VARCHAR(128),
         source_ids TEXT,
@@ -308,7 +308,7 @@ var mysqlConsoleDDL = []string{
         created_at DATETIME NOT NULL,
         finished_at DATETIME
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-	`CREATE TABLE IF NOT EXISTS distill_tasks (
+	`CREATE TABLE IF NOT EXISTS ai_distill_tasks (
         id VARCHAR(128) NOT NULL PRIMARY KEY,
         user_id VARCHAR(128),
         source_ids TEXT,
@@ -320,7 +320,7 @@ var mysqlConsoleDDL = []string{
         created_at DATETIME NOT NULL,
         finished_at DATETIME
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-	`CREATE TABLE IF NOT EXISTS console_sessions (
+	`CREATE TABLE IF NOT EXISTS sys_console_sessions (
         id VARCHAR(128) NOT NULL PRIMARY KEY,
         user_id VARCHAR(128) NOT NULL,
         created_at DATETIME NOT NULL,
@@ -354,7 +354,7 @@ func (db *DB) MigrationsContain(ctx context.Context, table string) (bool, error)
 
 // MigrateSessionsAutoSyncColumns adds the mempalace_synced_turns /
 // mempalace_last_synced_at / mempalace_last_error columns to a pre-existing
-// `sessions` table. The CREATE TABLE in migrateConsole already includes them
+// `ai_sessions` table. The CREATE TABLE in migrateConsole already includes them
 // for fresh deployments; this ALTER is idempotent and runs at startup so
 // v1 -> v1.1 upgrades get the auto-sync bookkeeping without a manual
 // migrate step.
@@ -367,17 +367,17 @@ func (db *DB) MigrateSessionsAutoSyncColumns(ctx context.Context) error {
 		name string
 		ddl  string
 	}{
-		{"mempalace_synced_turns", `ALTER TABLE sessions ADD COLUMN mempalace_synced_turns INTEGER DEFAULT 0`},
-		{"mempalace_last_synced_at", `ALTER TABLE sessions ADD COLUMN mempalace_last_synced_at DATETIME`},
-		{"mempalace_last_error", `ALTER TABLE sessions ADD COLUMN mempalace_last_error TEXT`},
+		{"mempalace_synced_turns", `ALTER TABLE ai_sessions ADD COLUMN mempalace_synced_turns INTEGER DEFAULT 0`},
+		{"mempalace_last_synced_at", `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_synced_at DATETIME`},
+		{"mempalace_last_error", `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_error TEXT`},
 	}
 	if db.driver == "mysql" {
-		cols[0].ddl = `ALTER TABLE sessions ADD COLUMN mempalace_synced_turns INT DEFAULT 0`
-		cols[1].ddl = `ALTER TABLE sessions ADD COLUMN mempalace_last_synced_at DATETIME`
-		cols[2].ddl = `ALTER TABLE sessions ADD COLUMN mempalace_last_error TEXT`
+		cols[0].ddl = `ALTER TABLE ai_sessions ADD COLUMN mempalace_synced_turns INT DEFAULT 0`
+		cols[1].ddl = `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_synced_at DATETIME`
+		cols[2].ddl = `ALTER TABLE ai_sessions ADD COLUMN mempalace_last_error TEXT`
 	}
 	for _, c := range cols {
-		has, err := db.columnExists(ctx, "sessions", c.name)
+		has, err := db.columnExists(ctx, "ai_sessions", c.name)
 		if err != nil {
 			return fmt.Errorf("columnExists %s: %w", c.name, err)
 		}
@@ -392,7 +392,7 @@ func (db *DB) MigrateSessionsAutoSyncColumns(ctx context.Context) error {
 				strings.Contains(msg, "already exists") {
 				continue
 			}
-			return fmt.Errorf("alter sessions add %s: %w", c.name, err)
+			return fmt.Errorf("alter ai_sessions add %s: %w", c.name, err)
 		}
 	}
 	return nil
@@ -435,8 +435,8 @@ func (db *DB) columnExists(ctx context.Context, table, column string) (bool, err
 // Used by the migrate subcommand to short-circuit when the schema is
 // already in place.
 func (db *DB) AllMigrated(ctx context.Context) (bool, error) {
-	tables := []string{"users", "projects", "sessions", "session_turns",
-		"summarize_tasks", "distill_tasks", "console_sessions"}
+	tables := []string{"sys_users", "pm_projects", "ai_sessions", "ai_session_turns",
+		"ai_summarize_tasks", "ai_distill_tasks", "sys_console_sessions"}
 	for _, t := range tables {
 		ok, err := db.MigrationsContain(ctx, t)
 		if err != nil {

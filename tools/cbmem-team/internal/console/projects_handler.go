@@ -102,7 +102,7 @@ func ListProjectsHandler(db *DB) gin.HandlerFunc {
 
 		rows, err := db.QueryContext(c.Request.Context(),
 			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted
-			 FROM projects
+			 FROM pm_projects
 			 WHERE deleted=0 AND (?='' OR name LIKE ? OR path LIKE ?)
 			 ORDER BY created_at DESC
 			 LIMIT ? OFFSET ?`,
@@ -129,7 +129,7 @@ func ListProjectsHandler(db *DB) gin.HandlerFunc {
 
 		var total int64
 		if err := db.QueryRowContext(c.Request.Context(),
-			`SELECT COUNT(*) FROM projects WHERE deleted=0 AND (?='' OR name LIKE ? OR path LIKE ?)`,
+			`SELECT COUNT(*) FROM pm_projects WHERE deleted=0 AND (?='' OR name LIKE ? OR path LIKE ?)`,
 			q, "%"+q+"%", "%"+q+"%").Scan(&total); err != nil {
 			Fail(c, http.StatusInternalServerError, 5000010, "count projects: "+err.Error())
 			return
@@ -161,7 +161,7 @@ func CreateProjectHandler(db *DB, dataDir string, defaultMCPBin string) gin.Hand
 		projectPath := filepath.Join(dataDir, "users", uid, "projects", safeName)
 
 		_, err := db.ExecContext(c.Request.Context(),
-			`INSERT INTO projects (id, name, path, wing, mcp_bin, creator_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
+			`INSERT INTO pm_projects (id, name, path, wing, mcp_bin, creator_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
 			id, req.Name, projectPath, req.Wing, defaultMCPBin, req.CreatorID, now, now)
 		if err != nil {
 			if isUniqueErr(err) {
@@ -172,7 +172,7 @@ func CreateProjectHandler(db *DB, dataDir string, defaultMCPBin string) gin.Hand
 			return
 		}
 		row := db.QueryRowContext(c.Request.Context(),
-			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted FROM projects WHERE id = ?`,
+			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted FROM pm_projects WHERE id = ?`,
 			id)
 		p, err := scanProjectRow(row)
 		if err != nil {
@@ -204,7 +204,7 @@ func UpdateProjectHandler(db *DB) gin.HandlerFunc {
 		}
 
 		row := db.QueryRowContext(c.Request.Context(),
-			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted FROM projects WHERE id = ? AND deleted = 0`,
+			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted FROM pm_projects WHERE id = ? AND deleted = 0`,
 			id)
 		existing, err := scanProjectRow(row)
 		if err != nil {
@@ -231,7 +231,7 @@ func UpdateProjectHandler(db *DB) gin.HandlerFunc {
 		existing.UpdatedAt = time.Now().UTC()
 
 		_, err = db.ExecContext(c.Request.Context(),
-			`UPDATE projects SET name=?, wing=?, mcp_bin=?, creator_id=?, updated_at=? WHERE id=? AND deleted=0`,
+			`UPDATE pm_projects SET name=?, wing=?, mcp_bin=?, creator_id=?, updated_at=? WHERE id=? AND deleted=0`,
 			existing.Name, existing.Wing, existing.MCPBin, existing.CreatorID, existing.UpdatedAt, id)
 		if err != nil {
 			Fail(c, http.StatusInternalServerError, 5000016, "update project: "+err.Error())
@@ -247,7 +247,7 @@ func DeleteProjectHandler(db *DB) gin.HandlerFunc {
 		id := c.Param("id")
 		now := time.Now().UTC()
 		res, err := db.ExecContext(c.Request.Context(),
-			`UPDATE projects SET deleted=1, updated_at=? WHERE id=? AND deleted=0`,
+			`UPDATE pm_projects SET deleted=1, updated_at=? WHERE id=? AND deleted=0`,
 			now, id)
 		if err != nil {
 			Fail(c, http.StatusInternalServerError, 5000017, "delete project: "+err.Error())
@@ -267,7 +267,7 @@ func ProjectIndexStatusHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		row := db.QueryRowContext(c.Request.Context(),
-			`SELECT path FROM projects WHERE id = ? AND deleted = 0`, id)
+			`SELECT path FROM pm_projects WHERE id = ? AND deleted = 0`, id)
 		var path string
 		if err := row.Scan(&path); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -300,7 +300,7 @@ func ProjectReindexHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		row := db.QueryRowContext(c.Request.Context(),
-			`SELECT path, IFNULL(mcp_bin,'') FROM projects WHERE id = ? AND deleted = 0`, id)
+			`SELECT path, IFNULL(mcp_bin,'') FROM pm_projects WHERE id = ? AND deleted = 0`, id)
 		var path, mcpBin string
 		if err := row.Scan(&path, &mcpBin); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -336,3 +336,5 @@ func ProjectReindexHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
 		})
 	}
 }
+
+

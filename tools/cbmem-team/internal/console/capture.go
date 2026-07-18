@@ -260,7 +260,7 @@ func captureWrite(db *DB, uid, project string, body []byte) error {
 	msgCount := len(req.Params.Arguments.Messages)
 
 	if _, err := db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO sessions (id, user_id, project_id, project_path, started_at, turn_count, tool_count) VALUES (?,?,NULL,?,?,?,?)`,
+		`INSERT OR IGNORE INTO ai_sessions (id, user_id, project_id, project_path, started_at, turn_count, tool_count) VALUES (?,?,NULL,?,?,?,?)`,
 		sessID, uid, project, now, 0, 0,
 	); err != nil {
 		return err

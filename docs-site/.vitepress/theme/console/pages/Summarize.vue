@@ -97,7 +97,7 @@ function taskStatusColor(s: string) {
 }
 
 async function loadTasks() {
-  try { tasks.value = await SummarizeDistillAPI.listSummarize() }
+  try { const r = await SummarizeDistillAPI.listSummarize(); tasks.value = r?.list || r || [] }
   catch {}
 }
 

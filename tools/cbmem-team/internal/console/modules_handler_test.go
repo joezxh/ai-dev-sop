@@ -286,12 +286,12 @@ func TestSessionsV2ListFiltersAndStats(t *testing.T) {
 	// project, one with a known module_id so the module filter is
 	// testable.
 	if _, err := h.DB.ExecContext(context.Background(),
-		`INSERT INTO sessions (id, user_id, team_id, project_id, module_id, project_path, started_at, tool_count, turn_count)
+		`INSERT INTO ai_sessions (id, user_id, team_id, project_id, module_id, project_path, started_at, tool_count, turn_count)
          VALUES ('s1','u_admin','team_stats','`+projectID+`','mod_x','/path1','2026-07-15 10:00:00',3,2)`); err != nil {
 		t.Fatalf("seed s1: %v", err)
 	}
 	if _, err := h.DB.ExecContext(context.Background(),
-		`INSERT INTO sessions (id, user_id, team_id, project_id, module_id, project_path, started_at, tool_count, turn_count)
+		`INSERT INTO ai_sessions (id, user_id, team_id, project_id, module_id, project_path, started_at, tool_count, turn_count)
          VALUES ('s2','u_admin','team_stats','`+projectID+`','','/path2','2026-07-15 11:00:00',5,3)`); err != nil {
 		t.Fatalf("seed s2: %v", err)
 	}

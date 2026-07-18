@@ -19,36 +19,36 @@ import (
 // Config represents the application configuration. All fields are copied
 // from command-line flags and optional YAML config file.
 type Config struct {
-	Listen        string        `yaml:"listen"`
-	DataDir       string        `yaml:"data_dir"`
-	MCPBinary     string        `yaml:"mcp_binary"`
-	JWTSecret     string        `yaml:"jwt_secret"`
-	AdminToken    string        `yaml:"admin_token"`
-	LogLevel      string        `yaml:"log_level"`
-	LLMProvider   string        `yaml:"llm_provider"`
-	LLMModel      string        `yaml:"llm_model"`
-	LLMBaseURL    string        `yaml:"llm_base_url"`
-	LLMAPIKey     string        `yaml:"llm_api_key"`
-	MemPalaceBase string        `yaml:"mempalace_base"`
+	Listen        string `yaml:"listen"`
+	DataDir       string `yaml:"data_dir"`
+	MCPBinary     string `yaml:"mcp_binary"`
+	JWTSecret     string `yaml:"jwt_secret"`
+	AdminToken    string `yaml:"admin_token"`
+	LogLevel      string `yaml:"log_level"`
+	LLMProvider   string `yaml:"llm_provider"`
+	LLMModel      string `yaml:"llm_model"`
+	LLMBaseURL    string `yaml:"llm_base_url"`
+	LLMAPIKey     string `yaml:"llm_api_key"`
+	MemPalaceBase string `yaml:"mempalace_base"`
 	// MemPalaceAutoSyncWing sets the default wing used for /mcp auto-synced drawers.
 	// If empty, the project basename is used.
 	MemPalaceAutoSyncWing string `yaml:"mempalace_auto_sync_wing"`
 	// MemPalaceAutoSyncHall sets the hall used for /mcp auto-synced drawers.
 	// Defaults to "events".
-	MemPalaceAutoSyncHall string `yaml:"mempalace_auto_sync_hall"`
-	ConsoleDist   string        `yaml:"console_dist"`
-	IdleTTL       time.Duration `yaml:"idle_ttl"`
-	MaxProcs      int           `yaml:"max_procs_per_user"`
-	MySQLDSN      string        `yaml:"mysql_dsn"`
-	MySQLMaxOpen  int           `yaml:"mysql_max_open"`
-	MySQLMaxIdle  int           `yaml:"mysql_max_idle"`
-	MySQLMaxLife  time.Duration `yaml:"mysql_max_lifetime"`
-	CORSOrigins   string        `yaml:"cors_allow_origins"`
-	AuthAccessTTL   time.Duration `yaml:"auth_access_ttl"`
-	AuthRefreshTTL  time.Duration `yaml:"auth_refresh_ttl"`
-	AuthInitialAdmin string      `yaml:"auth_initial_admin"`
-	AuthBcryptCost  int          `yaml:"auth_bcrypt_cost"`
-	RepoRoot      string        `yaml:"repo_root"`
+	MemPalaceAutoSyncHall string        `yaml:"mempalace_auto_sync_hall"`
+	ConsoleDist           string        `yaml:"console_dist"`
+	IdleTTL               time.Duration `yaml:"idle_ttl"`
+	MaxProcs              int           `yaml:"max_procs_per_user"`
+	MySQLDSN              string        `yaml:"mysql_dsn"`
+	MySQLMaxOpen          int           `yaml:"mysql_max_open"`
+	MySQLMaxIdle          int           `yaml:"mysql_max_idle"`
+	MySQLMaxLife          time.Duration `yaml:"mysql_max_lifetime"`
+	CORSOrigins           string        `yaml:"cors_allow_origins"`
+	AuthAccessTTL         time.Duration `yaml:"auth_access_ttl"`
+	AuthRefreshTTL        time.Duration `yaml:"auth_refresh_ttl"`
+	AuthInitialAdmin      string        `yaml:"auth_initial_admin"`
+	AuthBcryptCost        int           `yaml:"auth_bcrypm_cost"`
+	RepoRoot              string        `yaml:"repo_root"`
 }
 
 // DefaultConfig returns a Config with sensible defaults for development.
@@ -68,31 +68,31 @@ func DefaultConfig() *Config {
 func ParseFlags(args []string) (*Config, map[string]string, error) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var (
-		listen              = fs.String("listen", "", "HTTP listen address")
-		cfgFile             = fs.String("config", "", "config file path")
-		dataDir             = fs.String("data", "", "per-user data root")
-		mcpBin              = fs.String("mcp-bin", "", "path to codebase-memory-mcp binary")
-		jwtSecret           = fs.String("jwt-secret", "", "HMAC secret for JWT verification (overrides config)")
-		adminTok            = fs.String("admin-token", "", "admin token for /admin endpoints (overrides config)")
-		logLevel            = fs.String("log", "", "log level: debug|info|warn|error")
-		llmProvider         = fs.String("llm-provider", "", "llm provider: fake|openai|ollama")
-		llmModel            = fs.String("llm-model", "", "model name")
-		llmBaseURL          = fs.String("llm-base-url", "", "llm base url")
-		llmAPIKey           = fs.String("llm-api-key", "", "llm api key (optional for ollama)")
-		mempalaceBase       = fs.String("mempalace-base", "", "mempalace http base url, empty disables integration")
-		mempalaceAutoWing   = fs.String("mempalace-auto-sync-wing", "", "wing used for /mcp auto-synced drawers")
-		mempalaceAutoHall   = fs.String("mempalace-auto-sync-hall", "", "hall used for /mcp auto-synced drawers")
-		consoleDist         = fs.String("console-dist", "", "path to vitepress build dist for console frontend")
-		authAccessTTL       = fs.Duration("auth-access-ttl", 0, "JWT access token TTL")
-		authRefreshTTL      = fs.Duration("auth-refresh-ttl", 0, "refresh token TTL")
-		authInitialAdmin    = fs.String("auth-initial-admin", "", "if non-empty, mount POST /api/auth/first-admin for first-boot bootstrap. Empty disables the route.")
-		authBcryptCost      = fs.Int("auth-bcrypt-cost", 0, "bcrypt work factor (4-31, default 12)")
-		mysqlDSN            = fs.String("mysql-dsn", "", "MySQL DSN; empty = use SQLite at <data>/cbmem-team.db")
-		mysqlMaxOpen        = fs.Int("mysql-max-open", 0, "MySQL max open conns")
-		mysqlMaxIdle       = fs.Int("mysql-max-idle", 0, "MySQL max idle conns")
-		mysqlMaxLife       = fs.Duration("mysql-max-lifetime", 0, "MySQL conn max lifetime")
-		corsOrigins         = fs.String("cors-allow-origins", "", "Comma-separated CORS origin whitelist for /api/console. Use '*' for dev only; pass an empty string to disable CORS.")
-		repoRoot            = fs.String("repo-root", "", "global git repo root for v2 projects; each project path = <repo-root>/<slug>. Empty disables project creation.")
+		listen            = fs.String("listen", "", "HTTP listen address")
+		cfgFile           = fs.String("config", "", "config file path")
+		dataDir           = fs.String("data", "", "per-user data root")
+		mcpBin            = fs.String("mcp-bin", "", "path to codebase-memory-mcp binary")
+		jwtSecret         = fs.String("jwt-secret", "", "HMAC secret for JWT verification (overrides config)")
+		adminTok          = fs.String("admin-token", "", "admin token for /admin endpoints (overrides config)")
+		logLevel          = fs.String("log", "", "log level: debug|info|warn|error")
+		llmProvider       = fs.String("llm-provider", "", "llm provider: fake|openai|ollama")
+		llmModel          = fs.String("llm-model", "", "model name")
+		llmBaseURL        = fs.String("llm-base-url", "", "llm base url")
+		llmAPIKey         = fs.String("llm-api-key", "", "llm api key (optional for ollama)")
+		mempalaceBase     = fs.String("mempalace-base", "", "mempalace http base url, empty disables integration")
+		mempalaceAutoWing = fs.String("mempalace-auto-sync-wing", "", "wing used for /mcp auto-synced drawers")
+		mempalaceAutoHall = fs.String("mempalace-auto-sync-hall", "", "hall used for /mcp auto-synced drawers")
+		consoleDist       = fs.String("console-dist", "", "path to vitepress build dist for console frontend")
+		authAccessTTL     = fs.Duration("auth-access-ttl", 0, "JWT access token TTL")
+		authRefreshTTL    = fs.Duration("auth-refresh-ttl", 0, "refresh token TTL")
+		authInitialAdmin  = fs.String("auth-initial-admin", "", "if non-empty, mount POST /api/auth/first-admin for first-boot bootstrap. Empty disables the route.")
+		authBcryptCost    = fs.Int("auth-bcrypt-cost", 0, "bcrypt work factor (4-31, default 12)")
+		mysqlDSN          = fs.String("mysql-dsn", "", "MySQL DSN; empty = use SQLite at <data>/cbmem-team.db")
+		mysqlMaxOpen      = fs.Int("mysql-max-open", 0, "MySQL max open conns")
+		mysqlMaxIdle      = fs.Int("mysql-max-idle", 0, "MySQL max idle conns")
+		mysqlMaxLife      = fs.Duration("mysql-max-lifetime", 0, "MySQL conn max lifetime")
+		corsOrigins       = fs.String("cors-allow-origins", "", "Comma-separated CORS origin whitelist for /api/console. Use '*' for dev only; pass an empty string to disable CORS.")
+		repoRoot          = fs.String("repo-root", "", "global git repo root for v2 projects; each project path = <repo-root>/<slug>. Empty disables project creation.")
 	)
 	if err := fs.Parse(args); err != nil {
 		return nil, nil, err
@@ -308,7 +308,7 @@ func parseYAML(f *os.File, cfg *Config) {
 			}
 		case "auth_initial_admin":
 			cfg.AuthInitialAdmin = value
-		case "auth_bcrypt_cost":
+		case "auth_bcrypm_cost":
 			fmt.Sscanf(value, "%d", &cfg.AuthBcryptCost)
 		case "repo_root":
 			cfg.RepoRoot = value
@@ -328,13 +328,13 @@ func stripQuotes(s string) string {
 
 // Watcher watches the config file for changes and notifies listeners.
 type Watcher struct {
-	watcher   *fsnotify.Watcher
+	watcher    *fsnotify.Watcher
 	configPath string
-	notifyCh  chan struct{}
-	closeCh   chan struct{}
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	closed    bool
+	notifyCh   chan struct{}
+	closeCh    chan struct{}
+	wg         sync.WaitGroup
+	mu         sync.Mutex
+	closed     bool
 }
 
 // NewWatcher creates a new config file watcher.
@@ -352,7 +352,7 @@ func NewWatcher(configPath string) (*Watcher, error) {
 		watcher:    watcher,
 		configPath: configPath,
 		notifyCh:   make(chan struct{}, 1),
-		closeCh:   make(chan struct{}),
+		closeCh:    make(chan struct{}),
 	}
 
 	// Watch the config directory so we catch renames (common during writes).

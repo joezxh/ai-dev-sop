@@ -394,9 +394,17 @@ func run(ctx context.Context, cfg *config.Config, rm *reload.Manager) error {
 	})
 
 	if cfg.ConsoleDist != "" {
+		// Serve the SPA static files. Use NoRoute as a fallback so that
+		// any unmatched /console/* path returns index.html (SPA history
+		// fallback). We avoid registering a second wildcard route which
+		// would conflict with r.Static's internal /*filepath.
 		r.Static("/console", cfg.ConsoleDist)
-		r.GET("/console/*action", func(c *gin.Context) {
-			c.File(filepath.Join(cfg.ConsoleDist, "index.html"))
+		r.NoRoute(func(c *gin.Context) {
+			if strings.HasPrefix(c.Request.URL.Path, "/console/") {
+				c.File(filepath.Join(cfg.ConsoleDist, "index.html"))
+				return
+			}
+			c.Status(http.StatusNotFound)
 		})
 	}
 
