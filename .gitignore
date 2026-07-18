@@ -14,3 +14,5 @@ example
 .github
 .vitepress
 prev_dom
+/tools/cbmem-team/stderr.log
+/tools/cbmem-team/stdout.log
