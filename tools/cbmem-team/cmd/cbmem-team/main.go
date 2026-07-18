@@ -284,7 +284,7 @@ func run(ctx context.Context, cfg *config.Config, rm *reload.Manager) error {
 	// for the watermark / retry policy.
 	var mpCapture *llm.MemPalace
 	if cfg.MemPalaceBase != "" {
-		mpCapture = llm.NewMemPalace(cfg.MemPalaceBase, "")
+		mpCapture = llm.NewMemPalace(cfg.MemPalaceBase, cfg.MemPalaceToken)
 	}
 	mcpGroup := r.Group("/mcp")
 	mcpGroup.Use(jwtv.Middleware(),
@@ -300,6 +300,12 @@ func run(ctx context.Context, cfg *config.Config, rm *reload.Manager) error {
 		mcpGroup.POST("/", mcp.StreamableHandler(p, users, reposMgr, consoleDB))
 		mcpGroup.GET("/sse", jwtv.Middleware(), mcp.SSEHandler())
 	}
+	// GET /mcp — Streamable HTTP transport requires a GET endpoint for
+	// server-to-client SSE notifications. Registered separately so it
+	// skips the capture middlewares (POST-only).
+	mcpGet := r.Group("/mcp")
+	mcpGet.Use(jwtv.Middleware())
+	mcpGet.GET("", mcp.StreamableGETHandler())
 
 	// Public JWT refresh: lets a long-lived client (e.g. Cursor) swap a
 	// still-valid JWT for a fresh one without bothering the admin.
@@ -335,7 +341,7 @@ func run(ctx context.Context, cfg *config.Config, rm *reload.Manager) error {
 	}
 	var mp *llm.MemPalace
 	if cfg.MemPalaceBase != "" {
-		mp = llm.NewMemPalace(cfg.MemPalaceBase, "")
+		mp = llm.NewMemPalace(cfg.MemPalaceBase, cfg.MemPalaceToken)
 	}
 
 	authHandlers := console.NewAuthHandlersWithCost(

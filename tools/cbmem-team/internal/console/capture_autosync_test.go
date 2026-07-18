@@ -44,6 +44,12 @@ func (s *mempalaceStub) count() int {
 
 func (s *mempalaceStub) start() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// /healthz mirrors the real MemPalace liveness probe (no auth).
+		if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte("ok\n"))
+			return
+		}
 		// Simulate a transient failure for the first failN requests so
 		// the retry path can be exercised.
 		if atomic.LoadInt32(&s.failN) > 0 {
@@ -55,17 +61,20 @@ func (s *mempalaceStub) start() *httptest.Server {
 		buf := make([]byte, r.ContentLength)
 		_, _ = r.Body.Read(buf)
 		s.record(map[string]string{
-			"path":    r.URL.Path,
-			"body":    string(buf),
+			"path": r.URL.Path,
+			"body": string(buf),
 		})
+		// Mirror the MemPalace HTTP MCP contract: a successful tools/call
+		// returns a JSON-RPC result envelope carrying a content array.
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(s.status)
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"{\"status\":\"filed\"}"}]}}`))
 	}))
 }
 
 // startMemPalace spins up a stub that satisfies the llm.MemPalace HTTP
-// contract (/api/drawers POST + /healthz GET) and returns the configured
-// client + a teardown func.
+// contract (/mcp JSON-RPC tools/call POST + /healthz GET) and returns the
+// configured client + a teardown func.
 func startMemPalace(t *testing.T, stub *mempalaceStub) (*llm.MemPalace, func()) {
 	t.Helper()
 	srv := stub.start()
@@ -140,14 +149,19 @@ func TestCaptureAutoSyncPushesAllTurns(t *testing.T) {
 	stub.mu.Lock()
 	defer stub.mu.Unlock()
 	for i, h := range stub.hits {
-		if h["path"] != "/api/drawers" {
+		if h["path"] != "/mcp" {
 			t.Fatalf("hit[%d] path=%q", i, h["path"])
+		}
+		if !bytes.Contains([]byte(h["body"]), []byte(`"name":"mempalace_add_drawer"`)) {
+			t.Fatalf("hit[%d] body not a mempalace_add_drawer tools/call: %s", i, h["body"])
 		}
 		if !bytes.Contains([]byte(h["body"]), []byte(`"wing":"project_demo"`)) {
 			t.Fatalf("hit[%d] body missing wing: %s", i, h["body"])
 		}
-		if !bytes.Contains([]byte(h["body"]), []byte(`"hall":"events"`)) {
-			t.Fatalf("hit[%d] body missing hall: %s", i, h["body"])
+		// hall is carried in source_file, not its own key (MemPalace rejects
+		// unknown argument keys with -32602).
+		if !bytes.Contains([]byte(h["body"]), []byte(`"source_file":"events"`)) {
+			t.Fatalf("hit[%d] body missing source_file (hall): %s", i, h["body"])
 		}
 	}
 }

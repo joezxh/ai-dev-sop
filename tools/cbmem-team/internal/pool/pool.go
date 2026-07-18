@@ -15,6 +15,7 @@ package pool
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -170,6 +171,15 @@ func (p *Pool) Request(userID, projectPath, frame string) (string, error) {
 	if _, err := pr.stdin.Write([]byte("\n")); err != nil {
 		return "", fmt.Errorf("write newline: %w", err)
 	}
+	// JSON-RPC notifications (method set, no id) get NO response from the
+	// subprocess. Blocking on ReadString here would hang forever and hold
+	// pr.mu, deadlocking every subsequent request for this user — which is
+	// exactly what a client sending notifications/initialized after the
+	// initialize handshake triggers. Ack immediately without reading.
+	if isNotification([]byte(frame)) {
+		pr.lastUsed.Store(time.Now().UnixNano())
+		return "", nil
+	}
 	// Read response. Subprocess may emit banner lines (e.g. "level=info msg=...")
 	// before the JSON-RPC frame; skip non-JSON lines until we see '{'.
 	for {
@@ -187,6 +197,22 @@ func (p *Pool) Request(userID, projectPath, frame string) (string, error) {
 		// Non-JSON: log to /dev/null in production; here we discard.
 		// Optional: write to a per-user log file later.
 	}
+}
+
+// isNotification reports whether a JSON-RPC frame is a notification: it has
+// a method but no id member. Per the JSON-RPC 2.0 / MCP spec such messages
+// receive no response, so the caller must not wait for one. A missing id
+// leaves ID nil; an explicit "id": null (a malformed request, not a
+// notification) yields the 4-byte "null" and is treated as a request.
+func isNotification(frame []byte) bool {
+	var m struct {
+		Method string          `json:"method"`
+		ID     json.RawMessage `json:"id"`
+	}
+	if err := json.Unmarshal(frame, &m); err != nil {
+		return false
+	}
+	return m.Method != "" && len(m.ID) == 0
 }
 
 // Drop forcibly kills and removes a user's subprocess(es).

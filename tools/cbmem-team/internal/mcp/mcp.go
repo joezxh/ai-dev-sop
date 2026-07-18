@@ -77,6 +77,12 @@ func Handler(p *pool.Pool, users *store.Registry, repos *repos.Manager) gin.Hand
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
+		// Notifications produce no response frame; ack per the MCP spec
+		// with 202 Accepted and an empty body.
+		if resp == "" {
+			c.Status(http.StatusAccepted)
+			return
+		}
 		c.Data(http.StatusOK, "application/json", []byte(resp))
 	}
 }
@@ -88,6 +94,10 @@ func anyMatch(prefixes []string, p string) bool {
 	for _, pre := range prefixes {
 		if pre == "" {
 			continue
+		}
+		// wildcard: "*" matches everything
+		if pre == "*" {
+			return true
 		}
 		// exact match
 		if p == pre {

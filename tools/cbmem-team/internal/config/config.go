@@ -30,6 +30,10 @@ type Config struct {
 	LLMBaseURL    string `yaml:"llm_base_url"`
 	LLMAPIKey     string `yaml:"llm_api_key"`
 	MemPalaceBase string `yaml:"mempalace_base"`
+	// MemPalaceToken is the Bearer token sent to the MemPalace HTTP MCP
+	// endpoint (POST /mcp). Required when MemPalace binds a non-loopback
+	// address; matches its MEMPALACE_MCP_HTTP_TOKEN. Empty = no auth header.
+	MemPalaceToken string `yaml:"mempalace_token"`
 	// MemPalaceAutoSyncWing sets the default wing used for /mcp auto-synced drawers.
 	// If empty, the project basename is used.
 	MemPalaceAutoSyncWing string `yaml:"mempalace_auto_sync_wing"`
@@ -80,6 +84,7 @@ func ParseFlags(args []string) (*Config, map[string]string, error) {
 		llmBaseURL        = fs.String("llm-base-url", "", "llm base url")
 		llmAPIKey         = fs.String("llm-api-key", "", "llm api key (optional for ollama)")
 		mempalaceBase     = fs.String("mempalace-base", "", "mempalace http base url, empty disables integration")
+		mempalaceToken    = fs.String("mempalace-token", "", "bearer token for the mempalace /mcp endpoint (matches MEMPALACE_MCP_HTTP_TOKEN)")
 		mempalaceAutoWing = fs.String("mempalace-auto-sync-wing", "", "wing used for /mcp auto-synced drawers")
 		mempalaceAutoHall = fs.String("mempalace-auto-sync-hall", "", "hall used for /mcp auto-synced drawers")
 		consoleDist       = fs.String("console-dist", "", "path to vitepress build dist for console frontend")
@@ -104,7 +109,7 @@ func ParseFlags(args []string) (*Config, map[string]string, error) {
 	// CLI flags override config file values.
 	applyOverrides(cfg, *listen, *dataDir, *mcpBin, *jwtSecret, *adminTok,
 		*logLevel, *llmProvider, *llmModel, *llmBaseURL, *llmAPIKey,
-		*mempalaceBase, *mempalaceAutoWing, *mempalaceAutoHall, *consoleDist,
+		*mempalaceBase, *mempalaceToken, *mempalaceAutoWing, *mempalaceAutoHall, *consoleDist,
 		*authAccessTTL, *authRefreshTTL, *authInitialAdmin, *authBcryptCost,
 		*mysqlDSN, *mysqlMaxOpen, *mysqlMaxIdle, *mysqlMaxLife,
 		*corsOrigins, *repoRoot)
@@ -119,7 +124,7 @@ func ParseFlags(args []string) (*Config, map[string]string, error) {
 
 func applyOverrides(cfg *Config, listen, dataDir, mcpBin, jwtSecret, adminTok,
 	logLevel, llmProvider, llmModel, llmBaseURL, llmAPIKey,
-	mempalaceBase, mempalaceAutoWing, mempalaceAutoHall, consoleDist string,
+	mempalaceBase, mempalaceToken, mempalaceAutoWing, mempalaceAutoHall, consoleDist string,
 	authAccessTTL, authRefreshTTL time.Duration, authInitialAdmin string, authBcryptCost int,
 	mysqlDSN string, mysqlMaxOpen, mysqlMaxIdle int, mysqlMaxLife time.Duration,
 	corsOrigins, repoRoot string) {
@@ -157,6 +162,9 @@ func applyOverrides(cfg *Config, listen, dataDir, mcpBin, jwtSecret, adminTok,
 	}
 	if mempalaceBase != "" {
 		cfg.MemPalaceBase = mempalaceBase
+	}
+	if mempalaceToken != "" {
+		cfg.MemPalaceToken = mempalaceToken
 	}
 	if mempalaceAutoWing != "" {
 		cfg.MemPalaceAutoSyncWing = mempalaceAutoWing

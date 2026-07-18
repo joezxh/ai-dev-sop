@@ -150,6 +150,13 @@ func StreamableHandler(p *pool.Pool, users *store.Registry, repos *repos.Manager
 			return
 		}
 
+		// Notifications produce no response frame; ack per the MCP spec
+		// with 202 Accepted and no SSE body.
+		if resp == "" {
+			c.Status(http.StatusAccepted)
+			return
+		}
+
 		// SSE framing — one JSON-RPC response per `data:` line.
 		c.Writer.Header().Set("Content-Type", "text/event-stream")
 		c.Writer.Header().Set("Cache-Control", "no-cache")
@@ -229,7 +236,65 @@ func stdioLikeHandler(p *pool.Pool, users *store.Registry, repos *repos.Manager)
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
+		if resp == "" {
+			c.Status(http.StatusAccepted)
+			return
+		}
 		c.Data(http.StatusOK, "application/json", []byte(resp))
+	}
+}
+
+// StreamableGETHandler returns a gin.HandlerFunc that serves the GET side
+// of the MCP Streamable HTTP transport. Per the spec, clients open a GET
+// request with Accept: text/event-stream to receive server-initiated
+// notifications (e.g. progress, logging, cancellation). The handler
+// establishes an SSE connection and keeps it alive with periodic comments.
+//
+// This is required by the MCP Streamable HTTP spec — without it, clients
+// that follow the spec will get 404 on GET and fail to initialize.
+func StreamableGETHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid, _ := c.Get("user_id")
+		project := c.Query("project")
+		log.Printf("streamable-get: user_id=%v project=%q ip=%s", uid, project, c.ClientIP())
+
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("Connection", "keep-alive")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		c.Writer.WriteHeader(http.StatusOK)
+
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "streaming unsupported"})
+			return
+		}
+
+		// Send initial endpoint event telling the client where to POST
+		// JSON-RPC messages. Per the MCP Streamable HTTP spec the data
+		// field must be the URL of the POST endpoint.
+		postURL := c.Request.URL.Path
+		if c.Request.URL.RawQuery != "" {
+			postURL += "?" + c.Request.URL.RawQuery
+		}
+		fmt.Fprintf(c.Writer, "event: endpoint\ndata: %s\n\n", postURL)
+		flusher.Flush()
+
+		// 25-second keep-alive comment so reverse proxies don't time the
+		// connection out.
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+
+		ctx := c.Request.Context()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fmt.Fprintf(c.Writer, ": keep-alive %d\n\n", time.Now().Unix())
+				flusher.Flush()
+			}
+		}
 	}
 }
 
