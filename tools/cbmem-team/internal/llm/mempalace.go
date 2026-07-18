@@ -59,6 +59,38 @@ func (m *MemPalace) AddDrawer(ctx context.Context, wing, room, hall, content str
 	return lastErr
 }
 
+// AddDrawerOnce performs a single POST /api/drawers with no internal retry.
+// Callers that need retry semantics (exponential backoff, jitter, ctx-aware
+// cancellation) wrap this in their own loop. The capture-time auto-sync
+// uses this so the surrounding pushDrawerWithRetry loop is the *only*
+// retry layer, otherwise the 3 internal retries here would stack on top
+// of its 3 attempts and a MemPalace outage would take minutes to surface.
+func (m *MemPalace) AddDrawerOnce(ctx context.Context, wing, room, hall, content string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	body, err := json.Marshal(drawerReq{Wing: wing, Room: room, Hall: hall, Content: content})
+	if err != nil {
+		return fmt.Errorf("marshal drawer: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		m.BaseURL+"/api/drawers", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := m.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 == 2 {
+		return nil
+	}
+	respBody, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("mempalace status=%d body=%s", resp.StatusCode, string(respBody))
+}
+
 func (m *MemPalace) Status(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", m.BaseURL+"/healthz", nil)
 	if err != nil {

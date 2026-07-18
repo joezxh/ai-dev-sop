@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,12 +30,12 @@ func decodeProject(t *testing.T, body []byte) projectEnvelope {
 	return env
 }
 
-func setupProjectsRouter(db *DB) *gin.Engine {
+func setupProjectsRouter(t *testing.T, db *DB) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	g := r.Group("/api/console")
 	g.GET("/projects", ListProjectsHandler(db))
-	g.POST("/projects", CreateProjectHandler(db, nil))
+	g.POST("/projects", CreateProjectHandler(db, t.TempDir(), "codebase-memory-mcp"))
 	g.PUT("/projects/:id", UpdateProjectHandler(db))
 	g.DELETE("/projects/:id", DeleteProjectHandler(db))
 	g.GET("/projects/:id/index-status", ProjectIndexStatusHandler(db, nil))
@@ -44,7 +45,7 @@ func setupProjectsRouter(db *DB) *gin.Engine {
 
 func TestListProjectsEmpty(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/console/projects", nil))
@@ -63,7 +64,7 @@ func TestListProjectsEmpty(t *testing.T) {
 
 func TestCreateProject(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
 	body := strings.NewReader(`{"name":"demo","path":"/tmp/demo","wing":"right","mcp_bin":"","user_id":""}`)
 	w := httptest.NewRecorder()
@@ -88,10 +89,10 @@ func TestCreateProject(t *testing.T) {
 
 func TestCreateProjectMissingFields(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
-	// missing path
-	body := strings.NewReader(`{"name":"demo"}`)
+	// missing name (path is now auto-generated)
+	body := strings.NewReader(`{"wing":"right"}`)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/console/projects", body)
 	req.Header.Set("Content-Type", "application/json")
@@ -101,11 +102,12 @@ func TestCreateProjectMissingFields(t *testing.T) {
 	}
 }
 
-func TestCreateProjectDuplicatePath(t *testing.T) {
+func TestCreateProjectDuplicateName(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
-	body1 := strings.NewReader(`{"name":"a","path":"/tmp/dup"}`)
+	// First create with name "dup"
+	body1 := strings.NewReader(`{"name":"dup"}`)
 	w1 := httptest.NewRecorder()
 	req1 := httptest.NewRequest(http.MethodPost, "/api/console/projects", body1)
 	req1.Header.Set("Content-Type", "application/json")
@@ -114,11 +116,13 @@ func TestCreateProjectDuplicatePath(t *testing.T) {
 		t.Fatalf("first create: status=%d body=%s", w1.Code, w1.Body.String())
 	}
 
-	body2 := strings.NewReader(`{"name":"b","path":"/tmp/dup"}`)
+	// Second create with same name should fail (same auto-generated path)
+	body2 := strings.NewReader(`{"name":"dup"}`)
 	w2 := httptest.NewRecorder()
 	req2 := httptest.NewRequest(http.MethodPost, "/api/console/projects", body2)
 	req2.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w2, req2)
+	// Should get 409 Conflict because path uniqueness is enforced
 	if w2.Code != http.StatusConflict {
 		t.Fatalf("dup create: status=%d body=%s", w2.Code, w2.Body.String())
 	}
@@ -126,7 +130,7 @@ func TestCreateProjectDuplicatePath(t *testing.T) {
 
 func TestUpdateProject(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
 	// create
 	cw := httptest.NewRecorder()
@@ -158,7 +162,7 @@ func TestUpdateProject(t *testing.T) {
 
 func TestDeleteProject(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
 	// create
 	cw := httptest.NewRecorder()
@@ -194,7 +198,7 @@ func TestDeleteProject(t *testing.T) {
 
 func TestProjectIndexStatusNotIndexed(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
 	dir := t.TempDir()
 	cw := httptest.NewRecorder()
@@ -221,26 +225,26 @@ func TestProjectIndexStatusNotIndexed(t *testing.T) {
 
 func TestProjectIndexStatusIndexed(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
+	// Create a temp dir with .codebase-memory subdirectory
 	dir := t.TempDir()
 	idxDir := filepath.Join(dir, ".codebase-memory")
 	if err := os.MkdirAll(idxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cw := httptest.NewRecorder()
-	body := strings.NewReader(fmt.Sprintf(`{"name":"x","path":%q}`, filepath.ToSlash(dir)))
-	req := httptest.NewRequest(http.MethodPost, "/api/console/projects", body)
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(cw, req)
-	if cw.Code != http.StatusOK {
-		t.Fatalf("create: status=%d body=%s", cw.Code, cw.Body.String())
+
+	// Directly insert a project with the specific path (since API auto-generates path)
+	now := time.Now().UTC()
+	_, err := db.ExecContext(context.Background(),
+		`INSERT INTO projects (id, name, path, wing, mcp_bin, creator_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
+		"proj_test_idx", "test-idx", dir, "", "codebase-memory-mcp", "", now, now)
+	if err != nil {
+		t.Fatal(err)
 	}
-	env := decodeProject(t, cw.Body.Bytes())
-	id, _ := env.Data["id"].(string)
 
 	sw := httptest.NewRecorder()
-	r.ServeHTTP(sw, httptest.NewRequest(http.MethodGet, "/api/console/projects/"+id+"/index-status", nil))
+	r.ServeHTTP(sw, httptest.NewRequest(http.MethodGet, "/api/console/projects/proj_test_idx/index-status", nil))
 	if sw.Code != http.StatusOK {
 		t.Fatalf("status: status=%d body=%s", sw.Code, sw.Body.String())
 	}
@@ -248,37 +252,17 @@ func TestProjectIndexStatusIndexed(t *testing.T) {
 	if indexed, _ := senv.Data["indexed"].(bool); !indexed {
 		t.Fatalf("expected indexed=true, body=%s", sw.Body.String())
 	}
-	if dir, _ := senv.Data["indexed_dir"].(string); dir != idxDir {
-		t.Fatalf("indexed_dir=%q want %q", dir, idxDir)
+	if gotDir, _ := senv.Data["indexed_dir"].(string); gotDir != idxDir {
+		t.Fatalf("indexed_dir=%q want %q", gotDir, idxDir)
 	}
 }
 
-func TestProjectReindexMissingMcpBin(t *testing.T) {
-	db := newTestDB(t)
-	r := setupProjectsRouter(db)
-
-	dir := t.TempDir()
-	cw := httptest.NewRecorder()
-	body := strings.NewReader(fmt.Sprintf(`{"name":"x","path":%q,"mcp_bin":""}`, filepath.ToSlash(dir)))
-	req := httptest.NewRequest(http.MethodPost, "/api/console/projects", body)
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(cw, req)
-	if cw.Code != http.StatusOK {
-		t.Fatalf("create: status=%d body=%s", cw.Code, cw.Body.String())
-	}
-	env := decodeProject(t, cw.Body.Bytes())
-	id, _ := env.Data["id"].(string)
-
-	rw := httptest.NewRecorder()
-	r.ServeHTTP(rw, httptest.NewRequest(http.MethodPost, "/api/console/projects/"+id+"/reindex", nil))
-	if rw.Code != http.StatusPreconditionFailed {
-		t.Fatalf("reindex empty mcp_bin: status=%d body=%s", rw.Code, rw.Body.String())
-	}
-}
+// TestProjectReindexMissingMcpBin is removed because mcp_bin is now
+// auto-filled from server config and cannot be empty via the API.
 
 func TestProjectReindexHappyPath(t *testing.T) {
 	db := newTestDB(t)
-	r := setupProjectsRouter(db)
+	r := setupProjectsRouter(t, db)
 
 	dir := t.TempDir()
 	// Write a tiny shell script that exits 0 to use as a mock mcp_bin.

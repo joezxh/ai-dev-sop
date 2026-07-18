@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"cbmem-team/internal/llm"
 )
 
 // capState serialises the SQLite writes triggered by CaptureSessions so a
@@ -87,6 +90,35 @@ type captureWriteReq struct {
 	} `json:"params"`
 }
 
+// CaptureConfig controls optional side-effects of CaptureSessions. All
+// fields are optional; the zero value preserves the v1 behaviour of
+// writing only to the local console DB.
+type CaptureConfig struct {
+	// DB is required.
+	DB *DB
+	// MemPalace, when non-nil, enables the background auto-sync that
+	// mirrors new turns into MemPalace as Drawers. nil disables sync
+	// (matching v1 behaviour) — used in unit tests and deployments
+	// without MemPalace configured.
+	MemPalace *llm.MemPalace
+	// Wing is the MemPalace wing under which auto-synced drawers are
+	// written. Empty string means "use wing derived from the project
+	// path basename" (default). The console summariser still uses its
+	// own target_wing — this only affects the streaming auto-sync.
+	Wing string
+	// Hall selects which MemPalace hall auto-sync writes to. Defaults
+	// to "events" (the hall best matching "a stream of turns arriving
+	// over time").
+	Hall string
+	// MaxRetries caps the per-turn retry count when MemPalace is
+	// unreachable. Defaults to 3 if zero.
+	MaxRetries int
+	// Logger receives structured sync events. If nil, log.Printf is
+	// used. The handler is called from the sync goroutine, so it must
+	// be safe for concurrent use.
+	Logger func(level, msg string, kv ...any)
+}
+
 // CaptureSessions is a gin middleware that mirrors MCP /mcp requests into
 // the console DB so admins can browse the conversation history of any user.
 //
@@ -97,10 +129,41 @@ type captureWriteReq struct {
 // buffered channel serialises writes so the SQLite writer never sees a
 // burst.
 //
+// When CaptureConfig.MemPalace is non-nil the same goroutine additionally
+// pushes any new turns (turns whose turn_no exceeds the per-session
+// mempalace_synced_turns counter) into MemPalace as Drawers. Sync is
+// fire-and-forget: errors are recorded on sessions.mempalace_last_error
+// but never returned to the MCP client.
+//
 // Any error inside the write path is logged but never propagated back to
 // the user: capturing is best-effort and must never break the MCP request
 // that the user's IDE is waiting on.
-func CaptureSessions(db *DB) gin.HandlerFunc {
+func CaptureSessions(cfg CaptureConfig) gin.HandlerFunc {
+	if cfg.DB == nil {
+		panic("CaptureSessions: cfg.DB is required")
+	}
+	hall := cfg.Hall
+	if hall == "" {
+		hall = "events"
+	}
+	maxRetries := cfg.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+	logf := cfg.Logger
+	if logf == nil {
+		logf = func(level, msg string, kv ...any) {
+			// Default logger formats the kvs as "k=v k=v" so the
+			// existing log scrapers keep working.
+			args := make([]any, 0, len(kv)+2)
+			args = append(args, "capture-sync "+level+" "+msg)
+			for i := 0; i+1 < len(kv); i += 2 {
+				args = append(args, fmt.Sprintf("%s=%v", kv[i], kv[i+1]))
+			}
+			log.Println(args...)
+		}
+	}
+
 	return func(c *gin.Context) {
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
@@ -134,12 +197,27 @@ func CaptureSessions(db *DB) gin.HandlerFunc {
 			return
 		}
 
+		sessID := "sess_" + uid + "_" + shortHash(uid+"|"+project)
 		ch := capChanFor(uid)
 		go func() {
 			ch <- struct{}{}
 			defer func() { <-ch }()
-			if err := captureWrite(db, uid, project, body); err != nil {
+			if err := captureWrite(cfg.DB, uid, project, body); err != nil {
 				log.Printf("capture: write session failed uid=%s err=%v", uid, err)
+				return
+			}
+			if cfg.MemPalace != nil {
+				syncTurnsToMemPalace(syncTurnsParams{
+					DB:         cfg.DB,
+					MP:         cfg.MemPalace,
+					SessionID:  sessID,
+					UID:        uid,
+					Project:    project,
+					Wing:       cfg.Wing,
+					Hall:       hall,
+					MaxRetries: maxRetries,
+					Logf:       logf,
+				})
 			}
 		}()
 	}
@@ -166,6 +244,11 @@ func isMessageCall(body []byte) bool {
 // MCP call. Rolling model: same uid+project always yields the same session
 // id, so a long conversation accumulates into one row that keeps getting
 // UPDATEd with the latest ended_at and turn_count.
+//
+// It is the SQLite/MySQL-only path; the MemPalace sync is intentionally
+// layered on top (see syncTurnsToMemPalace) so the v1 contract — "capture
+// must never break the MCP request" — is preserved even if MemPalace is
+// misconfigured.
 func captureWrite(db *DB, uid, project string, body []byte) error {
 	var req captureWriteReq
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -222,4 +305,240 @@ func captureWrite(db *DB, uid, project string, body []byte) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// ----------------------------------------------------------------------------
+// MemPalace auto-sync (added 2026-07-15)
+// ----------------------------------------------------------------------------
+//
+// syncTurnsToMemPalace pushes any turns beyond sessions.mempalace_synced_turns
+// to MemPalace as Drawers, then bumps the counter on success. The bookkeeping
+// is per-session and per-row, so an interrupted sync resumes from exactly
+// where it stopped — no duplicates, no gaps. Each turn becomes ONE Drawer
+// keyed by (session_id, turn_no) so the dedup is at the Drawer level on the
+// MemPalace side too (AddDrawer is naturally idempotent when callers pass a
+// stable content string; the deterministic formatter guarantees that).
+//
+// Failure model:
+//   - per-turn retry with exponential backoff up to MaxRetries
+//   - on final failure the latest error is stored in sessions.mempalace_last_error
+//     and the synced counter is NOT advanced (next request will retry
+//     only the missing turns)
+//   - the goroutine never panics or returns errors to the MCP client
+//
+// Cost: O(N) HTTP calls per capture where N = number of new turns. At the
+// rolling-session cadence this is typically 1-3 calls per MCP round-trip
+// which is well within the 30s MemPalace timeout budget.
+
+type syncTurnsParams struct {
+	DB         *DB
+	MP         *llm.MemPalace
+	SessionID  string
+	UID        string
+	Project    string
+	Wing       string
+	Hall       string
+	MaxRetries int
+	Logf       func(level, msg string, kv ...any)
+}
+
+func syncTurnsToMemPalace(p syncTurnsParams) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.Logf("error", "mempalace sync panic recovered",
+				"session_id", p.SessionID, "panic", fmt.Sprintf("%v", r))
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// 1. Read the current synced watermark.
+	var syncedTurns int
+	if err := p.DB.QueryRowContext(ctx,
+		`SELECT COALESCE(mempalace_synced_turns, 0) FROM sessions WHERE id = ?`,
+		p.SessionID,
+	).Scan(&syncedTurns); err != nil {
+		p.Logf("error", "read watermark failed",
+			"session_id", p.SessionID, "err", err.Error())
+		return
+	}
+
+	// 2. Stream turns newer than the watermark, ordered by turn_no so the
+	//    Drawer timeline reads in conversation order. We bound the batch
+	//    to 100 turns per call so a long-running sync can interleave with
+	//    new MCP requests; the per-session channel serialises anyway.
+	rows, err := p.DB.QueryContext(ctx,
+		`SELECT turn_no, role, content FROM session_turns
+		   WHERE session_id = ? AND turn_no > ?
+		   ORDER BY turn_no ASC
+		   LIMIT 100`,
+		p.SessionID, syncedTurns,
+	)
+	if err != nil {
+		p.Logf("error", "fetch unsynced turns failed",
+			"session_id", p.SessionID, "err", err.Error())
+		return
+	}
+	type pendingTurn struct {
+		turnNo  int
+		role    string
+		content string
+	}
+	var batch []pendingTurn
+	for rows.Next() {
+		var t pendingTurn
+		if err := rows.Scan(&t.turnNo, &t.role, &t.content); err != nil {
+			_ = rows.Close()
+			p.Logf("error", "scan turn failed",
+				"session_id", p.SessionID, "err", err.Error())
+			return
+		}
+		batch = append(batch, t)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		p.Logf("error", "rows iteration failed",
+			"session_id", p.SessionID, "err", err.Error())
+		return
+	}
+	_ = rows.Close()
+
+	if len(batch) == 0 {
+		return
+	}
+
+	wing := p.Wing
+	if wing == "" {
+		wing = deriveAutoSyncWing(p.Project, p.UID)
+	}
+
+	var lastErr error
+	var successUpTo int
+	for _, t := range batch {
+		drawerContent := formatTurnAsDrawer(p.SessionID, t.turnNo, t.role, t.content)
+		if err := pushDrawerWithRetry(ctx, p.MP, wing, "turns", p.Hall, drawerContent, p.MaxRetries, p.Logf, p.SessionID, t.turnNo); err != nil {
+			lastErr = err
+			break
+		}
+		successUpTo = t.turnNo
+	}
+
+	// 3. Advance the watermark only on success so partial failures are
+	//    retried on the next capture. We store the latest error in
+	//    mempalace_last_error for ops visibility.
+	if successUpTo > 0 {
+		if _, err := p.DB.ExecContext(ctx,
+			`UPDATE sessions
+			    SET mempalace_synced_turns = ?,
+			        mempalace_last_synced_at = ?,
+			        mempalace_last_error = NULL
+			  WHERE id = ? AND mempalace_synced_turns < ?`,
+			successUpTo, time.Now().UTC(), p.SessionID, successUpTo,
+		); err != nil {
+			p.Logf("error", "advance watermark failed",
+				"session_id", p.SessionID, "turn_no", successUpTo, "err", err.Error())
+		} else {
+			p.Logf("info", "synced turns",
+				"session_id", p.SessionID, "count", len(batch),
+				"up_to", successUpTo)
+		}
+	}
+	if lastErr != nil {
+		errMsg := lastErr.Error()
+		if len(errMsg) > 500 {
+			errMsg = errMsg[:500]
+		}
+		if _, err := p.DB.ExecContext(ctx,
+			`UPDATE sessions SET mempalace_last_error = ? WHERE id = ?`,
+			errMsg, p.SessionID,
+		); err != nil {
+			p.Logf("error", "store last_error failed",
+				"session_id", p.SessionID, "err", err.Error())
+		}
+		p.Logf("warn", "sync stopped mid-batch",
+			"session_id", p.SessionID, "err", errMsg)
+	}
+}
+
+// pushDrawerWithRetry calls MemPalace.AddDrawer with bounded exponential
+// backoff. The retry budget is owned by MaxRetries; context cancellation
+// (timeout) short-circuits the loop so a long MemPalace outage doesn't
+// pile up goroutines.
+func pushDrawerWithRetry(
+	ctx context.Context,
+	mp *llm.MemPalace,
+	wing, room, hall, content string,
+	maxRetries int,
+	logf func(level, msg string, kv ...any),
+	sessionID string,
+	turnNo int,
+) error {
+	var lastErr error
+	backoff := 200 * time.Millisecond
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := mp.AddDrawerOnce(ctx, wing, room, hall, content); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				logf("debug", "mempalace retry",
+					"session_id", sessionID, "turn_no", turnNo,
+					"attempt", attempt+1, "backoff_ms", backoff.Milliseconds(),
+					"err", err.Error())
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(backoff):
+				}
+				backoff *= 2
+				if backoff > 5*time.Second {
+					backoff = 5 * time.Second
+				}
+			}
+		}
+	}
+	return lastErr
+}
+
+// formatTurnAsDrawer is the deterministic formatter that turns one
+// session_turn into a MemPalace Drawer content string. Determinism matters:
+// AddDrawer is naturally idempotent only when callers pass a stable
+// payload, and the watermark relies on (session_id, turn_no) being unique
+// so a re-run of the same batch produces the same content and MemPalace
+// can dedup at its end.
+func formatTurnAsDrawer(sessionID string, turnNo int, role, content string) string {
+	// Cap the content at 8KB — Drawers are meant to be glanceable, and a
+	// pathological 100KB tool output is the wrong shape for a Drawer.
+	if len(content) > 8192 {
+		content = content[:8192] + "\n…[truncated]"
+	}
+	return fmt.Sprintf("<!-- cbmem-team auto-sync session=%s turn=%d -->\n\n**%s**\n\n%s",
+		sessionID, turnNo, role, content)
+}
+
+// deriveAutoSyncWing picks a sensible default wing when the caller did
+// not configure one explicitly. Project basename is preferred; falls
+// back to the user id when project is empty.
+func deriveAutoSyncWing(project, uid string) string {
+	if project != "" {
+		// Take the last path component, strip common VCS / build suffixes.
+		base := project
+		if i := strings.LastIndex(base, "/"); i >= 0 {
+			base = base[i+1:]
+		} else if i := strings.LastIndex(base, "\\"); i >= 0 {
+			base = base[i+1:]
+		}
+		base = strings.TrimSuffix(base, ".git")
+		if base != "" {
+			return "project_" + base
+		}
+	}
+	if uid != "" {
+		return "user_" + uid
+	}
+	return "cbmem_team"
 }

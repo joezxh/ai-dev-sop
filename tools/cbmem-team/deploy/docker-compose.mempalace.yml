@@ -1,0 +1,65 @@
+# MemPalace Docker Compose 配置
+#
+# 使用方法:
+#   cd tools/cbmem-team/deploy
+#   docker compose -f docker-compose.mempalace.yml up -d
+#
+# 验证:
+#   docker exec mempalace mempalace status
+#
+# 重置数据:
+#   docker compose -f docker-compose.mempalace.yml down -v
+#   docker compose -f docker-compose.mempalace.yml up -d
+
+version: "3.8"
+
+services:
+  # MemPalace MCP 服务器
+  mempalace:
+    image: ghcr.io/mempalace/mempalace:latest
+    container_name: mempalace
+    restart: unless-stopped
+    ports:
+      - "${MEMPALACE_PORT:-8089}:8089"
+    volumes:
+      - mempalace-data:/data
+      # 可选: 挂载项目目录用于挖掘
+      # - /path/to/projects:/projects:ro
+    environment:
+      - MEMPALACE_DATA_DIR=/data
+      # 后端类型: chroma (默认), sqlite_exact, qdrant, pgvector
+      - MEMPALACE_BACKEND=${MEMPALACE_BACKEND:-chroma}
+      # Chroma 配置 (当 backend=chroma 时)
+      - CHROMA_DB_IMPL=duckdb+parquet
+      - CHROMA_PERSIST_DIRECTORY=/data/chroma
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mempalace-net
+
+  # MemPalace CLI (用于初始化和运维)
+  mempalace-cli:
+    image: ghcr.io/mempalace/mempalace:latest
+    container_name: mempalace-cli
+    profiles:
+      - cli  # 仅在需要时启动: docker compose --profile cli run mempalace-cli
+    volumes:
+      - mempalace-data:/data
+      - ./init-scripts:/scripts:ro
+    environment:
+      - MEMPALACE_DATA_DIR=/data
+    entrypoint: ["/bin/sh"]
+    networks:
+      - mempalace-net
+
+volumes:
+  mempalace-data:
+    driver: local
+
+networks:
+  mempalace-net:
+    driver: bridge

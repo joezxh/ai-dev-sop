@@ -6,20 +6,46 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Role identifies the capability level of a console session. Today
-// only admin is enforced (every admin-token login implicitly grants
-// admin); viewer/operator are reserved for the upcoming M5+ role
-// split that real-wire-fields in future users-table schema work.
+// Role identifies the capability level of a console session. The four
+// values correspond to the roles in deploy/sql/v2_schema.*.sql (users.role
+// CHECK constraint) and the models.User.Role field.
+//
+// Roles are intentionally ordered for the iterators in AllRoles below:
+// higher in the list = more capable. Code that needs an "is at least X"
+// check should use RoleAtLeast.
 type Role string
 
 const (
-	RoleAdmin    Role = "admin"
-	RoleOperator Role = "operator"
-	RoleViewer   Role = "viewer"
+	RoleAdmin     Role = "admin"
+	RoleLead      Role = "lead"
+	RoleDeveloper Role = "developer"
+	RoleViewer    Role = "viewer"
 )
 
 // AllRoles is the canonical ordering used by iterators and tests.
-var AllRoles = []Role{RoleAdmin, RoleOperator, RoleViewer}
+var AllRoles = []Role{RoleAdmin, RoleLead, RoleDeveloper, RoleViewer}
+
+// RoleAtLeast returns true when `r` is at least as capable as `want`,
+// according to AllRoles (index 0 = strongest).
+func RoleAtLeast(r, want Role) bool {
+	for _, x := range AllRoles {
+		if x == want {
+			// r is "at least want" if r appears at or before want in
+			// the canonical ordering. Anything after want (viewer at
+			// the tail) is rejected.
+			for _, y := range AllRoles {
+				if y == r {
+					return true
+				}
+				if y == want {
+					return false
+				}
+			}
+			return false
+		}
+	}
+	return false
+}
 
 // SetRole injects the role into the gin context. Callers (login /
 // session middleware) compute the role from underlying credentials

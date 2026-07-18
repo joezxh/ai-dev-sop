@@ -39,18 +39,16 @@ func isUniqueErr(err error) bool {
 }
 
 type createProjectReq struct {
-	Name   string `json:"name" binding:"required"`
-	Path   string `json:"path" binding:"required"`
-	Wing   string `json:"wing"`
-	McpBin string `json:"mcp_bin"`
-	UserID string `json:"user_id"`
+	Name      string `json:"name" binding:"required"`
+	Wing      string `json:"wing"`
+	CreatorID string `json:"creator_id"`
 }
 
 type updateProjectReq struct {
-	Name   *string `json:"name"`
-	Wing   *string `json:"wing"`
-	McpBin *string `json:"mcp_bin"`
-	UserID *string `json:"user_id"`
+	Name      *string `json:"name"`
+	Wing      *string `json:"wing"`
+	McpBin    *string `json:"mcp_bin"`
+	CreatorID *string `json:"creator_id"`
 }
 
 type projectRow struct {
@@ -59,7 +57,7 @@ type projectRow struct {
 	Path      string
 	Wing      string
 	MCPBin    string
-	UserID    string
+	CreatorID string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Deleted   bool
@@ -69,7 +67,7 @@ func scanProjectRow(row interface{ Scan(...any) error }) (projectRow, error) {
 	var p projectRow
 	var deleted int
 	if err := row.Scan(
-		&p.ID, &p.Name, &p.Path, &p.Wing, &p.MCPBin, &p.UserID,
+		&p.ID, &p.Name, &p.Path, &p.Wing, &p.MCPBin, &p.CreatorID,
 		&p.CreatedAt, &p.UpdatedAt, &deleted,
 	); err != nil {
 		return p, err
@@ -85,7 +83,7 @@ func projectToDTO(p projectRow) ProjectDTO {
 		Path:      p.Path,
 		Wing:      p.Wing,
 		MCPBin:    p.MCPBin,
-		UserID:    p.UserID,
+		CreatorID: p.CreatorID,
 		CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339),
 		Deleted:   p.Deleted,
@@ -103,7 +101,7 @@ func ListProjectsHandler(db *DB) gin.HandlerFunc {
 		q := c.Query("q")
 
 		rows, err := db.QueryContext(c.Request.Context(),
-			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(user_id,''), created_at, updated_at, deleted
+			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted
 			 FROM projects
 			 WHERE deleted=0 AND (?='' OR name LIKE ? OR path LIKE ?)
 			 ORDER BY created_at DESC
@@ -142,7 +140,9 @@ func ListProjectsHandler(db *DB) gin.HandlerFunc {
 }
 
 // CreateProjectHandler inserts a new project row.
-func CreateProjectHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
+// path is auto-generated from dataDir/userID/projectName;
+// mcp_bin comes from the server-wide config.
+func CreateProjectHandler(db *DB, dataDir string, defaultMCPBin string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req createProjectReq
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -151,9 +151,18 @@ func CreateProjectHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
 		}
 		id := fmt.Sprintf("proj_%s", randomHex(4))
 		now := time.Now().UTC()
+
+		// Auto-generate project path: <dataDir>/users/<userID>/projects/<name>
+		uid := req.CreatorID
+		if uid == "" {
+			uid = "default"
+		}
+		safeName := sanitizeDirName(req.Name)
+		projectPath := filepath.Join(dataDir, "users", uid, "projects", safeName)
+
 		_, err := db.ExecContext(c.Request.Context(),
-			`INSERT INTO projects (id, name, path, wing, mcp_bin, user_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
-			id, req.Name, req.Path, req.Wing, req.McpBin, req.UserID, now, now)
+			`INSERT INTO projects (id, name, path, wing, mcp_bin, creator_id, created_at, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)`,
+			id, req.Name, projectPath, req.Wing, defaultMCPBin, req.CreatorID, now, now)
 		if err != nil {
 			if isUniqueErr(err) {
 				Fail(c, http.StatusConflict, 4090001, "project path already exists")
@@ -163,7 +172,7 @@ func CreateProjectHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
 			return
 		}
 		row := db.QueryRowContext(c.Request.Context(),
-			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(user_id,''), created_at, updated_at, deleted FROM projects WHERE id = ?`,
+			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted FROM projects WHERE id = ?`,
 			id)
 		p, err := scanProjectRow(row)
 		if err != nil {
@@ -172,6 +181,16 @@ func CreateProjectHandler(db *DB, _ *pool.Pool) gin.HandlerFunc {
 		}
 		OK(c, projectToDTO(p))
 	}
+}
+
+// sanitizeDirName replaces characters unsafe for directory names with underscores.
+func sanitizeDirName(s string) string {
+	r := strings.NewReplacer(
+		"/", "_", "\\", "_", ":", "_", "*", "_",
+		"?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
+		" ", "_",
+	)
+	return r.Replace(s)
 }
 
 // UpdateProjectHandler applies a partial update to an existing project.
@@ -185,7 +204,7 @@ func UpdateProjectHandler(db *DB) gin.HandlerFunc {
 		}
 
 		row := db.QueryRowContext(c.Request.Context(),
-			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(user_id,''), created_at, updated_at, deleted FROM projects WHERE id = ? AND deleted = 0`,
+			`SELECT id, name, path, IFNULL(wing,''), IFNULL(mcp_bin,''), IFNULL(creator_id,''), created_at, updated_at, deleted FROM projects WHERE id = ? AND deleted = 0`,
 			id)
 		existing, err := scanProjectRow(row)
 		if err != nil {
@@ -206,14 +225,14 @@ func UpdateProjectHandler(db *DB) gin.HandlerFunc {
 		if req.McpBin != nil {
 			existing.MCPBin = *req.McpBin
 		}
-		if req.UserID != nil {
-			existing.UserID = *req.UserID
+		if req.CreatorID != nil {
+			existing.CreatorID = *req.CreatorID
 		}
 		existing.UpdatedAt = time.Now().UTC()
 
 		_, err = db.ExecContext(c.Request.Context(),
-			`UPDATE projects SET name=?, wing=?, mcp_bin=?, user_id=?, updated_at=? WHERE id=? AND deleted=0`,
-			existing.Name, existing.Wing, existing.MCPBin, existing.UserID, existing.UpdatedAt, id)
+			`UPDATE projects SET name=?, wing=?, mcp_bin=?, creator_id=?, updated_at=? WHERE id=? AND deleted=0`,
+			existing.Name, existing.Wing, existing.MCPBin, existing.CreatorID, existing.UpdatedAt, id)
 		if err != nil {
 			Fail(c, http.StatusInternalServerError, 5000016, "update project: "+err.Error())
 			return

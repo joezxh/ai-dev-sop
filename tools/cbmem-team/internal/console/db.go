@@ -79,26 +79,30 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             path TEXT NOT NULL UNIQUE,
             wing TEXT,
             mcp_bin TEXT,
-            user_id TEXT,
+            creator_id TEXT,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             deleted INTEGER DEFAULT 0
         )`,
-		`CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id)`,
-		`CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            project_id TEXT,
-            project_path TEXT NOT NULL,
-            started_at DATETIME NOT NULL,
-            ended_at DATETIME,
-            tool_count INTEGER DEFAULT 0,
-            turn_count INTEGER DEFAULT 0,
-            summary TEXT
-        )`,
+		`CREATE INDEX IF NOT EXISTS idx_projects_creator ON projects(creator_id)`,
+`CREATE TABLE IF NOT EXISTS sessions (
+           id TEXT PRIMARY KEY,
+           user_id TEXT NOT NULL,
+           project_id TEXT,
+           project_path TEXT NOT NULL,
+           started_at DATETIME NOT NULL,
+           ended_at DATETIME,
+           tool_count INTEGER DEFAULT 0,
+           turn_count INTEGER DEFAULT 0,
+           summary TEXT,
+           mempalace_synced_turns INTEGER DEFAULT 0,
+           mempalace_last_synced_at DATETIME,
+           mempalace_last_error TEXT
+       )`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_mempalace_pending ON sessions(mempalace_synced_turns, turn_count) WHERE mempalace_synced_turns < turn_count`,
 		`CREATE TABLE IF NOT EXISTS session_turns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
@@ -229,7 +233,7 @@ func (db *DB) indexExists(ctx context.Context, table, name string) (bool, error)
 // mysqlConsoleIndexes is the ordered list of CREATE INDEX statements that
 // accompany mysqlConsoleDDL. Adding a new table? Add its indexes here too.
 var mysqlConsoleIndexes = []indexSpec{
-	{"projects", "idx_projects_user", `CREATE INDEX idx_projects_user ON projects(user_id)`},
+	{"projects", "idx_projects_creator", `CREATE INDEX idx_projects_creator ON projects(creator_id)`},
 	{"sessions", "idx_sessions_user", `CREATE INDEX idx_sessions_user ON sessions(user_id)`},
 	{"sessions", "idx_sessions_project", `CREATE INDEX idx_sessions_project ON sessions(project_id)`},
 	{"sessions", "idx_sessions_started", `CREATE INDEX idx_sessions_started ON sessions(started_at DESC)`},
@@ -265,22 +269,25 @@ var mysqlConsoleDDL = []string{
         path VARCHAR(512) NOT NULL UNIQUE,
         wing VARCHAR(128),
         mcp_bin VARCHAR(512),
-        user_id VARCHAR(128),
+        creator_id VARCHAR(128),
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         deleted TINYINT(1) DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-	`CREATE TABLE IF NOT EXISTS sessions (
-        id VARCHAR(128) NOT NULL PRIMARY KEY,
-        user_id VARCHAR(128) NOT NULL,
-        project_id VARCHAR(128),
-        project_path VARCHAR(512) NOT NULL,
-        started_at DATETIME NOT NULL,
-        ended_at DATETIME,
-        tool_count INT DEFAULT 0,
-        turn_count INT DEFAULT 0,
-        summary TEXT
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+`CREATE TABLE IF NOT EXISTS sessions (
+       id VARCHAR(128) NOT NULL PRIMARY KEY,
+       user_id VARCHAR(128) NOT NULL,
+       project_id VARCHAR(128),
+       project_path VARCHAR(512) NOT NULL,
+       started_at DATETIME NOT NULL,
+       ended_at DATETIME,
+       tool_count INT DEFAULT 0,
+       turn_count INT DEFAULT 0,
+       summary TEXT,
+       mempalace_synced_turns INT DEFAULT 0,
+       mempalace_last_synced_at DATETIME,
+       mempalace_last_error TEXT
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 	`CREATE TABLE IF NOT EXISTS session_turns (
         id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         session_id VARCHAR(128) NOT NULL,
@@ -343,6 +350,85 @@ func (db *DB) MigrationsContain(ctx context.Context, table string) (bool, error)
 		return false, err
 	}
 	return n > 0, nil
+}
+
+// MigrateSessionsAutoSyncColumns adds the mempalace_synced_turns /
+// mempalace_last_synced_at / mempalace_last_error columns to a pre-existing
+// `sessions` table. The CREATE TABLE in migrateConsole already includes them
+// for fresh deployments; this ALTER is idempotent and runs at startup so
+// v1 -> v1.1 upgrades get the auto-sync bookkeeping without a manual
+// migrate step.
+//
+// Idempotent: each ALTER probes information_schema first and skips when
+// the column is already present. Errors other than "already exists" are
+// returned so a real schema problem isn't masked.
+func (db *DB) MigrateSessionsAutoSyncColumns(ctx context.Context) error {
+	cols := []struct {
+		name string
+		ddl  string
+	}{
+		{"mempalace_synced_turns", `ALTER TABLE sessions ADD COLUMN mempalace_synced_turns INTEGER DEFAULT 0`},
+		{"mempalace_last_synced_at", `ALTER TABLE sessions ADD COLUMN mempalace_last_synced_at DATETIME`},
+		{"mempalace_last_error", `ALTER TABLE sessions ADD COLUMN mempalace_last_error TEXT`},
+	}
+	if db.driver == "mysql" {
+		cols[0].ddl = `ALTER TABLE sessions ADD COLUMN mempalace_synced_turns INT DEFAULT 0`
+		cols[1].ddl = `ALTER TABLE sessions ADD COLUMN mempalace_last_synced_at DATETIME`
+		cols[2].ddl = `ALTER TABLE sessions ADD COLUMN mempalace_last_error TEXT`
+	}
+	for _, c := range cols {
+		has, err := db.columnExists(ctx, "sessions", c.name)
+		if err != nil {
+			return fmt.Errorf("columnExists %s: %w", c.name, err)
+		}
+		if has {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, c.ddl); err != nil {
+			// SQLite returns "duplicate column" with a recognisable
+			// fragment; tolerate that as a no-op so re-runs are safe.
+			msg := err.Error()
+			if strings.Contains(msg, "duplicate column") ||
+				strings.Contains(msg, "already exists") {
+				continue
+			}
+			return fmt.Errorf("alter sessions add %s: %w", c.name, err)
+		}
+	}
+	return nil
+}
+
+// columnExists reports whether a column is present on the given table.
+// Works on SQLite (pragma_table_info) and MySQL 8.0 (information_schema).
+func (db *DB) columnExists(ctx context.Context, table, column string) (bool, error) {
+	if db.driver == "mysql" {
+		const q = `SELECT COUNT(*) FROM information_schema.columns
+		           WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`
+		var n int
+		if err := db.QueryRowContext(ctx, q, table, column).Scan(&n); err != nil {
+			return false, err
+		}
+		return n > 0, nil
+	}
+	// SQLite: pragma_table_info returns one row per column.
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(name, column) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // AllMigrated returns true when every console table already exists.

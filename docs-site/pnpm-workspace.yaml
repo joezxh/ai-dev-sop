@@ -1,3 +1,5 @@
 allowBuilds:
-  esbuild: set this to true or false
-  vue-demi: set this to true or false
+  '0': core-js
+  '1': esbuild
+  '2': vue-demi
+  core-js: true

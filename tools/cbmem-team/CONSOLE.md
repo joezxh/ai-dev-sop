@@ -2,6 +2,21 @@
 
 > 双轨记忆控制台 — 管理界面，覆盖用户管理、项目管理、会话记录、会话归纳、会话蒸馏五大模块。
 
+## 独立部署拓扑
+
+```
+Browser ──→ docs.fin-ai.net  (VitePress 静态构建产物)
+            │
+            └── SPA 调用 fetch('/api/console/...')
+                      │
+                      ↓ CORS (Access-Control-Allow-Origin: docs.fin-ai.net)
+                api.fin-ai.net ──→ cbmem-team :8787
+```
+
+- **前端**：docs-site 构建为纯静态 `dist/`，由 Caddy 托管（`docs.fin-ai.net`）
+- **后端**：cbmem-team 监听 `:8787`，由 Caddy 反代（`api.fin-ai.net`）
+- **CORS**：生产环境后端只允许 `docs.fin-ai.net`，dev 环境允许 `http://localhost:5173`
+
 ## 启用
 
 ```bash
@@ -16,8 +31,10 @@ cbmem-team \
   -llm-base-url https://api.openai.com/v1 \
   -llm-api-key "$(cat /etc/cbmem-team/llm-api-key)" \
   -mempalace-base http://192.168.100.83:8089 \
-  -console-dist /opt/cbmem-console/dist
+  -cors-allow-origins "https://docs.fin-ai.net"
 ```
+
+> 注意：`cbmem-team` 不再托管前端 Console SPA。前端由 Caddy 独立提供。
 
 ### 必需 Flag
 
@@ -28,7 +45,9 @@ cbmem-team \
 | `-mcp-bin` | `codebase-memory-mcp` 二进制路径 | `/usr/local/bin/codebase-memory-mcp` |
 | `-jwt-secret` | JWT 签名密钥 | `openssl rand -hex 32` |
 | `-admin-token` | 控制台管理员静态 token | `openssl rand -hex 32` |
-| `-console-dist` | VitePress 构建产物目录 | `/opt/cbmem-console/dist` |
+| `-cors-allow-origins` | CORS 白名单（逗号分隔，生产需明确指定） | `https://docs.fin-ai.net,http://localhost:5173` |
+
+> 旧版 `-console-dist` flag 已废弃（v2.0.0+），请改用 `-cors-allow-origins`。
 
 ### LLM Flag（归纳/蒸馏引擎）
 
@@ -49,7 +68,7 @@ cbmem-team \
 
 ## 登录
 
-浏览器打开 `http://server:8787/console/`，输入 admin token 登录。
+浏览器打开 `https://docs.fin-ai.net/console/`，输入 admin token 登录。
 
 ## 控制台模块
 
@@ -258,7 +277,7 @@ sudo systemctl start cbmem-team    # SQLite 旧单元，无 -mysql-dsn flag
 
 ```ini
 [Unit]
-Description=cbmem-team HTTP wrapper + Console
+Description=cbmem-team HTTP wrapper + Console API
 
 [Service]
 ExecStart=/usr/local/bin/cbmem-team \
@@ -272,17 +291,19 @@ ExecStart=/usr/local/bin/cbmem-team \
   -llm-base-url https://api.openai.com/v1 \
   -llm-api-key /run/secrets/cbmem-llm-api-key \
   -mempalace-base http://192.168.100.83:8089 \
-  -console-dist /opt/cbmem-console/dist \
+  -cors-allow-origins "https://docs.fin-ai.net" \
   -log info
 Restart=always
 User=cbmem
 ```
 
-## 前端构建
+## 前端构建与部署
 
 ```bash
 cd docs-site
-npm install
-npm run build          # VitePress 构建产物在 .vitepress/dist/
-# 将产物 symlink 到 -console-dist 指定路径
+pnpm install
+pnpm run build          # VitePress 构建产物在 .vitepress/dist/
+# 将产物部署到 /var/www/docs.fin-ai.net（由 Caddy 托管）
 ```
+
+> 前端构建产物是纯静态文件（HTML/JS/CSS），无需 cbmem-team 反代。

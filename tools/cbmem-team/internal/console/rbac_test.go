@@ -65,9 +65,9 @@ func TestRBACRequireRoleAllowsMatching(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/ops", func(c *gin.Context) {
-		SetRole(c, RoleOperator)
+		SetRole(c, RoleDeveloper)
 		c.Next()
-	}, RequireRole(RoleAdmin, RoleOperator), func(c *gin.Context) {
+	}, RequireRole(RoleAdmin, RoleDeveloper), func(c *gin.Context) {
 		c.Status(200)
 	})
 
@@ -82,8 +82,8 @@ func TestHasRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/", func(c *gin.Context) {
-		SetRole(c, RoleOperator)
-		if !HasRole(c, RoleAdmin, RoleOperator) {
+		SetRole(c, RoleDeveloper)
+		if !HasRole(c, RoleAdmin, RoleDeveloper) {
 			t.Errorf("HasRole(operator, admin, operator) should be true")
 		}
 		if HasRole(c, RoleAdmin) {

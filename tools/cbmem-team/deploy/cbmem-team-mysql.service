@@ -1,5 +1,5 @@
 [Unit]
-Description=cbmem-team HTTP wrapper + Console (MySQL backend)
+Description=cbmem-team HTTP API (MySQL backend)
 Documentation=https://docs/superpowers/specs/2026-07-11-cbmem-team-v2-research.md
 After=network.target docker.service
 Wants=docker.service
@@ -8,13 +8,11 @@ Wants=docker.service
 Type=simple
 User=cbmem
 Group=cbmem
-# Load DSN from a secrets file (mode 0600, owned by cbmem). systemd
-# EnvironmentFile does NOT inline-expand shell, so secrets must be raw
-# KEY=VALUE pairs.
 EnvironmentFile=/etc/cbmem-team/mysql.env
 ExecStart=/usr/local/bin/cbmem-team \
   -listen :8787 \
   -data /var/lib/cbmem-team \
+  -repo-root /var/lib/cbmem-team/repos \
   -mcp-bin /usr/local/bin/codebase-memory-mcp \
   -jwt-secret /run/secrets/cbmem-jwt-secret \
   -admin-token /run/secrets/cbmem-admin-token \
@@ -27,13 +25,12 @@ ExecStart=/usr/local/bin/cbmem-team \
   -llm-base-url https://api.openai.com/v1 \
   -llm-api-key /run/secrets/cbmem-llm-api-key \
   -mempalace-base http://192.168.100.83:8089 \
-  -console-dist /opt/cbmem-console/dist \
+  -mempalace-auto-sync-wing "project_team" \
+  -mempalace-auto-sync-hall "events" \
+  -cors-allow-origins "https://docs.fin-ai.net" \
   -log info
 Restart=always
 RestartSec=5
-# 7-day rollback window: keep the legacy SQLite DB reachable. To roll
-# back, drop the -mysql-dsn flag and start with cbmem-team-sqlite.service
-# (deploy/cbmem-team-sqlite.service).
 
 [Install]
 WantedBy=multi-user.target

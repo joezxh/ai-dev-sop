@@ -32,11 +32,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"cbmem-team/internal/auth"
+	"cbmem-team/internal/config"
 	"cbmem-team/internal/console"
 	"cbmem-team/internal/httpsrv/middleware"
 	"cbmem-team/internal/llm"
 	"cbmem-team/internal/mcp"
 	"cbmem-team/internal/pool"
+	"cbmem-team/internal/reload"
 	"cbmem-team/internal/repos"
 	"cbmem-team/internal/store"
 )
@@ -56,96 +58,31 @@ func main() {
 		case "mysql-ping":
 			os.Exit(runMySQLPing(os.Args[2:]))
 		case "help", "--help", "-h":
-			fmt.Print(usage)
+			fmt.Print(config.Usage)
 			os.Exit(0)
 		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n\n%s\n", os.Args[1], usage)
+			fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n\n%s\n", os.Args[1], config.Usage)
 			os.Exit(2)
 		}
 	}
 	os.Exit(runServe(os.Args[1:]))
 }
 
-const usage = `cbmem-team — HTTP wrapper for codebase-memory-mcp
-
-Subcommands:
-  serve                            (default) start the HTTP server
-  migrate-tables                   create console tables on the configured MySQL
-  migrate-sqlite-to-mysql         one-shot ETL: copy all rows from a SQLite
-                                   console DB into MySQL
-  mysql-ping                       ping a MySQL DSN and exit
-
-Use "<subcommand> --help" for subcommand flags.
-
-serve flags (excerpt):
-  -listen       :8787
-  -data         /var/lib/cbmem-team
-  -mysql-dsn    "" (empty = use SQLite at <data>/cbmem-team.db)
-  -mysql-max-open 16
-  -mysql-max-idle 4
-  -mysql-max-lifetime 30m
-`
-
-// runServe opens flags, loads config, and runs the HTTP server. It is the
-// original `main()` body, refactored into a function so the subcommand
+// runServe opens flags, loads config, and runs the HTTP server with hot reload support.
+// It is the original `main()` body, refactored into a function so the subcommand
 // dispatcher above can call it. The legacy SQLite path stays the default
 // unless `-mysql-dsn` is set, in which case `console.OpenEither` switches
 // transparently to MySQL 8.0.
 func runServe(args []string) int {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	var (
-		listen        = fs.String("listen", ":8787", "HTTP listen address")
-		cfgFile       = fs.String("config", "/etc/cbmem-team/config.yaml", "config file path")
-		dataDir       = fs.String("data", "/var/lib/cbmem-team", "per-user data root")
-		mcpBin        = fs.String("mcp-bin", "/usr/local/bin/codebase-memory-mcp", "path to codebase-memory-mcp binary")
-		jwtSecret     = fs.String("jwt-secret", "", "HMAC secret for JWT verification (overrides config)")
-		adminTok      = fs.String("admin-token", "", "admin token for /admin endpoints (overrides config)")
-		logLevel      = fs.String("log", "info", "log level: debug|info|warn|error")
-		llmProvider   = fs.String("llm-provider", "fake", "llm provider: fake|openai|ollama")
-		llmModel      = fs.String("llm-model", "", "model name")
-		llmBaseURL    = fs.String("llm-base-url", "", "llm base url")
-		llmAPIKey     = fs.String("llm-api-key", "", "llm api key (optional for ollama)")
-		mempalaceBase = fs.String("mempalace-base", "", "mempalace http base url, empty disables integration")
-		consoleDist   = fs.String("console-dist", "", "path to vitepress build dist for console frontend")
-		mysqlDSN      = fs.String("mysql-dsn", "", "MySQL DSN; empty = use SQLite at <data>/cbmem-team.db")
-		mysqlMaxOpen  = fs.Int("mysql-max-open", 16, "MySQL max open conns")
-		mysqlMaxIdle  = fs.Int("mysql-max-idle", 4, "MySQL max idle conns")
-		mysqlMaxLife  = fs.Duration("mysql-max-lifetime", 30*time.Minute, "MySQL conn max lifetime")
-		corsOrigins   = fs.String("cors-allow-origins", "*",
-			"Comma-separated CORS origin whitelist for /api/console. Use '*' for dev only; pass an empty string to disable CORS.")
-	)
-	_ = fs.Parse(args)
+	cfg, flagValues, err := config.ParseFlags(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "parse flags: %v\n", err)
+		return 2
+	}
 
-	cfg := loadConfig(*cfgFile)
-	if *listen != "" && *listen != ":8787" {
-		cfg.Listen = *listen
-	}
-	if *dataDir != "" && *dataDir != "/var/lib/cbmem-team" {
-		cfg.DataDir = *dataDir
-	}
-	if *mcpBin != "" && *mcpBin != "/usr/local/bin/codebase-memory-mcp" {
-		cfg.MCPBinary = *mcpBin
-	}
-	if *jwtSecret != "" {
-		cfg.JWTSecret = *jwtSecret
-	}
-	cfg.AdminToken = *adminTok
-	if *logLevel != "" {
-		cfg.LogLevel = *logLevel
-	}
-	cfg.LLMProvider = *llmProvider
-	cfg.LLMModel = *llmModel
-	cfg.LLMBaseURL = *llmBaseURL
-	cfg.LLMAPIKey = *llmAPIKey
-	cfg.MemPalaceBase = *mempalaceBase
-	cfg.ConsoleDist = *consoleDist
-	cfg.MySQLDSN = *mysqlDSN
-	cfg.MySQLMaxOpen = *mysqlMaxOpen
-	cfg.MySQLMaxIdle = *mysqlMaxIdle
-	cfg.MySQLMaxLife = *mysqlMaxLife
-	cfg.CORSOrigins = *corsOrigins
+	configPath, _ := flagValues["config_file"]
 
-	if err := run(cfg); err != nil {
+	if err := runWithHotReload(cfg, configPath); err != nil {
 		log.Printf("fatal: %v", err)
 		return 1
 	}
@@ -231,29 +168,6 @@ func runMySQLPing(args []string) int {
 	return 0
 }
 
-type Config struct {
-	Listen        string        `yaml:"listen"`
-	DataDir       string        `yaml:"data_dir"`
-	MCPBinary     string        `yaml:"mcp_binary"`
-	JWTSecret     string        `yaml:"jwt_secret"`
-	AdminToken    string        `yaml:"admin_token"`
-	LogLevel      string        `yaml:"log_level"`
-	LLMProvider   string        `yaml:"llm_provider"`
-	LLMModel      string        `yaml:"llm_model"`
-	LLMBaseURL    string        `yaml:"llm_base_url"`
-	LLMAPIKey     string        `yaml:"llm_api_key"`
-	MemPalaceBase string        `yaml:"mempalace_base"`
-	ConsoleDist   string        `yaml:"console_dist"`
-	Users         []store.User  `yaml:"users"`
-	IdleTTL       time.Duration `yaml:"idle_ttl"`
-	MaxProcs      int           `yaml:"max_procs_per_user"`
-	MySQLDSN      string        `yaml:"mysql_dsn"`
-	MySQLMaxOpen  int           `yaml:"mysql_max_open"`
-	MySQLMaxIdle  int           `yaml:"mysql_max_idle"`
-	MySQLMaxLife  time.Duration `yaml:"mysql_max_lifetime"`
-	CORSOrigins   string        `yaml:"cors_allow_origins"`
-}
-
 // splitCORSOrigins converts the -cors-allow-origins flag into the slice
 // shape middleware.CORS expects. The empty string yields a nil slice so
 // the middleware treats CORS as disabled.
@@ -264,38 +178,47 @@ func splitCORSOrigins(raw string) []string {
 	return strings.Split(raw, ",")
 }
 
-func loadConfig(path string) *Config {
-	// Minimal YAML-less loader: file is optional; if absent, defaults are used.
-	cfg := &Config{
-		Listen:    ":8787",
-		DataDir:   "/var/lib/cbmem-team",
-		MCPBinary: "/usr/local/bin/codebase-memory-mcp",
-		IdleTTL:   30 * time.Minute,
-		MaxProcs:  4,
-		LogLevel:  "info",
+// runWithHotReload wraps run() with hot reload support for the config file.
+func runWithHotReload(cfg *config.Config, configPath string) error {
+	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Create hot reload manager
+	rm := reload.NewManager()
+	if configPath != "" {
+		if err := rm.Start(ctx, cfg, configPath); err != nil {
+			log.Printf("hot reload: failed to start watcher: %v", err)
+			// Non-fatal: continue without hot reload
+		} else {
+			log.Printf("hot reload: enabled, watching %s", configPath)
+		}
 	}
-	if path == "" {
-		return cfg
-	}
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		log.Printf("config %s not found, using defaults", path)
-		return cfg
-	}
-	// We avoid pulling a YAML dep by using a tiny key=value parser.
-	// Production deployments can swap this for yaml.Unmarshal.
-	f, err := os.Open(path)
+
+	err := run(ctx, cfg, rm)
 	if err != nil {
-		log.Printf("open config: %v", err)
-		return cfg
+		return err
 	}
-	defer f.Close()
-	log.Printf("loaded config: %s", path)
-	return cfg
+
+	// Stop hot reload
+	if rm != nil {
+		rm.Stop()
+	}
+	return nil
 }
 
-func run(cfg *Config) error {
+// run starts the HTTP server with the given configuration.
+func run(ctx context.Context, cfg *config.Config, rm *reload.Manager) error {
+	log.Printf("data_dir: %s", cfg.DataDir)
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir data: %w", err)
+	}
+	// M3: ensure the git repo root exists so the first project
+	// creation doesn't have to.
+	if cfg.RepoRoot != "" {
+		if err := os.MkdirAll(cfg.RepoRoot, 0o755); err != nil {
+			return fmt.Errorf("mkdir repo_root: %w", err)
+		}
 	}
 
 	users, err := store.LoadUsers(filepath.Join(cfg.DataDir, "users.json"))
@@ -354,8 +277,24 @@ func run(cfg *Config) error {
 	// (writes rolling session_turns), then CaptureInvocations (writes
 	// tool_invocation_logs for every call). Both middlewares read the body
 	// before c.Next() and replace it so downstream handlers can drain it.
+	//
+	// CaptureSessions receives MemPalace so newly captured turns are
+	// mirrored into MemPalace in the background (bookkeeping lives on
+	// sessions.mempalace_synced_turns). See internal/console/capture.go
+	// for the watermark / retry policy.
+	var mpCapture *llm.MemPalace
+	if cfg.MemPalaceBase != "" {
+		mpCapture = llm.NewMemPalace(cfg.MemPalaceBase, "")
+	}
 	mcpGroup := r.Group("/mcp")
-	mcpGroup.Use(jwtv.Middleware(), console.CaptureSessions(consoleDB), mcp.CaptureInvocations(consoleDB))
+	mcpGroup.Use(jwtv.Middleware(),
+		console.CaptureSessions(console.CaptureConfig{
+			DB:        consoleDB,
+			MemPalace: mpCapture,
+			Wing:      cfg.MemPalaceAutoSyncWing,
+			Hall:      cfg.MemPalaceAutoSyncHall,
+		}),
+		mcp.CaptureInvocations(consoleDB))
 	{
 		mcpGroup.POST("", mcp.StreamableHandler(p, users, reposMgr, consoleDB))
 		mcpGroup.POST("/", mcp.StreamableHandler(p, users, reposMgr, consoleDB))
@@ -399,14 +338,59 @@ func run(cfg *Config) error {
 		mp = llm.NewMemPalace(cfg.MemPalaceBase, "")
 	}
 
+	authHandlers := console.NewAuthHandlersWithCost(
+		consoleDB,
+		[]byte(cfg.JWTSecret),
+		cfg.AuthAccessTTL,
+		cfg.AuthRefreshTTL,
+		cfg.AuthInitialAdmin,
+		cfg.AuthBcryptCost,
+	)
+
+	// M3: JWT verifier shared with auth handlers. We build our own
+	// instance (rather than re-using authHandlers.Verifier) so that
+	// tests and ops can wire M3 routes independently of M2's
+	// user-disabled extra check. The secret MUST match.
+	jwtVerifier := auth.NewVerifier([]byte(cfg.JWTSecret))
+
+	// M3: teams + projects v2. RepoRoot is the canonical base
+	// directory for v2 projects; configurable via -repo-root
+	// (cfg.RepoRoot) so dev / staging / prod can co-exist.
+	teamHandlers := console.NewTeamHandlers(consoleDB)
+	projectHandlers := console.NewProjectHandlers(consoleDB, cfg.RepoRoot, cfg.MCPBinary)
+	// M4: modules + v2 sessions read APIs.
+	moduleHandlers := console.NewModuleHandlers(consoleDB)
+	sessionsV2Handlers := console.NewSessionHandlersV2(consoleDB)
+	// M5: memory templates + memories + summarize/distill v2 wrappers.
+	memoryTemplateHandlers := console.NewMemoryTemplateHandlers(consoleDB)
+	memoryHandlers := console.NewMemoryHandlers(consoleDB)
+	summarizeDistillV2 := console.NewSummarizeDistillHandlersV2(consoleDB, provider, mp)
+	// M6: AI tool catalogue (cursor / qoder / superpowers / gstack /
+	// custom). Invoke execution is HTTP/stdio and doesn't need an
+	// LLM provider at registration time, so we always wire this.
+	aiToolsHandlers := console.NewAIToolHandlers(consoleDB)
+
 	console.Mount(r, console.MountConfig{
-		DB:         consoleDB,
-		AdminToken: cfg.AdminToken,
-		Session:    sm,
-		Users:      users,
-		LLM:        provider,
-		MemPalace:  mp,
-		CORS:       middleware.CORS(splitCORSOrigins(cfg.CORSOrigins)),
+		DB:                  consoleDB,
+		AdminToken:          cfg.AdminToken,
+		JWTSecret:           []byte(cfg.JWTSecret),
+		JWTVerifier:         jwtVerifier,
+		Session:             sm,
+		Users:               users,
+		LLM:                 provider,
+		MemPalace:           mp,
+		DataDir:             cfg.DataDir,
+		MCPBinary:           cfg.MCPBinary,
+		CORS:                middleware.CORS(splitCORSOrigins(cfg.CORSOrigins)),
+		Auth:                authHandlers,
+		Teams:               teamHandlers,
+		Projects:            projectHandlers,
+		Modules:             moduleHandlers,
+		SessionsV2:          sessionsV2Handlers,
+		MemoryTemplates:     memoryTemplateHandlers,
+		Memories:            memoryHandlers,
+		SummarizeDistillV2:  summarizeDistillV2,
+		AITools:             aiToolsHandlers,
 	})
 
 	if cfg.ConsoleDist != "" {
@@ -422,12 +406,8 @@ func run(cfg *Config) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// Graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go func() {
-		log.Printf("cbmem-team listening on %s (data=%s mcp=%s)", cfg.Listen, cfg.DataDir, cfg.MCPBinary)
+		log.Printf("cbmem-team listening on %s (data=%s mcp=%s repo_root=%s)", cfg.Listen, cfg.DataDir, cfg.MCPBinary, cfg.RepoRoot)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %v", err)
 		}

@@ -12,22 +12,30 @@ a central instance.
 ```
 ┌──────────────┐    POST /mcp?as=alice&project=/code/foo
 │  Cursor /    │ ─────────────────────────────────────────┐
-│  Claude /    │   Authorization: Bearer <jwt>           │
-│  Qoder       │                                          ▼
+│  Claude /    │   Authorization: Bearer <jwt>            │
+│  Qoder       │                                            ▼
 └──────────────┘                              ┌──────────────────────┐
-                                              │   cbmem-team (HTTP)  │
-                                              │  ┌────────────────┐  │
-                                              │  │  per-user      │  │
-                                              │  │  stdio pool    │  │
-                                              │  └─────┬──────────┘  │
-                                              └────────┼─────────────┘
-                                                       ▼
-                              ┌────────────────────────────────────┐
-                              │  codebase-memory-mcp  (alice)       │
-                              │  workdir: /var/lib/cbmem-team/      │
-                              │           users/alice/projects/foo │
-                              │  SQLite (writable only by alice)    │
-                              └────────────────────────────────────┘
+                                               │   cbmem-team (HTTP)  │
+                                               │  ┌────────────────┐  │
+                                               │  │  per-user      │  │
+                                               │  │  stdio pool    │  │
+                                               │  └─────┬──────────┘  │
+                                               └────────┼─────────────┘
+                                                        ▼
+                             ┌────────────────────────────────────┐
+                             │  codebase-memory-mcp  (alice)       │
+                             │  workdir: /var/lib/cbmem-team/     │
+                             │           users/alice/projects/foo  │
+                             │  SQLite (writable only by alice)   │
+                             └────────────────────────────────────┘
+
+Browser ──→ docs.fin-ai.net (Caddy static, .vitepress/dist/)
+              │  GET /console/*
+              │  POST /api/console/*  (CORS: docs.fin-ai.net)
+              ↓
+        api.fin-ai.net (Caddy reverse proxy)
+              ↓ 127.0.0.1:8787
+        cbmem-team (HTTP API)
 ```
 
 * One **stdio subprocess per user**. SQLite file-locks give natural isolation.
@@ -100,7 +108,8 @@ parameter `as=...` is what isolates their indexes server-side.
 
 - [x] JWT signature verified on every `/mcp` request
 - [x] Per-user `ProjectPaths` allow-list (optional, set per user)
-- [ ] **TLS**: deploy behind nginx / caddy; do not expose `:8787` directly
+- [x] **TLS**: deploy behind Caddy; do not expose `:8787` directly
+- [x] **CORS whitelist**: `-cors-allow-origins` enforced; only docs.fin-ai.net allowed in prod
 - [ ] **Admin token rotation**: rotate quarterly, store in vault
 - [ ] **Disk quota**: `/var/lib/cbmem-team` is one SQLite file per
        (user, project); monitor via `du -sh /var/lib/cbmem-team/users/*`

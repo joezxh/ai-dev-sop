@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"cbmem-team/internal/auth"
 	"cbmem-team/internal/store"
 )
 
@@ -187,4 +188,40 @@ func RevokeUserHandler(reg *store.Registry) gin.HandlerFunc {
 		}
 		OK(c, userToDTO(existing))
 	}
+}
+
+// MintTokenHandler generates a short-lived JWT for the given user.
+// The JWT secret is passed in so console package stays free of the
+// (possibly FDE-proprietary) cbmem-team/internal/auth dependency.
+func MintTokenHandler(reg *store.Registry, jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		if _, ok := reg.Get(id); !ok {
+			Fail(c, http.StatusNotFound, 4040003, "user not found")
+			return
+		}
+		ttlStr := c.DefaultQuery("ttl", "720h")
+		ttl, err := time.ParseDuration(ttlStr)
+		if err != nil {
+			Fail(c, http.StatusBadRequest, 4000003, "bad ttl: "+err.Error())
+			return
+		}
+		token, err := mintJWT(jwtSecret, id, ttl)
+		if err != nil {
+			Fail(c, http.StatusInternalServerError, 5000004, "sign token: "+err.Error())
+			return
+		}
+		OK(c, gin.H{
+			"user_id": id,
+			"token":   token,
+			"expires": time.Now().UTC().Add(ttl).Format(time.RFC3339),
+		})
+	}
+}
+
+// mintJWT wraps auth.Verifier so console package stays free of the
+// (possibly FDE-proprietary) cbmem-team/internal/auth dependency.
+func mintJWT(secret []byte, userID string, ttl time.Duration) (string, error) {
+	v := auth.NewVerifier(secret)
+	return v.Sign(userID, ttl)
 }

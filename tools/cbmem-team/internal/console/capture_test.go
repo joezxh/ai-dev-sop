@@ -28,7 +28,7 @@ func TestCaptureSimpleMessage(t *testing.T) {
 			c.Set("user_id", "alice")
 			c.JSON(200, gin.H{"jsonrpc": "2.0", "result": "ok"})
 		},
-		CaptureSessions(db),
+		CaptureSessions(CaptureConfig{DB: db}),
 	)
 
 	req := httptest.NewRequest("POST", "/mcp?project=/tmp/test", bytes.NewBufferString(captureMessageCallBody))
@@ -88,7 +88,7 @@ func TestCaptureNonMessageBypasses(t *testing.T) {
 			c.Set("user_id", "alice")
 			c.JSON(200, gin.H{"jsonrpc": "2.0", "result": "ok"})
 		},
-		CaptureSessions(db),
+		CaptureSessions(CaptureConfig{DB: db}),
 	)
 
 	req := httptest.NewRequest("POST", "/mcp?project=/tmp/test", bytes.NewBufferString(captureNonMessageCallBody))

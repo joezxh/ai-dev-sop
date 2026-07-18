@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"cbmem-team/internal/auth"
 	"cbmem-team/internal/llm"
 	"cbmem-team/internal/store"
 )
@@ -14,15 +15,68 @@ import (
 type MountConfig struct {
 	DB         *DB
 	AdminToken string
+	JWTSecret  []byte
 	Session    *SessionManager
 	Users      *store.Registry
 	LLM        llm.Provider
 	MemPalace  *llm.MemPalace
+	DataDir    string // per-user data root, used to auto-generate project paths
+	MCPBinary  string // default codebase-memory-mcp binary path
 
 	// CORS, when non-nil, is mounted on the /api/console group only.
 	// /healthz and other root-level routes are intentionally left untouched
 	// so internal health checks remain CORS-free.
 	CORS gin.HandlerFunc
+
+	// Auth (M2): when non-nil, /api/auth/* routes are mounted under
+	// the public (unauthenticated) /api group. JWTSecret must match
+	// MountConfig.JWTSecret; InitialAdmin, when non-empty, enables
+	// the POST /api/auth/first-admin route for first-boot setup.
+	Auth *AuthHandlers
+
+	// JWTVerifier (M3): when non-nil, used by the /api/console/v2
+	// team/project routes as the JWT auth middleware. Same secret as
+	// Auth.JWTSecret. Kept separate so deployments can mount M3 even
+	// when Auth's extra-checks (user-disabled, etc.) aren't desired.
+	JWTVerifier *auth.Verifier
+
+	// Teams (M3): when non-nil, mounts /api/v2/teams/* endpoints.
+	Teams *TeamHandlers
+
+// Projects (M3): when non-nil, mounts /api/v2/teams/:id/projects/*
+// and /api/v2/projects/:pid/* endpoints. RepoRoot is the canonical
+// base directory under which every v2 project path lives; passed
+// to NewProjectHandlers.
+	Projects *ProjectHandlers
+
+	// Modules (M4): when non-nil, mounts /api/v2/projects/:id/modules/*
+	// plus /api/v2/modules/:id* endpoints.
+	Modules *ModuleHandlers
+
+	// SessionsV2 (M4): when non-nil, mounts /api/v2/sessions*
+	// and /api/v2/projects/:id/sessions* endpoints. These are
+	// additive to the v1 cookie-protected sessions endpoints under
+	// /api/console/sessions; the v2 path is JWT-gated and exposes
+	// richer filters (team_id, project_id, module_id).
+	SessionsV2 *SessionHandlersV2
+
+	// MemoryTemplates (M5): list + render endpoints under
+	// /api/v2/memory-templates/*.
+	MemoryTemplates *MemoryTemplateHandlers
+
+	// Memories (M5): CRUD + tags under /api/v2/memories and
+	// /api/v2/modules/:id/memories.
+	Memories *MemoryHandlers
+
+	// SummarizeDistillV2 (M5): JWT-gated wrappers for summarize
+	// and distill task lifecycle. Mounts under
+	// /api/v2/summarize-tasks and /api/v2/distill-tasks.
+	SummarizeDistillV2 *SummarizeDistillHandlersV2
+
+	// AITools (M6): CRUD + invoke for the AI tool catalogue
+	// (cursor / qoder / superpowers / gstack / custom). Mounts
+	// under /api/v2/ai-tools/*.
+	AITools *AIToolHandlers
 }
 
 func Mount(r *gin.Engine, cfg MountConfig) {
@@ -32,6 +86,15 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		// adds the two BP tables alongside.
 		if err := cfg.DB.Migrate(context.Background(), M1ExtraSchema(), M2ExtraSchema(), M3ExtraSchema(), M4ExtraSchema()); err != nil {
 			panic("console: migrate db: " + err.Error())
+		}
+		// Auto-sync columns on sessions (mempalace_synced_turns,
+		// mempalace_last_synced_at, mempalace_last_error) are part of
+		// CREATE TABLE for fresh DBs; the ALTER here makes them appear on
+		// pre-existing v1 deployments. Idempotent.
+		if err := cfg.DB.MigrateSessionsAutoSyncColumns(context.Background()); err != nil {
+			// Don't fail boot — capture and summarisation still work
+			// without the watermark. Log and continue.
+			fmt.Printf("migrate auto-sync columns: %v\n", err)
 		}
 		if n, err := SeedToolDirectory(context.Background(), cfg.DB); err != nil {
 			// best-effort: an empty catalog is still served by the API,
@@ -50,12 +113,30 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 		} else if n > 0 {
 			fmt.Printf("seeded %d workflow rows\n", n)
 		}
+
+		// v2 schema migration (M2-M4). Runs after the v1 schema so the
+		// ALTER TABLE statements have a base to work on. Idempotent.
+		if err := cfg.DB.MigrateV2(context.Background(), nil); err != nil {
+			panic("console: migrate v2: " + err.Error())
+		}
 	}
 
 	api := r.Group("/api/console")
 	if cfg.CORS != nil {
 		api.Use(cfg.CORS)
 	}
+
+	// /api/auth/* — M2 password + JWT routes. Lives at /api/auth (not
+	// /api/console/auth) so the cookie-based /api/console/login can
+	// continue to exist for the v1 UI while the v2 UI moves here.
+	authGroup := r.Group("/api/auth")
+	if cfg.CORS != nil {
+		authGroup.Use(cfg.CORS)
+	}
+	if cfg.Auth != nil {
+		cfg.Auth.Mount(authGroup)
+	}
+
 	api.POST("/login", LoginHandler(cfg.AdminToken, cfg.Session))
 	api.POST("/logout", RequireSession(cfg.Session), RequireCSRF(), LogoutHandler(cfg.Session))
 
@@ -69,10 +150,11 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 	users.PUT("/:id", UpdateUserHandler(cfg.Users))
 	users.DELETE("/:id", DeleteUserHandler(cfg.Users))
 	users.POST("/:id/revoke", RevokeUserHandler(cfg.Users))
+	users.POST("/:id/token", MintTokenHandler(cfg.Users, cfg.JWTSecret))
 
 	projects := protected.Group("/projects")
 	projects.GET("", ListProjectsHandler(cfg.DB))
-	projects.POST("", CreateProjectHandler(cfg.DB, nil))
+	projects.POST("", CreateProjectHandler(cfg.DB, cfg.DataDir, cfg.MCPBinary))
 	projects.PUT("/:id", UpdateProjectHandler(cfg.DB))
 	projects.DELETE("/:id", DeleteProjectHandler(cfg.DB))
 	projects.GET("/:id/index-status", ProjectIndexStatusHandler(cfg.DB, nil))
@@ -168,6 +250,134 @@ func Mount(r *gin.Engine, cfg MountConfig) {
 			repos.POST("/:id/run", RunRepoPipelineHandler(cfg.DB, rpRuntime))
 			repos.GET("/:id/runs", ListRepoPipelineRunsHandler(cfg.DB))
 		}
+
+		// M3 (Team / Project v2). All routes require JWT (the v1
+		// `protected` group uses session-cookies; this is the v2
+		// path: bearer JWT). Middleware order:
+		//   1. CORS (already on /api/console)
+		//   2. JWT (sets user_id / role / jti in ctx)
+		//   3. handler-level role checks via RequireRoleAtLeast
+		//
+		// Routes:
+		//   GET    /api/console/v2/teams
+		//   POST   /api/console/v2/teams
+		//   GET    /api/console/v2/teams/:id
+		//   PUT    /api/console/v2/teams/:id
+		//   DELETE /api/console/v2/teams/:id
+		//   GET    /api/console/v2/teams/:id/members
+		//   POST   /api/console/v2/teams/:id/members
+		//   PUT    /api/console/v2/teams/:id/members/:uid
+		//   DELETE /api/console/v2/teams/:id/members/:uid
+		//   GET    /api/console/v2/teams/:id/projects
+		//   POST   /api/console/v2/teams/:id/projects
+		//   GET    /api/console/v2/projects/:pid
+		//   PUT    /api/console/v2/projects/:pid
+		//   DELETE /api/console/v2/projects/:pid
+		//   POST   /api/console/v2/projects/:pid/clone
+		//   GET    /api/console/v2/projects/:pid/index-status
+		//   POST   /api/console/v2/projects/:pid/reindex
+		// M4 (modules, sessions), M5 (memory templates, memories,
+		// summarize/distill tasks) are mounted in the same group so
+		// they share the JWT verifier and "user_id / role" context.
+		if cfg.Teams != nil || cfg.Projects != nil || cfg.Modules != nil || cfg.SessionsV2 != nil ||
+			cfg.MemoryTemplates != nil || cfg.Memories != nil || cfg.SummarizeDistillV2 != nil ||
+			cfg.AITools != nil { // M4: Modules/SessionsV2; M5: MemoryTemplates/Memories/SummarizeDistillV2; M6: AITools
+			m3 := v2.Group("")
+			if cfg.JWTVerifier != nil {
+				m3.Use(cfg.JWTVerifier.Middleware())
+			}
+			if cfg.Teams != nil {
+				m3.GET("/teams", cfg.Teams.ListTeams())
+				m3.POST("/teams", cfg.Teams.CreateTeam())
+				m3.GET("/teams/:id", cfg.Teams.GetTeam())
+				m3.PUT("/teams/:id", cfg.Teams.UpdateTeam())
+				m3.DELETE("/teams/:id", cfg.Teams.DeleteTeam())
+
+				m3.GET("/teams/:id/members", cfg.Teams.ListMembers())
+				m3.POST("/teams/:id/members", cfg.Teams.AddMember())
+				m3.PUT("/teams/:id/members/:uid", cfg.Teams.UpdateMember())
+				m3.DELETE("/teams/:id/members/:uid", cfg.Teams.RemoveMember())
+
+				if cfg.Projects != nil {
+					m3.GET("/teams/:id/projects", cfg.Projects.ListProjects())
+					m3.POST("/teams/:id/projects", cfg.Projects.CreateProject())
+				}
+			}
+			if cfg.Projects != nil {
+			m3.GET("/projects/:pid", cfg.Projects.GetProject())
+			m3.PUT("/projects/:pid", cfg.Projects.UpdateProject())
+			m3.DELETE("/projects/:pid", cfg.Projects.DeleteProject())
+			m3.POST("/projects/:pid/clone", cfg.Projects.CloneProject())
+			m3.GET("/projects/:pid/index-status", cfg.Projects.IndexStatus())
+			m3.POST("/projects/:pid/reindex", cfg.Projects.Reindex())
+
+				// M4: module tree under a project + per-module endpoints.
+				// Reuses the same JWT verifier the M3 routes use.
+				if cfg.Modules != nil {
+					m3.GET("/projects/:pid/modules", cfg.Modules.ListModules())
+					m3.POST("/projects/:pid/modules", cfg.Modules.CreateModule())
+					m3.GET("/projects/:pid/modules/tree", cfg.Modules.Tree())
+				}
+			}
+			if cfg.Modules != nil {
+				m3.GET("/modules/:id", cfg.Modules.GetModule())
+				m3.PUT("/modules/:id", cfg.Modules.UpdateModule())
+				m3.DELETE("/modules/:id", cfg.Modules.DeleteModule())
+				m3.POST("/modules/:id/move", cfg.Modules.MoveModule())
+			}
+            if cfg.SessionsV2 != nil {
+                m3.GET("/sessions", cfg.SessionsV2.ListSessions())
+                m3.GET("/sessions/stats", cfg.SessionsV2.Stats())
+                m3.GET("/sessions/:id", cfg.SessionsV2.GetSession())
+                if cfg.Projects != nil {
+                    // Project-scoped recent sessions feeds the project
+                    // detail "recent conversations" tile.
+                    m3.GET("/projects/:pid/sessions", cfg.SessionsV2.ProjectSessions())
+                }
+            }
+            // M5 — memory templates (read-only + admin create +
+            // render). All authenticated users can list/render;
+            // only admin can POST a new template.
+            if cfg.MemoryTemplates != nil {
+                m3.GET("/memory-templates", cfg.MemoryTemplates.List())
+                m3.GET("/memory-templates/:id", cfg.MemoryTemplates.Get())
+                m3.POST("/memory-templates/:id/render", cfg.MemoryTemplates.Render())
+                m3.POST("/memory-templates", cfg.MemoryTemplates.Create())
+            }
+            // M5 — memories (CRUD + tags). RBAC handled in handler.
+            if cfg.Memories != nil {
+                m3.GET("/memories", cfg.Memories.List())
+                m3.POST("/memories", cfg.Memories.Create())
+                m3.GET("/memories/:id", cfg.Memories.Get())
+                m3.PUT("/memories/:id", cfg.Memories.Update())
+                m3.DELETE("/memories/:id", cfg.Memories.Delete())
+                m3.POST("/memories/:id/tags", cfg.Memories.AddTag())
+                if cfg.Modules != nil {
+                    m3.GET("/modules/:id/memories", cfg.Memories.ModuleMemories())
+                }
+            }
+            // M5 — summarize/distill v2 task lifecycle (JWT-wrapped).
+            if cfg.SummarizeDistillV2 != nil {
+                m3.GET("/summarize-tasks", cfg.SummarizeDistillV2.ListSummarize())
+                m3.POST("/summarize-tasks", cfg.SummarizeDistillV2.CreateSummarize())
+                m3.GET("/summarize-tasks/:id", cfg.SummarizeDistillV2.GetSummarize())
+                m3.GET("/distill-tasks", cfg.SummarizeDistillV2.ListDistill())
+                m3.POST("/distill-tasks", cfg.SummarizeDistillV2.CreateDistill())
+                m3.GET("/distill-tasks/:id", cfg.SummarizeDistillV2.GetDistill())
+            }
+            // M6 — AI tool catalogue + invoke + audit. RBAC enforced
+            // in handler; routes are JWT-gated via the parent group.
+            if cfg.AITools != nil {
+                m3.GET("/ai-tools", cfg.AITools.List())
+                m3.POST("/ai-tools", cfg.AITools.Create())
+                m3.GET("/ai-tools/:id", cfg.AITools.Get())
+                m3.PUT("/ai-tools/:id", cfg.AITools.Update())
+                m3.DELETE("/ai-tools/:id", cfg.AITools.Delete())
+                m3.POST("/ai-tools/:id/invoke", cfg.AITools.Invoke())
+                m3.GET("/ai-tools/:id/invocations", cfg.AITools.ListInvocations())
+                m3.GET("/ai-tools/invocations/:inv_id", cfg.AITools.GetInvocation())
+            }
+        }
 	}
 
 	// M2 single-file UI. Public so a curl smoke can hit it without a
