@@ -44,6 +44,10 @@ const (
 
 // User mirrors the v2 users table. DefaultTeamID is denormalised for
 // convenience — the canonical user↔team mapping lives in team_members.
+//
+// On-disk BIGINT columns are translated to/from string at the db_*.go
+// layer via strconv so the JSON shape remains string-formatted (matching
+// the v1 API the front-end was built against).
 type User struct {
 	ID                  string    `json:"id"`
 	Username            string    `json:"username"`

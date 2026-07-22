@@ -1,6 +1,6 @@
 # cbmem-team 用户手册
 
-> **版本**：v3（角色导向重写版）
+> **版本**：v4（M5/M6 功能版 + MemPalace 自动同步）
 > **适用读者**：开发者 / 运维
 > **前置阅读**：[`README.md`](./README.md)（架构图）、[`CONSOLE.md`](./CONSOLE.md)（控制台 API 速查）
 > **英文版**：[`manual.en.md`](./manual.en.md)
@@ -24,9 +24,11 @@
                          │  ┌────────────────────────────┐  │
                          │  │   Gin HTTP Server          │  │
                          │  │   JWT 验证 / 会话捕获      │  │
+                         │  │   MemPalace 自动同步       │  │
                          │  └────────────┬───────────────┘  │
                          │  ┌────────────┴───────────────┐  │
-                         │  │ /mcp  │ /admin │ /console   │  │
+                         │  │ /mcp │ /admin │ /console   │  │
+                         │  │ /api/v2/* (M3-M6)        │  │
                          │  └────────────────────────────┘  │
                          └──────────┬───────────┬───────────┘
                                     │           │
@@ -190,21 +192,7 @@ Qoder 的 MCP 配置方式与 Cursor 类似。在项目根目录或全局配置�
 }
 ```
 
-### 1.5 CodeBuddy 配置
-
-CodeBuddy 支持在设置中配置 MCP 服务器。打开 CodeBuddy 设置 → MCP Servers，添加新服务器：
-
-- **名称**：`cbmem-team`
-- **URL**：`http://your-server:8787/mcp?as=alice&project=/path/to/project`
-- **Headers**：
-
-```json
-{
-  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...."
-}
-```
-
-### 1.6 Token 续期
+### 1.5 Token 续期
 
 JWT token 有过期时间（默认签发 30 天）。续期方式：
 
@@ -216,7 +204,7 @@ curl -sS -X POST "http://your-server:8787/refresh?ttl=4320h" \
 
 响应中返回新的 JWT token，替换配置文件中的旧 token 即可。
 
-### 1.7 自动配置脚本
+### 1.6 自动配置脚本
 
 仓库提供两个脚本，自动完成「签发 JWT → 写入配置文件 → 连通性验证」全流程：
 
@@ -253,7 +241,7 @@ pwsh examples/cbmem-emit-mcp.ps1 `
 4. 执行 `tools/list` 冒烟测试
 5. 输出一行摘要
 
-### 1.8 端到端连通性验证
+### 1.7 端到端连通性验证
 
 配置完成后，执行以下验证：
 
@@ -368,9 +356,10 @@ cbmem-team 提供 Web 控制台，覆盖用户管理、项目管理、会话记�
 **会话采集机制**：
 
 cbmem-team 在 MCP handler 外包一层 capture middleware，自动采集：
-- 触发条件：JSON-RPC `initialize` / `tools/call` 含 `messages/create`
-- 复用策略：同一 `(user_id, project_path)` 30 分钟内有最近 session 则复用
+- 触发条件：`tools/call` 或 `tools/invoke` 调用，且工具名称包含 "message"（不区分大小写），且 messages 数组非空
+- 复用策略：同一 `(user_id, project_path)` 的请求复用同一个 session id（滚动会话模型）
 - 异步写入：不阻塞 MCP 请求
+- 自动同步：配置 `MemPalace` 后，新采集的轮次自动同步到 MemPalace 作为 Drawer
 
 ### 2.5 会话归纳（Summarize）
 
@@ -502,6 +491,7 @@ cbmem-team 通过以下配置启用 MemPalace 集成：
 ```bash
 cbmem-team \
   -mempalace-base http://mempalace-server:8089 \
+  -mempalace-token <token> \
   -mempalace-timeout 10s \
   ...
 ```
@@ -516,7 +506,38 @@ cbmem-team \
 
 > MemPalace 内置自动重试机制（失败重试 3 次）。
 
-### 3.3 搜索与检索
+### 3.3 MCP 会话自动同步（新增 v4）
+
+cbmem-team 支持在每次 MCP `tools/call` 调用时**自动同步会话轮次**到 MemPalace：
+
+```bash
+cbmem-team \
+  -mempalace-base http://mempalace-server:8089 \
+  -mempalace-token <token> \
+  -mempalace-auto-sync-wing engineering \
+  -mempalace-auto-sync-hall events \
+  ...
+```
+
+**自动同步配置**：
+
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `-mempalace-auto-sync-wing` | 自动同步使用的 wing | 项目 basename |
+| `-mempalace-auto-sync-hall` | 自动同步使用的 hall | `events` |
+
+**触发条件**：
+- JSON-RPC method 为 `tools/call` 或 `tools/invoke`
+- 工具名称包含 "message"（不区分大小写）
+- messages 数组非空
+
+**同步机制**：
+- 滚动会话模型：同一 `(user_id, project_path)` 复用同一个 session id
+- 水印追踪：`sessions.mempalace_synced_turns` 记录已同步轮次
+- 幂等写入：`formatTurnAsDrawer` 生成确定性内容，支持 MemPalace 端去重
+- 失败重试：最多 3 次指数退避重试
+
+### 3.4 搜索与检索
 
 写入 MemPalace 后，团队成员可通过 MemPalace 的 MCP 工具搜索记忆：
 
@@ -552,7 +573,7 @@ mempalace wake-up
 | 协议 | stdio（标准输入输出） | HTTP + JWT |
 | 用户数 | 单用户 | 多用户 |
 | 索引隔离 | 天然隔离（本地文件） | per-user 进程 + SQLite 文件锁 |
-| 会话捕获 | 无 | 自动捕获 |
+| 会话捕获 | 无 | 自动捕获 + MemPalace 同步 |
 | 知识提炼 | 无 | 归纳/蒸馏 + MemPalace |
 | 管理界面 | 无 | Web 控制台 |
 | 适用场景 | 个人开发 | 团队协作 |
@@ -601,15 +622,15 @@ Content-Type: application/json
 cbmem-team 在 MCP handler 外包一层 **capture middleware**，自动采集所有对话会话：
 
 **触发条件**：
-- JSON-RPC `initialize` 请求
-- `tools/call` 或 `tools/invoke` 调用
-- 包含 `messages` 数组的消息调用
+- JSON-RPC method 为 `tools/call` 或 `tools/invoke`
+- 工具名称包含 "message"（不区分大小写）
+- messages 数组非空
 
 **采集内容**：
-- 每次触发 → 创建或复用 `sessions` 行
-- 每轮对话 → 写入 `session_turns`（role, content, tools_json, ts）
+- 每次触发 → 创建或复用 `ai_sessions` 行（滚动会话模型）
+- 每条消息 → 写入 `ai_session_turns`（role, content, tools_json, ts）
 
-**复用策略**：同一 `(user_id, project_path)` 30 分钟内有最近 session 则复用，否则创建新 session。
+**复用策略**：同一 `(user_id, project_path)` 的请求始终复用同一个 session id，实现滚动会话。
 
 **性能影响**：采集在独立 goroutine 中异步执行，不阻塞 MCP 请求。写入使用 per-user channel 串行化，避免 SQLite 锁竞争。
 
@@ -696,10 +717,13 @@ listening on :8787
 | `-llm-api-key` | 空 | LLM API 密钥（Ollama 可不填） |
 | `-llm-timeout` | `30s` | LLM 请求超时 |
 | `-mempalace-base` | 空 | MemPalace HTTP base URL，空则禁用 |
-| `-mempalace-timeout` | `10s` | MemPalace 请求超时 |
+| `-mempalace-token` | 空 | MemPalace MCP HTTP Bearer token |
+| `-mempalace-auto-sync-wing` | 空 | 自动同步使用的 wing |
+| `-mempalace-auto-sync-hall` | `events` | 自动同步使用的 hall |
 | `-console-dist` | 空 | 控制台前端 VitePress 产物目录 |
 | `-idle-ttl` | `30m` | 空闲进程回收时间 |
 | `-max-procs-per-user` | `4` | 每个用户的最大进程数 |
+| `-repo-root` | `<data>/repos` | v2 项目的全局 git repo 根目录 |
 
 ### 5.3 systemd 后台部署（推荐生产）
 
@@ -975,6 +999,88 @@ crawl → parse → grade → sink → rehearse
 | `POST /api/console/v2/repos/candidates/:id/accept` | 接受候选 |
 | `POST /api/console/v2/repos/candidates/:id/merge` | 合并到 best_practices |
 
+### 7.5 Teams + Projects v2（M3）
+
+v2 API 采用 JWT 认证，支持团队和项目层级管理。
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/console/v2/teams` | GET | 列出团队 |
+| `/api/console/v2/teams` | POST | 创建团队 |
+| `/api/console/v2/teams/:id` | GET | 获取团队详情 |
+| `/api/console/v2/teams/:id` | PUT | 更新团队 |
+| `/api/console/v2/teams/:id` | DELETE | 删除团队 |
+| `/api/console/v2/teams/:id/members` | GET | 列出成员 |
+| `/api/console/v2/teams/:id/members` | POST | 添加成员 |
+| `/api/console/v2/teams/:id/members/:uid` | PUT | 更新成员角色 |
+| `/api/console/v2/teams/:id/members/:uid` | DELETE | 移除成员 |
+| `/api/console/v2/teams/:id/projects` | GET | 列出团队项目 |
+| `/api/console/v2/teams/:id/projects` | POST | 创建团队项目 |
+| `/api/console/v2/projects/:pid` | GET | 获取项目详情 |
+| `/api/console/v2/projects/:pid` | PUT | 更新项目 |
+| `/api/console/v2/projects/:pid` | DELETE | 删除项目 |
+| `/api/console/v2/projects/:pid/clone` | POST | 克隆项目 |
+| `/api/console/v2/projects/:pid/index-status` | GET | 索引状态 |
+| `/api/console/v2/projects/:pid/reindex` | POST | 触发重新索引 |
+
+### 7.6 Modules + Sessions v2（M4）
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/console/v2/projects/:pid/modules` | GET | 列出项目模块 |
+| `/api/console/v2/projects/:pid/modules` | POST | 创建模块 |
+| `/api/console/v2/projects/:pid/modules/tree` | GET | 获取模块树 |
+| `/api/console/v2/modules/:id` | GET | 获取模块详情 |
+| `/api/console/v2/modules/:id` | PUT | 更新模块 |
+| `/api/console/v2/modules/:id` | DELETE | 删除模块 |
+| `/api/console/v2/modules/:id/move` | POST | 移动模块 |
+| `/api/console/v2/sessions` | GET | 列出会话（支持 team_id/project_id/module_id 筛选） |
+| `/api/console/v2/sessions/stats` | GET | 会话统计 |
+| `/api/console/v2/sessions/:id` | GET | 获取会话详情 |
+| `/api/console/v2/projects/:pid/sessions` | GET | 获取项目的会话 |
+
+### 7.7 Memory Templates + Memories（M5）
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/console/v2/memory-templates` | GET | 列出记忆模板 |
+| `/api/console/v2/memory-templates/:id` | GET | 获取模板详情 |
+| `/api/console/v2/memory-templates/:id/render` | POST | 渲染模板 |
+| `/api/console/v2/memory-templates` | POST | 创建模板 |
+| `/api/console/v2/memories` | GET | 列出记忆 |
+| `/api/console/v2/memories` | POST | 创建记忆 |
+| `/api/console/v2/memories/:id` | GET | 获取记忆详情 |
+| `/api/console/v2/memories/:id` | PUT | 更新记忆 |
+| `/api/console/v2/memories/:id` | DELETE | 删除记忆 |
+| `/api/console/v2/memories/:id/tags` | POST | 添加标签 |
+| `/api/console/v2/modules/:id/memories` | GET | 获取模块的记忆 |
+
+### 7.8 Summarize/Distill v2（M5）
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/console/v2/summarize-tasks` | GET | 列出归纳任务 |
+| `/api/console/v2/summarize-tasks` | POST | 创建归纳任务 |
+| `/api/console/v2/summarize-tasks/:id` | GET | 获取任务详情 |
+| `/api/console/v2/distill-tasks` | GET | 列出蒸馏任务 |
+| `/api/console/v2/distill-tasks` | POST | 创建蒸馏任务 |
+| `/api/console/v2/distill-tasks/:id` | GET | 获取蒸馏任务详情 |
+
+### 7.9 AI Tools 目录（M6）
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/console/v2/ai-tools` | GET | 列出 AI 工具 |
+| `/api/console/v2/ai-tools` | POST | 注册 AI 工具 |
+| `/api/console/v2/ai-tools/:id` | GET | 获取工具详情 |
+| `/api/console/v2/ai-tools/:id` | PUT | 更新工具 |
+| `/api/console/v2/ai-tools/:id` | DELETE | 删除工具 |
+| `/api/console/v2/ai-tools/:id/invoke` | POST | 调用工具 |
+| `/api/console/v2/ai-tools/:id/invocations` | GET | 调用历史 |
+| `/api/console/v2/ai-tools/invocations/:inv_id` | GET | 调用详情 |
+
+支持协议：`http`（转发到 endpoint）和 `stdio`（spawn command+args）。
+
 ---
 
 ## 8. 命令行工具参考
@@ -991,33 +1097,14 @@ crawl → parse → grade → sink → rehearse
 | 工具 | 编译命令 | 用途 |
 |---|---|---|
 | `create-db` | `go build -o bin/create-db ./cmd/create-db` | 建 `cbmem` MySQL 库 |
-| `mysql-probe` | `go build -o bin/mysql-probe ./cmd/mysql-probe` | MySQL 连接探测 |
-| `show-tables` | `go build -o bin/show-tables ./cmd/show-tables` | 列出所有表 |
-| `show-indexes` | `go build -o bin/show-indexes ./cmd/show-indexes` | 列出所有索引 |
 
-### 8.3 端到端测试工具（仅 dev / CI）
-
-| 工具 | 覆盖里程碑 | 运行命令 |
-|---|---|---|
-| `e2e-m1` | M1 工具目录 + 调用日志 | `go run ./cmd/e2e-m1` |
-| `e2e-v5` | M0.5 SQLite/MySQL 双轨 + ETL | `go run ./cmd/e2e-v5` |
-| `e2e-v6` | M2 限流 + BP CRUD | `go run ./cmd/e2e-v6` |
-| `e2e-v7` | M3 工作流 + M4 Pipeline | `go run ./cmd/e2e-v7` |
-
-通用 flag：`-mysql-dsn "..."` 或通过环境变量 `$CBMEM_MYSQL_DSN`。
-
-### 8.4 工具速查表
+### 8.3 工具速查表
 
 | 工具 | 主要用途 | 生产 |
 |---|---|---|
 | `cbmem-team` | 主服务（HTTP wrapper + 控制台） | ✅ |
 | `cbmem-mint-token` | 离线签发 JWT | ✅ |
 | `create-db` | 建 MySQL 库 | ✅ |
-| `mysql-probe` | 探活 MySQL | ✅ |
-| `show-tables` | 列所有表 | ✅ |
-| `show-indexes` | 列所有索引 | ✅ |
-| `seed-sqlite` | 写 SQLite 测试数据 | ❌ |
-| `e2e-m1` ~ `e2e-v7` | 端到端验收 | ❌ |
 | `mcp-stub` | e2e 用 MCP 桩 | ❌ |
 | `mint-token-debug` | 调试 401 | ❌ |
 
@@ -1054,7 +1141,10 @@ crawl → parse → grade → sink → rehearse
 
 | 参数 | 描述 | 默认 |
 |------|------|------|
-| `-mempalace-base` | MemPalace HTTP 地址 | `http://localhost:8089` |
+| `-mempalace-base` | MemPalace HTTP 地址 | 空（禁用） |
+| `-mempalace-token` | MemPalace MCP HTTP Bearer token | 空 |
+| `-mempalace-auto-sync-wing` | 自动同步使用的 wing | 空（使用项目 basename） |
+| `-mempalace-auto-sync-hall` | 自动同步使用的 hall | `events` |
 | `-mempalace-timeout` | 超时时长 | `10s` |
 
 ### 9.4 可选参数
@@ -1069,6 +1159,12 @@ crawl → parse → grade → sink → rehearse
 | `-mysql-max-open` | MySQL 连接池上限 | `16` |
 | `-mysql-max-idle` | MySQL 空闲连接数 | `4` |
 | `-mysql-max-lifetime` | MySQL 连接最大存活时间 | `30m` |
+| `-repo-root` | v2 项目全局 git repo 根目录 | `<data>/repos` |
+| `-auth-access-ttl` | JWT access token TTL | `8h` |
+| `-auth-refresh-ttl` | JWT refresh token TTL | `168h` |
+| `-auth-initial-admin` | 首次启动引导的初始管理员 | 空（禁用） |
+| `-auth-bcrypt-cost` | bcrypt 工作因子 | `12` |
+| `-cors-allow-origins` | CORS 允许的来源 | 空（禁用 CORS） |
 
 ---
 
@@ -1083,27 +1179,39 @@ cbmem-team 支持两种后端，通过启动 flag 切换：
 | **SQLite**（默认） | 不设 `-mysql-dsn` flag | 单机 / 开发 / 小团队 |
 | **MySQL 8.0** | `-mysql-dsn <dsn>` | 生产 / 多实例 / 高并发 |
 
-### 10.2 核心表
+### 10.2 核心表（v1）
 
 | 表名 | 用途 |
 |------|------|
-| `users` | 用户信息（含 project_paths 白名单） |
-| `projects` | 项目配置（含 wing / mcp_bin） |
-| `sessions` | 会话记录 |
-| `session_turns` | 会话轮次 |
+| `sys_users` | 用户信息（含 project_paths 白名单） |
+| `pm_projects` | 项目配置（含 wing / mcp_bin） |
+| `ai_sessions` | 会话记录（含 MemPalace 同步水印） |
+| `ai_session_turns` | 会话轮次 |
+| `sys_console_sessions` | 控制台登录 session（含 TTL） |
 
 ### 10.3 任务表
 
 | 表名 | 用途 |
 |------|------|
-| `summarize_tasks` | 归纳任务 |
-| `distill_tasks` | 蒸馏任务 |
+| `ai_summarize_tasks` | 归纳任务 |
+| `ai_distill_tasks` | 蒸馏任务 |
 
-### 10.4 控制台表
+### 10.4 v2 表（M2-M6）
 
-| 表名 | 用途 |
-|------|------|
-| `console_sessions` | 控制台登录 session（含 TTL） |
+| 表名 | 里程碑 | 用途 |
+|------|--------|------|
+| `users` | M2 | 用户（支持角色：admin/lead/developer/viewer） |
+| `teams` | M3 | 团队 |
+| `team_members` | M3 | 团队成员关联 |
+| `projects` | M3 | v2 项目 |
+| `modules` | M4 | 模块树 |
+| `sessions` | M4 | v2 会话 |
+| `memory_templates` | M5 | 记忆模板 |
+| `memories` | M5 | 记忆 |
+| `summarize_tasks` | M5 | 归纳任务 |
+| `distill_tasks` | M5 | 蒸馏任务 |
+| `ai_tools` | M6 | AI 工具目录 |
+| `ai_tool_invocations` | M6 | AI 工具调用记录 |
 
 ### 10.5 M1-M4 扩展表
 
@@ -1160,7 +1268,23 @@ cbmem-team 支持两种后端，通过启动 flag 切换：
 | `/api/console/distill/:task_id` | GET | 任务状态 |
 | `/api/console/distill/:task_id/commit` | POST | 写入 MemPalace |
 
-### 11.3 MCP 端点
+### 11.3 v2 API（/api/console/v2/*，JWT 认证）
+
+| Path | Method | 说明 |
+|------|--------|------|
+| `/api/console/v2/teams` | GET/POST | 团队 CRUD |
+| `/api/console/v2/teams/:id` | GET/PUT/DELETE | 团队详情 |
+| `/api/console/v2/teams/:id/members` | GET/POST | 成员管理 |
+| `/api/console/v2/teams/:id/projects` | GET/POST | 团队项目 |
+| `/api/console/v2/projects/:pid` | GET/PUT/DELETE | v2 项目 |
+| `/api/console/v2/projects/:pid/modules` | GET/POST | 模块管理 |
+| `/api/console/v2/modules/:id` | GET/PUT/DELETE | 模块详情 |
+| `/api/console/v2/sessions` | GET | v2 会话列表 |
+| `/api/console/v2/memory-templates` | GET/POST | 记忆模板 |
+| `/api/console/v2/memories` | GET/POST | 记忆 CRUD |
+| `/api/console/v2/ai-tools` | GET/POST | AI 工具目录 |
+
+### 11.4 MCP 端点
 
 | Path | Method | 说明 |
 |------|--------|------|
@@ -1170,7 +1294,7 @@ cbmem-team 支持两种后端，通过启动 flag 切换：
 | `/healthz` | GET | 健康检查 |
 | `/refresh` | POST | JWT 自动续期 |
 
-### 11.4 统一响应格式 + 错误码
+### 11.5 统一响应格式 + 错误码
 
 ```json
 { "code": 0, "msg": "", "data": {} }
@@ -1244,6 +1368,15 @@ cbmem-team 支持两种后端，通过启动 flag 切换：
 
 **修法**：定期归档近 30 天在线数据，监控 `du -sh /var/lib/cbmem-team/`。
 
+### Q9：MemPalace 自动同步不生效
+
+**排查路径**：
+
+1. **是否配置了 MemPalace**：`curl http://server:8787/healthz` 检查日志确认 `mempalace-base` 加载
+2. **触发条件是否满足**：只有 `tools/call`/`tools/invoke` 且工具名包含 "message" 才触发
+3. **水印是否前进**：查询 `sessions.mempalace_synced_turns` 字段
+4. **错误日志**：检查 `sessions.mempalace_last_error` 字段
+
 ---
 
 ## 附录
@@ -1261,18 +1394,13 @@ ADMIN_TOKEN=<64-hex-chars>
 LOG_LEVEL=info
 IDLE_TTL=30m
 MAX_PROCS_PER_USER=4
+MEMPALACE_BASE=http://mempalace-server:8089
+MEMPALACE_TOKEN=<token>
+MEMPALACE_AUTO_SYNC_WING=engineering
+MEMPALACE_AUTO_SYNC_HALL=events
 ```
 
 > systemd unit 通过 `EnvironmentFile=` 加载；CLI flag 优先级高于 env。
-
-#### dev 工具的 MySQL DSN 解析
-
-所有 `cmd/*` 工具统一通过 `internal/devconf.ResolveMySQLDSN` 解析，优先级：
-
-1. `-mysql-dsn "..."` flag
-2. `$CBMEM_MYSQL_DSN` 环境变量
-3. `$DSN` 环境变量（旧名，向后兼容）
-4. `dev default`（仅开发用，**不是生产凭证**）
 
 ### B. 相关文档
 
@@ -1293,7 +1421,8 @@ MAX_PROCS_PER_USER=4
 - **v2.2 (M3)**：工作流引擎 + 3 个内置 workflow
 - **v2.3 (M4)**：repo pipeline + bp_candidate review + 2 个 MySQL 视图
 - **v3.0**：用户手册重写（角色导向）
+- **v4.0**：MemPalace 自动同步 + M5/M6 API + 会话采集机制更新
 
 ---
 
-*文档最后更新：2026-07-08*
+*文档最后更新：2026-07-20*

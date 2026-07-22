@@ -143,7 +143,7 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 	// owner_id, created_at, updated_at (7 placeholders). created_at /
 	// updated_at default to the legacy team's clock so audit queries
 	// "WHEN was the team created?" still return a sensible value.
-	legacyTeamID := "team_legacy"
+	legacyTeamID := int64(1)
 	now := timeNow()
 	// owner_id is NULL — there's no canonical owner for a v1 → v2 legacy
 	// bucket; the audit log carries the operator that triggered the
@@ -164,7 +164,7 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 	//    (9 placeholders). The path is empty string because v1 didn't
 	//    carry one and we leave the surface area empty rather than
 	//    guessing a global code-repo path.
-	firstProjectID := "proj_legacy"
+	firstProjectID := int64(1)
 	if _, err := db.ExecContext(ctx,
 		db.v2DDL().legacyProjectSQL,
 		firstProjectID, legacyTeamID,
@@ -181,7 +181,7 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 	//    v1 sessions can map onto it directly.
 	if _, err := db.ExecContext(ctx,
 		db.v2DDL().legacyModuleSQL,
-		"mod_legacy", firstProjectID,
+		int64(1), firstProjectID,
 		"Legacy Module (migrated from v1)", "",
 		1, now, now,
 	); err != nil && !isAlreadyExists(err) {
@@ -240,8 +240,7 @@ func (db *DB) migrateV2Phase3(ctx context.Context, warn func(string, ...any)) er
 	}
 	if _, err := db.ExecContext(ctx,
 		`UPDATE ai_sessions SET module_id = ? WHERE module_id IS NULL OR module_id = ''`,
-		"mod_legacy",
-	); err != nil {
+		int64(1),); err != nil {
 		return fmt.Errorf("backfill ai_sessions.module_id: %w", err)
 	}
 

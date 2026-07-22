@@ -1,14 +1,18 @@
 -- =============================================================================
--- cbmem-team SQLite 初始化数据
+-- cbmem-team SQLite 初始化数据 (v4)
 -- =============================================================================
 -- 内容：
 --   1. admin 初始管理员账号（bcrypt hash of "admin123"）
 --   2. 默认团队 "Default Team"
---   3. 49工具目录 (ai_tool_directory)
---   4. 3条最佳实践 (pm_best_practices + pm_bp_versions)
---   5. 3条内置工作流 (pm_workflows + pm_workflow_versions)
---   6. 5条内置记忆模板 (ai_memories_templates)
---   7. 内置AI工具 (ai_tools)
+--   3. Legacy 迁移节点
+--   4. 49工具目录 (ai_tool_directory)
+--   5. 3条最佳实践 (pm_best_practices + pm_bp_versions)
+--   6. 3条内置工作流 (pm_workflows + pm_workflow_versions)
+--   7. 5条内置记忆模板 (ai_memories_templates)
+--   8. 3条内置AI工具 (ai_tools)
+--
+-- 重要：所有主键使用 INTEGER PRIMARY KEY AUTOINCREMENT
+--      SQLite 没有会话变量，需要分步插入后查询 ID
 --
 -- 应用顺序：
 --   1. admin 用户
@@ -21,17 +25,17 @@
 --   8. 记忆模板
 --   9. AI工具
 --
--- 密码：bcrypt(cost=12, default) of "admin123"
+-- 密码：bcrypt(cost=12) of "admin123"
 --   $2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.PQDJp.nwfP4H8y
 
 BEGIN;
 
 -- =============================================================================
 -- 1. admin 用户
+-- 注意：不指定 id 列，让数据库自动生成
 -- =============================================================================
-INSERT INTO sys_users (id, username, display_name, email, password_hash, role, must_change_password, disabled, created_at, updated_at)
+INSERT INTO sys_users (username, display_name, email, password_hash, role, must_change_password, disabled, created_at, updated_at)
 VALUES (
-    'u_admin_default',
     'admin',
     'Administrator',
     'admin@example.com',
@@ -45,39 +49,84 @@ VALUES (
 
 -- =============================================================================
 -- 2. 默认团队
+-- 注意：不指定 id 列，让数据库自动生成
 -- =============================================================================
-INSERT INTO pm_teams (id, name, slug, description, owner_id, created_at, updated_at, deleted)
+INSERT INTO pm_teams (name, slug, description, owner_id, created_at, updated_at, deleted)
 VALUES (
-    'team_default',
     'Default Team',
     'default',
     '默认团队，系统自动创建',
-    'u_admin_default',
+    (SELECT last_insert_rowid()),
     datetime('now'),
     datetime('now'),
     0
 );
 
 -- =============================================================================
--- 3. 团队成员关联
+-- 3. 团队成员关联（admin 加入默认团队，角色为 admin）
 -- =============================================================================
 INSERT INTO pm_team_members (team_id, user_id, role, joined_at)
-VALUES ('team_default', 'u_admin_default', 'admin', datetime('now'));
+VALUES (
+    (SELECT id FROM pm_teams WHERE slug = 'default'),
+    (SELECT id FROM sys_users WHERE username = 'admin'),
+    'admin',
+    datetime('now')
+);
 
 -- =============================================================================
--- 4. Legacy 迁移节点
+-- 4. admin 用户的默认团队设为 default
 -- =============================================================================
-INSERT OR IGNORE INTO pm_teams (id, name, slug, description, owner_id, created_at, updated_at, deleted)
-VALUES ('team_legacy', 'Legacy Team (migrated from v1)', 'legacy', '从 v1 迁移的默认团队', NULL, datetime('now'), datetime('now'), 0);
-
-INSERT OR IGNORE INTO pm_projects (id, team_id, name, slug, description, path, git_url, git_branch, git_commit_sha, status, owner_id, created_at, updated_at, deleted)
-VALUES ('proj_legacy', 'team_legacy', 'Legacy Project', 'legacy', '从 v1 迁移的默认项目', '', '', '', '', 'ready', '', datetime('now'), datetime('now'), 0);
-
-INSERT OR IGNORE INTO pm_modules (id, project_id, name, description, path, is_leaf, created_at, updated_at, deleted)
-VALUES ('mod_legacy', 'proj_legacy', 'Legacy Module', '从 v1 迁移的默认模块', '', 1, datetime('now'), datetime('now'), 0);
+UPDATE sys_users SET default_team_id = (SELECT id FROM pm_teams WHERE slug = 'default')
+WHERE username = 'admin';
 
 -- =============================================================================
--- 5. 49工具目录
+-- 5. Legacy 迁移节点
+-- Legacy 团队
+-- =============================================================================
+INSERT INTO pm_teams (name, slug, description, owner_id, created_at, updated_at, deleted)
+VALUES (
+    'Legacy Team (migrated from v1)',
+    'legacy',
+    '从 v1 迁移的默认团队',
+    NULL,
+    datetime('now'),
+    datetime('now'),
+    0
+);
+
+-- Legacy 项目
+INSERT INTO pm_projects (team_id, name, slug, description, path, git_url, git_branch, git_commit_sha, status, owner_id, created_at, updated_at, deleted)
+VALUES (
+    (SELECT id FROM pm_teams WHERE slug = 'legacy'),
+    'Legacy Project',
+    'legacy',
+    '从 v1 迁移的默认项目',
+    '',
+    '',
+    '',
+    '',
+    'ready',
+    NULL,
+    datetime('now'),
+    datetime('now'),
+    0
+);
+
+-- Legacy 模块
+INSERT INTO pm_modules (project_id, name, description, path, is_leaf, created_at, updated_at, deleted)
+VALUES (
+    (SELECT id FROM pm_projects WHERE slug = 'legacy' AND team_id = (SELECT id FROM pm_teams WHERE slug = 'legacy')),
+    'Legacy Module',
+    '从 v1 迁移的默认模块',
+    '',
+    1,
+    datetime('now'),
+    datetime('now'),
+    0
+);
+
+-- =============================================================================
+-- 6. 49工具目录
 -- =============================================================================
 INSERT INTO ai_tool_directory (tool_id, track, category, name, signature, status, priority, version, created_at, updated_at)
 VALUES
@@ -108,7 +157,7 @@ VALUES
     ('mempalace_merge_drawer',      'A', 'admin',   'Merge drawer',       'src_id,dst_id',     'active', 7, '1.0.0', datetime('now'), datetime('now')),
     ('mempalace_archive_wing',      'A', 'admin',   'Archive wing',       'wing_id',           'active', 8, '1.0.0', datetime('now'), datetime('now')),
     ('mempalace_restore_wing',      'A', 'admin',   'Restore wing',       'wing_id',           'active', 8, '1.0.0', datetime('now'), datetime('now')),
-    ('mempalace_reindex_search',    'A', 'admin',   'Reindex search',     'wing_id',           'active', 7, '1.0.0', datetime('now'), datetime('now')),
+    ('mempalace_reindex_search',   'A', 'admin',   'Reindex search',     'wing_id',           'active', 7, '1.0.0', datetime('now'), datetime('now')),
     ('mempalace_quota_set',         'A', 'admin',   'Set quota',          'wing_id,bytes',     'active', 8, '1.0.0', datetime('now'), datetime('now')),
     ('mempalace_audit_log',         'A', 'admin',   'Audit log',          'filter',            'active', 8, '1.0.0', datetime('now'), datetime('now')),
     ('mempalace_backup',            'A', 'admin',   'Backup',             'wing_id',           'active', 9, '1.0.0', datetime('now'), datetime('now')),
@@ -127,14 +176,15 @@ VALUES
     ('get_code_snippet',            'B', 'query',   'Get snippet',        'file,line_range',   'active', 4, '1.0.0', datetime('now'), datetime('now')),
     ('get_graph_schema',            'B', 'query',   'Graph schema',       '--',                 'active', 6, '1.0.0', datetime('now'), datetime('now')),
     ('detect_changes',              'B', 'analysis','Detect changes',     'git_diff',          'active', 1, '1.0.0', datetime('now'), datetime('now')),
-    ('get_architecture',            'B', 'analysis','Get architecture',   'scope',             'active', 3, '1.0.0', datetime('now'), datetime('now')),
-    ('manage_adr',                  'B', 'analysis','ADR CRUD',           'op,adr',            'active', 4, '1.0.0', datetime('now'), datetime('now')),
-    ('ingest_traces',               'B', 'analysis','Ingest traces',      'trace_bundle',      'active', 5, '1.0.0', datetime('now'), datetime('now'));
+    ('get_architecture',           'B', 'analysis','Get architecture',   'scope',             'active', 3, '1.0.0', datetime('now'), datetime('now')),
+    ('manage_adr',                 'B', 'analysis','ADR CRUD',           'op,adr',            'active', 4, '1.0.0', datetime('now'), datetime('now')),
+    ('ingest_traces',              'B', 'analysis','Ingest traces',      'trace_bundle',      'active', 5, '1.0.0', datetime('now'), datetime('now'));
 
 -- =============================================================================
--- 6. 最佳实践 (3条)
+-- 7. 最佳实践 (3条)
 -- =============================================================================
 
+-- BP1: MemPalace Drawer 命名约定
 INSERT INTO pm_best_practices (id, title, category, track, tools, related_halls, related_wings, scenes, priority, status, version, created_by, created_at, updated_at, review_due, source, body)
 VALUES (
     'bp-naming-mempalace-drawer',
@@ -148,7 +198,7 @@ VALUES (
     'P2',
     'published',
     1,
-    'system',
+    (SELECT id FROM sys_users WHERE username = 'admin'),
     datetime('now'),
     datetime('now'),
     date('now', '+90 days'),
@@ -157,8 +207,9 @@ VALUES (
 );
 
 INSERT INTO pm_bp_versions (bp_id, version, snapshot_json, changed_by, change_note, created_at)
-VALUES ('bp-naming-mempalace-drawer', 1, '{"id":"bp-naming-mempalace-drawer","title":"MemPalace Drawer 命名约定","category":"naming","track":"A","status":"published","version":1}', 'system', 'initial seed', datetime('now'));
+VALUES ('bp-naming-mempalace-drawer', 1, '{"id":"bp-naming-mempalace-drawer","title":"MemPalace Drawer 命名约定","category":"naming","track":"A","status":"published","version":1}', (SELECT id FROM sys_users WHERE username = 'admin'), 'initial seed', datetime('now'));
 
+-- BP2: 大仓首次索引走 fast 模式
 INSERT INTO pm_best_practices (id, title, category, track, tools, related_halls, related_wings, scenes, priority, status, version, created_by, created_at, updated_at, review_due, source, body)
 VALUES (
     'bp-perf-codebase-index-fast',
@@ -172,7 +223,7 @@ VALUES (
     'P1',
     'published',
     1,
-    'system',
+    (SELECT id FROM sys_users WHERE username = 'admin'),
     datetime('now'),
     datetime('now'),
     date('now', '+90 days'),
@@ -181,8 +232,9 @@ VALUES (
 );
 
 INSERT INTO pm_bp_versions (bp_id, version, snapshot_json, changed_by, change_note, created_at)
-VALUES ('bp-perf-codebase-index-fast', 1, '{"id":"bp-perf-codebase-index-fast","title":"大仓首次索引走 fast 模式","category":"performance","track":"B","status":"published","version":1}', 'system', 'initial seed', datetime('now'));
+VALUES ('bp-perf-codebase-index-fast', 1, '{"id":"bp-perf-codebase-index-fast","title":"大仓首次索引走 fast 模式","category":"performance","track":"B","status":"published","version":1}', (SELECT id FROM sys_users WHERE username = 'admin'), 'initial seed', datetime('now'));
 
+-- BP3: ADR ↔ Drawer 双写桥
 INSERT INTO pm_best_practices (id, title, category, track, tools, related_halls, related_wings, scenes, priority, status, version, created_by, created_at, updated_at, review_due, source, body)
 VALUES (
     'bp-collab-adr-drawer-bridge',
@@ -196,7 +248,7 @@ VALUES (
     'P0',
     'published',
     1,
-    'system',
+    (SELECT id FROM sys_users WHERE username = 'admin'),
     datetime('now'),
     datetime('now'),
     date('now', '+90 days'),
@@ -205,12 +257,13 @@ VALUES (
 );
 
 INSERT INTO pm_bp_versions (bp_id, version, snapshot_json, changed_by, change_note, created_at)
-VALUES ('bp-collab-adr-drawer-bridge', 1, '{"id":"bp-collab-adr-drawer-bridge","title":"ADR ↔ Drawer 双写桥","category":"collaboration","track":"J","status":"published","version":1}', 'system', 'initial seed', datetime('now'));
+VALUES ('bp-collab-adr-drawer-bridge', 1, '{"id":"bp-collab-adr-drawer-bridge","title":"ADR ↔ Drawer 双写桥","category":"collaboration","track":"J","status":"published","version":1}', (SELECT id FROM sys_users WHERE username = 'admin'), 'initial seed', datetime('now'));
 
 -- =============================================================================
--- 7. 内置工作流 (3条)
+-- 8. 内置工作流 (3条)
 -- =============================================================================
 
+-- WF1: Commit 前置检查
 INSERT INTO pm_workflows (workflow_id, name, description, track, category, nodes_json, entry_id, status, version, created_by, created_at, updated_at)
 VALUES (
     'wf-commit-precheck',
@@ -222,14 +275,15 @@ VALUES (
     'n_start',
     'published',
     1,
-    'system',
+    (SELECT id FROM sys_users WHERE username = 'admin'),
     datetime('now'),
     datetime('now')
 );
 
 INSERT INTO pm_workflow_versions (workflow_id, version, snapshot_json, changed_by, change_note, created_at)
-VALUES ('wf-commit-precheck', 1, '{"id":"wf-commit-precheck","status":"published","version":1}', 'system', 'initial seed', datetime('now'));
+VALUES ('wf-commit-precheck', 1, '{"id":"wf-commit-precheck","status":"published","version":1}', (SELECT id FROM sys_users WHERE username = 'admin'), 'initial seed', datetime('now'));
 
+-- WF2: ADR 双写
 INSERT INTO pm_workflows (workflow_id, name, description, track, category, nodes_json, entry_id, status, version, created_by, created_at, updated_at)
 VALUES (
     'wf-adr-doublewrite',
@@ -241,14 +295,15 @@ VALUES (
     'n_start',
     'published',
     1,
-    'system',
+    (SELECT id FROM sys_users WHERE username = 'admin'),
     datetime('now'),
     datetime('now')
 );
 
 INSERT INTO pm_workflow_versions (workflow_id, version, snapshot_json, changed_by, change_note, created_at)
-VALUES ('wf-adr-doublewrite', 1, '{"id":"wf-adr-doublewrite","status":"published","version":1}', 'system', 'initial seed', datetime('now'));
+VALUES ('wf-adr-doublewrite', 1, '{"id":"wf-adr-doublewrite","status":"published","version":1}', (SELECT id FROM sys_users WHERE username = 'admin'), 'initial seed', datetime('now'));
 
+-- WF3: 仓库每日同步
 INSERT INTO pm_workflows (workflow_id, name, description, track, category, nodes_json, entry_id, status, version, created_by, created_at, updated_at)
 VALUES (
     'wf-repo-daily-sync',
@@ -260,21 +315,21 @@ VALUES (
     'n_start',
     'published',
     1,
-    'system',
+    (SELECT id FROM sys_users WHERE username = 'admin'),
     datetime('now'),
     datetime('now')
 );
 
 INSERT INTO pm_workflow_versions (workflow_id, version, snapshot_json, changed_by, change_note, created_at)
-VALUES ('wf-repo-daily-sync', 1, '{"id":"wf-repo-daily-sync","status":"published","version":1}', 'system', 'initial seed', datetime('now'));
+VALUES ('wf-repo-daily-sync', 1, '{"id":"wf-repo-daily-sync","status":"published","version":1}', (SELECT id FROM sys_users WHERE username = 'admin'), 'initial seed', datetime('now'));
 
 -- =============================================================================
--- 8. 内置记忆模板 (5条)
+-- 9. 内置记忆模板 (5条)
 -- =============================================================================
 
-INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
+-- TPL1: ADR
+INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
 VALUES (
-    'tpl_adr',
     'Architecture Decision Record (ADR)',
     'Capture one architectural decision with context, options, and consequences.',
     '[{"key":"title","label":"Title","type":"string","required":true},{"key":"status","label":"Status","type":"string","required":true,"help":"proposed | accepted | deprecated | superseded"},{"key":"context","label":"Context","type":"string","required":true,"help":"What is the issue we are addressing?"},{"key":"decision","label":"Decision","type":"string","required":true,"help":"What did we decide?"},{"key":"consequences","label":"Consequences","type":"string","required":false,"help":"What becomes easier / harder?"}]',
@@ -297,9 +352,9 @@ VALUES (
     1
 );
 
-INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
+-- TPL2: Lessons Learned
+INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
 VALUES (
-    'tpl_lesson',
     'Lessons Learned',
     'Document a problem, root cause, fix, and long-term impact.',
     '[{"key":"problem","label":"Problem","type":"string","required":true},{"key":"root_cause","label":"Root Cause","type":"string","required":true},{"key":"solution","label":"Solution","type":"string","required":true},{"key":"impact","label":"Impact","type":"string","required":false,"help":"severity + blast radius"}]',
@@ -321,9 +376,9 @@ VALUES (
     1
 );
 
-INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
+-- TPL3: Code Snippet
+INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
 VALUES (
-    'tpl_snippet',
     'Reusable Code Snippet',
     'Save a small, language-tagged code snippet with usage notes.',
     '[{"key":"language","label":"Language","type":"string","required":true,"help":"go | python | ts | sql | ..."},{"key":"description","label":"Description","type":"string","required":true},{"key":"code","label":"Code","type":"string","required":true}]',
@@ -335,9 +390,9 @@ VALUES (
     1
 );
 
-INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
+-- TPL4: Runbook
+INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
 VALUES (
-    'tpl_runbook',
     'Operational Runbook',
     'A trigger-and-steps manual for an on-call or ops procedure.',
     '[{"key":"trigger","label":"Trigger","type":"string","required":true,"help":"What symptom / alert fires this?"},{"key":"steps","label":"Steps","type":"string","required":true,"help":"Numbered steps to resolve"},{"key":"rollback","label":"Rollback","type":"string","required":false,"help":"How to undo if needed"}]',
@@ -355,9 +410,9 @@ VALUES (
     1
 );
 
-INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
+-- TPL5: Lightweight Decision
+INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
 VALUES (
-    'tpl_decision',
     'Lightweight Decision',
     'Capture a small decision without the full ADR ceremony.',
     '[{"key":"title","label":"Title","type":"string","required":true},{"key":"decision","label":"Decision","type":"string","required":true},{"key":"context","label":"Context","type":"string","required":false}]',
@@ -370,13 +425,14 @@ VALUES (
 );
 
 -- =============================================================================
--- 9. 内置AI工具 (3条)
+-- 10. 内置AI工具 (3条)
+-- 注意：id 使用业务标识符（TEXT），team_id 使用 INTEGER
 -- =============================================================================
 
 INSERT INTO ai_tools (id, team_id, name, slug, description, endpoint, protocol, command, args_json, required_role, allowed_projects_json, timeout_seconds, enabled, created_at, updated_at)
 VALUES (
     'aitool_mempalace',
-    'team_default',
+    (SELECT id FROM pm_teams WHERE slug = 'default'),
     'MemPalace',
     'mempalace',
     '知识宫殿 — 结构化长期记忆管理，支持 Wing/Room/Hall/Drawer 四级存储，语义搜索与自动归档。',
@@ -395,7 +451,7 @@ VALUES (
 INSERT INTO ai_tools (id, team_id, name, slug, description, endpoint, protocol, command, args_json, required_role, allowed_projects_json, timeout_seconds, enabled, created_at, updated_at)
 VALUES (
     'aitool_codebase_mem',
-    'team_default',
+    (SELECT id FROM pm_teams WHERE slug = 'default'),
     'Codebase Memory MCP',
     'codebase-memory-mcp',
     '代码库记忆 — 基于图数据库的代码索引、符号搜索、调用链追踪与架构分析。',
@@ -414,7 +470,7 @@ VALUES (
 INSERT INTO ai_tools (id, team_id, name, slug, description, endpoint, protocol, command, args_json, required_role, allowed_projects_json, timeout_seconds, enabled, created_at, updated_at)
 VALUES (
     'aitool_deep_research',
-    'team_default',
+    (SELECT id FROM pm_teams WHERE slug = 'default'),
     'Deep Research',
     'deep-research',
     '深度研究 — 多源网络搜索与文档综合分析报告生成。',

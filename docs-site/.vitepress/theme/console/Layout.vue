@@ -14,7 +14,11 @@
   <div class="console-shell">
     <header class="topbar">
       <h1>控制台</h1>
-      <div class="user">
+      <div class="topbar-right">
+        <button class="docs-link" @click="goHome">
+          文档首页
+        </button>
+        <div class="user">
         <template v-if="session.isLoggedIn">
           <span class="username">{{ session.username }}</span>
           <a-tag :color="roleColor">{{ session.role }}</a-tag>
@@ -23,6 +27,7 @@
         <template v-else>
           <span class="not-logged-in">未登录</span>
         </template>
+        </div>
       </div>
     </header>
 
@@ -87,6 +92,8 @@
 import { computed, onMounted } from 'vue'
 import { useSessionStore } from './store/session'
 import { useRoute } from './router'
+
+const HOME_PATH = '/'
 import Login from './pages/Login.vue'
 import Teams from './pages/Teams.vue'
 import Projects from './pages/Projects.vue'
@@ -141,6 +148,10 @@ function onLogout() {
   session.logout()
   window.location.hash = '#/login'
 }
+
+function goHome() {
+  window.location.href = '/'
+}
 </script>
 
 <style scoped>
@@ -159,6 +170,23 @@ function onLogout() {
   box-sizing: border-box;
 }
 .topbar h1 { margin: 0; font-size: 16px; }
+.topbar-right { display: flex; gap: 12px; align-items: center; }
+.docs-link {
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  text-decoration: none;
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.docs-link:hover {
+  color: #fff;
+  border-color: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.1);
+}
 .user { display: flex; gap: 8px; align-items: center; }
 .username { color: #fff; font-size: 14px; }
 .not-logged-in { color: #aaa; font-size: 14px; }

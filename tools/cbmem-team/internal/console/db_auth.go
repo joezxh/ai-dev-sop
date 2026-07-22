@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,9 +47,6 @@ var ErrUserExists = errors.New("username already exists")
 //   - must_change_password → true on first login
 //   - deleted   → 0 (active)
 func (db *DB) CreateUser(ctx context.Context, u *User) error {
-	if u.ID == "" {
-		return errors.New("CreateUser: id required")
-	}
 	if u.Username == "" {
 		return errors.New("CreateUser: username required")
 	}
@@ -61,15 +59,27 @@ func (db *DB) CreateUser(ctx context.Context, u *User) error {
 	if u.Role == "" {
 		u.Role = string(RoleDeveloper)
 	}
-	now := time.Now().UTC()
-	if u.CreatedAt.IsZero() {
-		u.CreatedAt = now
-	}
-	u.UpdatedAt = now
-
 	displayName := u.DisplayName
 	if displayName == "" {
 		displayName = u.Username
+	}
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = time.Now().UTC()
+	}
+	if u.UpdatedAt.IsZero() {
+		u.UpdatedAt = u.CreatedAt
+	}
+
+	// Tests sometimes hard-code string IDs (e.g. "u_test") to assert
+	// specific id values. On an INTEGER PRIMARY KEY AUTOINCREMENT
+	// column we can still honour those when the string is a valid
+	// integer literal; otherwise we let the DB generate one and read
+	// it back via LastInsertId.
+	explicitID := int64(0)
+	if u.ID != "" {
+		if v, err := strconv.ParseInt(u.ID, 10, 64); err == nil {
+			explicitID = v
+		}
 	}
 
 	q := `INSERT INTO sys_users
@@ -78,16 +88,37 @@ func (db *DB) CreateUser(ctx context.Context, u *User) error {
          created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	if _, err := db.ExecContext(ctx, q,
-		u.ID, u.Username, displayName, u.Email, u.PasswordHash,
-		u.DefaultTeamID, u.Role, boolToInt(u.MustChangePassword), boolToInt(u.Disabled),
-		u.CreatedAt, u.UpdatedAt,
-	); err != nil {
+	var res sql.Result
+	var err error
+	if explicitID > 0 {
+		res, err = db.ExecContext(ctx, q,
+			explicitID, u.Username, displayName, u.Email, u.PasswordHash,
+			u.DefaultTeamID, u.Role, boolToInt(u.MustChangePassword), boolToInt(u.Disabled),
+			u.CreatedAt, u.UpdatedAt,
+		)
+	} else {
+		qNoID := `INSERT INTO sys_users
+            (username, display_name, email, password_hash,
+             default_team_id, role, must_change_password, disabled,
+             created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		res, err = db.ExecContext(ctx, qNoID,
+			u.Username, displayName, u.Email, u.PasswordHash,
+			u.DefaultTeamID, u.Role, boolToInt(u.MustChangePassword), boolToInt(u.Disabled),
+			u.CreatedAt, u.UpdatedAt,
+		)
+	}
+	if err != nil {
 		// Detect unique-constraint violation on username.
 		if isUniqueViolation(err) {
 			return ErrUserExists
 		}
 		return fmt.Errorf("insert user: %w", err)
+	}
+	if u.ID == "" {
+		if id, idErr := res.LastInsertId(); idErr == nil && id > 0 {
+			u.ID = strconv.FormatInt(id, 10)
+		}
 	}
 	return nil
 }
@@ -240,11 +271,15 @@ func (db *DB) CreateRefreshToken(ctx context.Context, id, userID, plaintext stri
 	if id == "" || userID == "" || plaintext == "" {
 		return errors.New("CreateRefreshToken: id/userID/plaintext required")
 	}
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("CreateRefreshToken: parse user_id: %w", err)
+	}
 	now := time.Now().UTC()
-	_, err := db.ExecContext(ctx,
+	_, err = db.ExecContext(ctx,
 		`INSERT INTO sys_refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
               VALUES (?, ?, ?, ?, ?)`,
-		id, userID, hashToken(plaintext), now, now.Add(ttl),
+		id, uid, hashToken(plaintext), now, now.Add(ttl),
 	)
 	if err != nil {
 		return fmt.Errorf("insert refresh: %w", err)
@@ -352,15 +387,17 @@ func (db *DB) scanUser(row *sql.Row) (*User, error) {
 // multi-row (Query + Next) read paths.
 func scanUserRow(s scanner) (*User, error) {
 	var u User
+	var idInt int64
 	var lastLogin sql.NullTime
 	err := s.Scan(
-		&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash,
+		&idInt, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash,
 		&u.DefaultTeamID, &u.Role, &u.MustChangePassword, &u.Disabled,
 		&u.CreatedAt, &u.UpdatedAt, &lastLogin,
 	)
 	if err != nil {
 		return nil, err
 	}
+	u.ID = strconv.FormatInt(idInt, 10)
 	if lastLogin.Valid {
 		t := lastLogin.Time
 		u.LastLoginAt = &t

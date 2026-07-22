@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "launch": "node run.cjs",
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview",

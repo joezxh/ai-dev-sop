@@ -1,7 +1,9 @@
 package console
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,6 +32,27 @@ import (
 // authenticated — handlers should pair this with their own early-out.
 func CurrentUserID(c *gin.Context) string {
 	return c.GetString("user_id")
+}
+
+// CurrentUserIDInt parses the gin-context user_id as a bigint. Returns
+// 0 when missing or malformed (used by M3+ handlers that operate on
+// the numeric sys_users.id).
+func CurrentUserIDInt(c *gin.Context) int64 {
+	uid, _ := currentUserIDInt(c)
+	return uid
+}
+
+// currentUserIDInt reads the user_id string from gin context and
+// parses it back to an int64. The id is stored as a string because
+// gin.Context values are interface{} (so anything works), and JWT
+// subjects are conventionally strings — the int64 surface matches the
+// sys_users.id BIGINT column. Returns 0 if missing or malformed.
+func currentUserIDInt(c *gin.Context) (int64, error) {
+	raw := c.GetString("user_id")
+	if raw == "" {
+		return 0, errors.New("unauthenticated")
+	}
+	return strconv.ParseInt(raw, 10, 64)
 }
 
 // CurrentRole returns the Role stored in the gin context. Falls back
@@ -63,8 +86,8 @@ func RequireRoleAtLeast(want Role) gin.HandlerFunc {
 // place of /users/me.
 func RequireUserMatches(idParam string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uid := CurrentUserID(c)
-		if uid == "" {
+		uid, _ := currentUserIDInt(c)
+		if uid == 0 {
 			Fail(c, http.StatusUnauthorized, 4010050, "unauthenticated")
 			c.Abort()
 			return
@@ -73,7 +96,7 @@ func RequireUserMatches(idParam string) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if c.Param(idParam) != uid {
+		if c.Param(idParam) != strconv.FormatInt(uid, 10) {
 			Fail(c, http.StatusForbidden, 4030011, "resource does not belong to caller")
 			c.Abort()
 			return

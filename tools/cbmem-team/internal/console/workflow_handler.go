@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -204,9 +205,10 @@ func ArchiveWorkflowHandler(db *DB) gin.HandlerFunc {
 func RunWorkflowHandler(db *DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		dry := c.Query("dry_run") == "1" || c.DefaultQuery("mode", "") == "simulate"
-		trigger := c.GetString("user_id")
-		if trigger == "" {
-			trigger = "anonymous"
+		triggerID, err := currentUserIDInt(c)
+		trigger := "anonymous"
+		if err == nil && triggerID != 0 {
+			trigger = strconv.FormatInt(triggerID, 10)
 		}
 		run, err := executeWorkflow(c.Request.Context(), db, c.Param("id"), WorkflowRunOpts{
 			TriggeredBy: trigger,
@@ -303,7 +305,7 @@ func executeWorkflow(ctx context.Context, db *DB, wfID string, opts WorkflowRunO
 	}
 
 	// Depth-first walk starting at entry_id. Held in a struct so the
-// recursive function can call itself by name.
+	// recursive function can call itself by name.
 	nodesByID := map[string]WorkflowNode{}
 	for _, n := range wf.Nodes {
 		nodesByID[n.ID] = n

@@ -1,6 +1,6 @@
 # cbmem-team User Manual
 
-> **Version**: v3 (Role-oriented rewrite)
+> **Version**: v4 (M5/M6 Features + MemPalace Auto-Sync)
 > **Target readers**: Developers / Operations
 > **Prerequisites**: [`README.md`](./README.md) (architecture), [`CONSOLE.md`](./CONSOLE.md) (Console API reference)
 > **Chinese version**: [`manual.md`](./manual.md)
@@ -24,9 +24,11 @@
                          │  ┌────────────────────────────┐  │
                          │  │   Gin HTTP Server          │  │
                          │  │   JWT Auth / Capture       │  │
+                         │  │   MemPalace Auto-Sync      │  │
                          │  └────────────┬───────────────┘  │
                          │  ┌────────────┴───────────────┐  │
-                         │  │ /mcp  │ /admin │ /console   │  │
+                         │  │ /mcp │ /admin │ /console   │  │
+                         │  │ /api/v2/* (M3-M6)        │  │
                          │  └────────────────────────────┘  │
                          └──────────┬───────────┬───────────┘
                                     │           │
@@ -190,21 +192,7 @@ Edit `~/.config/claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_d
 }
 ```
 
-### 1.5 CodeBuddy Configuration
-
-CodeBuddy supports MCP server configuration in Settings. Open CodeBuddy Settings → MCP Servers, add a new server:
-
-- **Name**: `cbmem-team`
-- **URL**: `http://your-server:8787/mcp?as=alice&project=/path/to/project`
-- **Headers**:
-
-```json
-{
-  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...."
-}
-```
-
-### 1.6 Token Renewal
+### 1.5 Token Renewal
 
 JWT tokens have an expiration time (default issuance: 30 days). To renew:
 
@@ -216,7 +204,7 @@ curl -sS -X POST "http://your-server:8787/refresh?ttl=4320h" \
 
 Replace the old token in your config file with the new JWT from the response.
 
-### 1.7 Automated Configuration Scripts
+### 1.6 Automated Configuration Scripts
 
 The repository provides two scripts that automate the full flow: "mint JWT → write config → connectivity test":
 
@@ -253,7 +241,7 @@ The script executes 5 steps automatically:
 4. Run `tools/list` smoke test
 5. Print one-line summary
 
-### 1.8 End-to-End Connectivity Verification
+### 1.7 End-to-End Connectivity Verification
 
 After configuration, run these verification steps:
 
@@ -368,9 +356,10 @@ Call `GET /api/console/sessions-stats` or view in Console Dashboard:
 **Session capture mechanism**:
 
 cbmem-team wraps MCP handler with a capture middleware that automatically collects:
-- Trigger conditions: JSON-RPC `initialize` / `tools/call` containing `messages/create`
-- Reuse strategy: Same `(user_id, project_path)` reuses session if one exists within 30 minutes
+- Trigger conditions: JSON-RPC `tools/call` or `tools/invoke` with tool name containing "message" (case-insensitive) and non-empty messages array
+- Reuse strategy: Same `(user_id, project_path)` reuses the same session id (rolling session model)
 - Async write: Does not block MCP requests
+- Auto-sync: When MemPalace is configured, newly captured turns are automatically synced to MemPalace as Drawers
 
 ### 2.5 Session Summarization
 
@@ -502,6 +491,7 @@ Configure MemPalace integration:
 ```bash
 cbmem-team \
   -mempalace-base http://mempalace-server:8089 \
+  -mempalace-token <token> \
   -mempalace-timeout 10s \
   ...
 ```
@@ -516,7 +506,38 @@ cbmem-team \
 
 > MemPalace has built-in auto-retry (3 attempts on failure).
 
-### 3.3 Search and Retrieval
+### 3.3 MCP Session Auto-Sync (New in v4)
+
+cbmem-team supports **automatic session turn sync** to MemPalace on every MCP `tools/call`:
+
+```bash
+cbmem-team \
+  -mempalace-base http://mempalace-server:8089 \
+  -mempalace-token <token> \
+  -mempalace-auto-sync-wing engineering \
+  -mempalace-auto-sync-hall events \
+  ...
+```
+
+**Auto-sync configuration**:
+
+| Parameter | Description | Default |
+|------|------|------|
+| `-mempalace-auto-sync-wing` | Wing for auto-synced drawers | Project basename |
+| `-mempalace-auto-sync-hall` | Hall for auto-synced drawers | `events` |
+
+**Trigger conditions**:
+- JSON-RPC method is `tools/call` or `tools/invoke`
+- Tool name contains "message" (case-insensitive)
+- Messages array is non-empty
+
+**Sync mechanism**:
+- Rolling session model: Same `(user_id, project_path)` reuses the same session id
+- Watermark tracking: `sessions.mempalace_synced_turns` records synced turns
+- Idempotent writes: `formatTurnAsDrawer` generates deterministic content, enabling MemPalace-side dedup
+- Retry on failure: Up to 3 retries with exponential backoff
+
+### 3.4 Search and Retrieval
 
 After writing to MemPalace, team members can search memories via MemPalace's MCP tools:
 
@@ -552,7 +573,7 @@ Key features:
 | Protocol | stdio (standard I/O) | HTTP + JWT |
 | Users | Single user | Multi-user |
 | Index Isolation | Natural (local files) | Per-user process + SQLite file locks |
-| Session Capture | None | Automatic |
+| Session Capture | None | Auto-capture + MemPalace sync |
 | Knowledge Distillation | None | Summarize/Distill + MemPalace |
 | Management UI | None | Web console |
 | Use Case | Individual development | Team collaboration |
@@ -601,15 +622,15 @@ Content-Type: application/json
 cbmem-team wraps the MCP handler with a **capture middleware** that automatically collects all conversation sessions:
 
 **Trigger conditions**:
-- JSON-RPC `initialize` request
-- `tools/call` or `tools/invoke` calls
-- Message calls containing `messages` array
+- JSON-RPC method is `tools/call` or `tools/invoke`
+- Tool name contains "message" (case-insensitive)
+- Messages array is non-empty
 
 **Captured content**:
-- Each trigger → creates or reuses a `sessions` row
-- Each turn → writes to `session_turns` (role, content, tools_json, ts)
+- Each trigger → creates or reuses an `ai_sessions` row (rolling session model)
+- Each message → writes to `ai_session_turns` (role, content, tools_json, ts)
 
-**Reuse strategy**: Same `(user_id, project_path)` reuses session if one exists within 30 minutes, otherwise creates new session.
+**Reuse strategy**: Same `(user_id, project_path)` always reuses the same session id, implementing rolling sessions.
 
 **Performance impact**: Capture runs asynchronously in a separate goroutine, never blocking MCP requests. Writes are serialized via per-user channels to avoid SQLite lock contention.
 
@@ -696,10 +717,13 @@ listening on :8787
 | `-llm-api-key` | Empty | LLM API key (optional for Ollama) |
 | `-llm-timeout` | `30s` | LLM request timeout |
 | `-mempalace-base` | Empty | MemPalace HTTP base URL, empty = disabled |
-| `-mempalace-timeout` | `10s` | MemPalace request timeout |
+| `-mempalace-token` | Empty | MemPalace MCP HTTP Bearer token |
+| `-mempalace-auto-sync-wing` | Empty | Wing for auto-synced drawers |
+| `-mempalace-auto-sync-hall` | `events` | Hall for auto-synced drawers |
 | `-console-dist` | Empty | Console frontend VitePress build output directory |
 | `-idle-ttl` | `30m` | Idle process recycle time |
 | `-max-procs-per-user` | `4` | Max processes per user |
+| `-repo-root` | `<data>/repos` | Global git repo root for v2 projects |
 
 ### 5.3 systemd Background Deployment (Recommended for Production)
 
@@ -975,6 +999,88 @@ crawl → parse → grade → sink → rehearse
 | `POST /api/console/v2/repos/candidates/:id/accept` | Accept candidate |
 | `POST /api/console/v2/repos/candidates/:id/merge` | Merge to best_practices |
 
+### 7.5 Teams + Projects v2 (M3)
+
+v2 API uses JWT authentication, supports team and project hierarchy management.
+
+| Endpoint | Method | Description |
+|------|------|------|
+| `/api/console/v2/teams` | GET | List teams |
+| `/api/console/v2/teams` | POST | Create team |
+| `/api/console/v2/teams/:id` | GET | Get team details |
+| `/api/console/v2/teams/:id` | PUT | Update team |
+| `/api/console/v2/teams/:id` | DELETE | Delete team |
+| `/api/console/v2/teams/:id/members` | GET | List members |
+| `/api/console/v2/teams/:id/members` | POST | Add member |
+| `/api/console/v2/teams/:id/members/:uid` | PUT | Update member role |
+| `/api/console/v2/teams/:id/members/:uid` | DELETE | Remove member |
+| `/api/console/v2/teams/:id/projects` | GET | List team projects |
+| `/api/console/v2/teams/:id/projects` | POST | Create team project |
+| `/api/console/v2/projects/:pid` | GET | Get project details |
+| `/api/console/v2/projects/:pid` | PUT | Update project |
+| `/api/console/v2/projects/:pid` | DELETE | Delete project |
+| `/api/console/v2/projects/:pid/clone` | POST | Clone project |
+| `/api/console/v2/projects/:pid/index-status` | GET | Index status |
+| `/api/console/v2/projects/:pid/reindex` | POST | Trigger re-index |
+
+### 7.6 Modules + Sessions v2 (M4)
+
+| Endpoint | Method | Description |
+|------|------|------|
+| `/api/console/v2/projects/:pid/modules` | GET | List project modules |
+| `/api/console/v2/projects/:pid/modules` | POST | Create module |
+| `/api/console/v2/projects/:pid/modules/tree` | GET | Get module tree |
+| `/api/console/v2/modules/:id` | GET | Get module details |
+| `/api/console/v2/modules/:id` | PUT | Update module |
+| `/api/console/v2/modules/:id` | DELETE | Delete module |
+| `/api/console/v2/modules/:id/move` | POST | Move module |
+| `/api/console/v2/sessions` | GET | List sessions (supports team_id/project_id/module_id filters) |
+| `/api/console/v2/sessions/stats` | GET | Session statistics |
+| `/api/console/v2/sessions/:id` | GET | Get session details |
+| `/api/console/v2/projects/:pid/sessions` | GET | Get project's sessions |
+
+### 7.7 Memory Templates + Memories (M5)
+
+| Endpoint | Method | Description |
+|------|------|------|
+| `/api/console/v2/memory-templates` | GET | List memory templates |
+| `/api/console/v2/memory-templates/:id` | GET | Get template details |
+| `/api/console/v2/memory-templates/:id/render` | POST | Render template |
+| `/api/console/v2/memory-templates` | POST | Create template |
+| `/api/console/v2/memories` | GET | List memories |
+| `/api/console/v2/memories` | POST | Create memory |
+| `/api/console/v2/memories/:id` | GET | Get memory details |
+| `/api/console/v2/memories/:id` | PUT | Update memory |
+| `/api/console/v2/memories/:id` | DELETE | Delete memory |
+| `/api/console/v2/memories/:id/tags` | POST | Add tag |
+| `/api/console/v2/modules/:id/memories` | GET | Get module's memories |
+
+### 7.8 Summarize/Distill v2 (M5)
+
+| Endpoint | Method | Description |
+|------|------|------|
+| `/api/console/v2/summarize-tasks` | GET | List summarize tasks |
+| `/api/console/v2/summarize-tasks` | POST | Create summarize task |
+| `/api/console/v2/summarize-tasks/:id` | GET | Get task details |
+| `/api/console/v2/distill-tasks` | GET | List distill tasks |
+| `/api/console/v2/distill-tasks` | POST | Create distill task |
+| `/api/console/v2/distill-tasks/:id` | GET | Get distill task details |
+
+### 7.9 AI Tools Directory (M6)
+
+| Endpoint | Method | Description |
+|------|------|------|
+| `/api/console/v2/ai-tools` | GET | List AI tools |
+| `/api/console/v2/ai-tools` | POST | Register AI tool |
+| `/api/console/v2/ai-tools/:id` | GET | Get tool details |
+| `/api/console/v2/ai-tools/:id` | PUT | Update tool |
+| `/api/console/v2/ai-tools/:id` | DELETE | Delete tool |
+| `/api/console/v2/ai-tools/:id/invoke` | POST | Invoke tool |
+| `/api/console/v2/ai-tools/:id/invocations` | GET | Invocation history |
+| `/api/console/v2/ai-tools/invocations/:inv_id` | GET | Invocation details |
+
+Supported protocols: `http` (forward to endpoint) and `stdio` (spawn command+args).
+
 ---
 
 ## 8. CLI Tool Reference
@@ -991,33 +1097,14 @@ crawl → parse → grade → sink → rehearse
 | Tool | Build Command | Purpose |
 |---|---|---|
 | `create-db` | `go build -o bin/create-db ./cmd/create-db` | Create `cbmem` MySQL database |
-| `mysql-probe` | `go build -o bin/mysql-probe ./cmd/mysql-probe` | MySQL connectivity probe |
-| `show-tables` | `go build -o bin/show-tables ./cmd/show-tables` | List all tables |
-| `show-indexes` | `go build -o bin/show-indexes ./cmd/show-indexes` | List all indexes |
 
-### 8.3 E2E Test Tools (dev / CI only)
-
-| Tool | Coverage | Run Command |
-|---|---|---|
-| `e2e-m1` | M1 Tool directory + invocation logs | `go run ./cmd/e2e-m1` |
-| `e2e-v5` | M0.5 SQLite/MySQL dual-track + ETL | `go run ./cmd/e2e-v5` |
-| `e2e-v6` | M2 Rate limiting + BP CRUD | `go run ./cmd/e2e-v6` |
-| `e2e-v7` | M3 Workflows + M4 Pipeline | `go run ./cmd/e2e-v7` |
-
-Common flag: `-mysql-dsn "..."` or via environment variable `$CBMEM_MYSQL_DSN`.
-
-### 8.4 Tool Quick Reference
+### 8.3 Tool Quick Reference
 
 | Tool | Primary Purpose | Production |
 |---|---|---|
 | `cbmem-team` | Main service (HTTP wrapper + console) | ✅ |
 | `cbmem-mint-token` | Offline JWT signing | ✅ |
 | `create-db` | Create MySQL database | ✅ |
-| `mysql-probe` | Probe MySQL | ✅ |
-| `show-tables` | List all tables | ✅ |
-| `show-indexes` | List all indexes | ✅ |
-| `seed-sqlite` | Write SQLite test data | ❌ |
-| `e2e-m1` ~ `e2e-v7` | E2E acceptance | ❌ |
 | `mcp-stub` | E2E MCP stub | ❌ |
 | `mint-token-debug` | Debug 401 | ❌ |
 
@@ -1054,7 +1141,10 @@ Common flag: `-mysql-dsn "..."` or via environment variable `$CBMEM_MYSQL_DSN`.
 
 | Parameter | Description | Default |
 |------|------|------|
-| `-mempalace-base` | MemPalace HTTP address | `http://localhost:8089` |
+| `-mempalace-base` | MemPalace HTTP address | Empty (disabled) |
+| `-mempalace-token` | MemPalace MCP HTTP Bearer token | Empty |
+| `-mempalace-auto-sync-wing` | Wing for auto-synced drawers | Empty (use project basename) |
+| `-mempalace-auto-sync-hall` | Hall for auto-synced drawers | `events` |
 | `-mempalace-timeout` | Timeout duration | `10s` |
 
 ### 9.4 Optional Parameters
@@ -1069,6 +1159,12 @@ Common flag: `-mysql-dsn "..."` or via environment variable `$CBMEM_MYSQL_DSN`.
 | `-mysql-max-open` | MySQL max open connections | `16` |
 | `-mysql-max-idle` | MySQL max idle connections | `4` |
 | `-mysql-max-lifetime` | MySQL max connection lifetime | `30m` |
+| `-repo-root` | Global git repo root for v2 projects | `<data>/repos` |
+| `-auth-access-ttl` | JWT access token TTL | `8h` |
+| `-auth-refresh-ttl` | JWT refresh token TTL | `168h` |
+| `-auth-initial-admin` | Initial admin for first-boot bootstrap | Empty (disabled) |
+| `-auth-bcrypt-cost` | bcrypt work factor | `12` |
+| `-cors-allow-origins` | CORS allowed origins | Empty (disabled) |
 
 ---
 
@@ -1083,27 +1179,39 @@ cbmem-team supports two backends, switched via startup flag:
 | **SQLite** (default) | Don't set `-mysql-dsn` flag | Single machine / dev / small team |
 | **MySQL 8.0** | `-mysql-dsn <dsn>` | Production / multi-instance / high concurrency |
 
-### 10.2 Core Tables
+### 10.2 Core Tables (v1)
 
 | Table | Purpose |
 |------|------|
-| `users` | User info (including project_paths whitelist) |
-| `projects` | Project config (including wing / mcp_bin) |
-| `sessions` | Session records |
-| `session_turns` | Session turns |
+| `sys_users` | User info (including project_paths whitelist) |
+| `pm_projects` | Project config (including wing / mcp_bin) |
+| `ai_sessions` | Session records (with MemPalace sync watermark) |
+| `ai_session_turns` | Session turns |
+| `sys_console_sessions` | Console login sessions (with TTL) |
 
 ### 10.3 Task Tables
 
 | Table | Purpose |
 |------|------|
-| `summarize_tasks` | Summarization tasks |
-| `distill_tasks` | Distillation tasks |
+| `ai_summarize_tasks` | Summarization tasks |
+| `ai_distill_tasks` | Distillation tasks |
 
-### 10.4 Console Tables
+### 10.4 v2 Tables (M2-M6)
 
-| Table | Purpose |
-|------|------|
-| `console_sessions` | Console login sessions (with TTL) |
+| Table | Milestone | Purpose |
+|------|------|------|
+| `users` | M2 | Users (supports roles: admin/lead/developer/viewer) |
+| `teams` | M3 | Teams |
+| `team_members` | M3 | Team member associations |
+| `projects` | M3 | v2 Projects |
+| `modules` | M4 | Module tree |
+| `sessions` | M4 | v2 Sessions |
+| `memory_templates` | M5 | Memory templates |
+| `memories` | M5 | Memories |
+| `summarize_tasks` | M5 | Summarize tasks |
+| `distill_tasks` | M5 | Distill tasks |
+| `ai_tools` | M6 | AI tool directory |
+| `ai_tool_invocations` | M6 | AI tool invocation records |
 
 ### 10.5 M1-M4 Extension Tables
 
@@ -1160,7 +1268,23 @@ cbmem-team supports two backends, switched via startup flag:
 | `/api/console/distill/:task_id` | GET | Task status |
 | `/api/console/distill/:task_id/commit` | POST | Write to MemPalace |
 
-### 11.3 MCP Endpoints
+### 11.3 v2 API (/api/console/v2/*, JWT Auth)
+
+| Path | Method | Description |
+|------|--------|------|
+| `/api/console/v2/teams` | GET/POST | Team CRUD |
+| `/api/console/v2/teams/:id` | GET/PUT/DELETE | Team details |
+| `/api/console/v2/teams/:id/members` | GET/POST | Member management |
+| `/api/console/v2/teams/:id/projects` | GET/POST | Team projects |
+| `/api/console/v2/projects/:pid` | GET/PUT/DELETE | v2 Projects |
+| `/api/console/v2/projects/:pid/modules` | GET/POST | Module management |
+| `/api/console/v2/modules/:id` | GET/PUT/DELETE | Module details |
+| `/api/console/v2/sessions` | GET | v2 Session list |
+| `/api/console/v2/memory-templates` | GET/POST | Memory templates |
+| `/api/console/v2/memories` | GET/POST | Memory CRUD |
+| `/api/console/v2/ai-tools` | GET/POST | AI tools directory |
+
+### 11.4 MCP Endpoints
 
 | Path | Method | Description |
 |------|--------|------|
@@ -1170,7 +1294,7 @@ cbmem-team supports two backends, switched via startup flag:
 | `/healthz` | GET | Health check |
 | `/refresh` | POST | JWT auto-renewal |
 
-### 11.4 Unified Response Format + Error Codes
+### 11.5 Unified Response Format + Error Codes
 
 ```json
 { "code": 0, "msg": "", "data": {} }
@@ -1244,6 +1368,15 @@ cbmem-team supports two backends, switched via startup flag:
 
 **Fix**: Periodically archive data older than 30 days; monitor `du -sh /var/lib/cbmem-team/`.
 
+### Q9: MemPalace auto-sync not working
+
+**Troubleshooting steps**:
+
+1. **Is MemPalace configured?**: Check logs in `curl http://server:8787/healthz` to confirm `mempalace-base` is loaded
+2. **Are trigger conditions met?**: Only `tools/call`/`tools/invoke` with tool name containing "message" triggers sync
+3. **Is watermark advancing?**: Query `sessions.mempalace_synced_turns` field
+4. **Check error logs**: Inspect `sessions.mempalace_last_error` field
+
 ---
 
 ## Appendix
@@ -1261,18 +1394,13 @@ ADMIN_TOKEN=<64-hex-chars>
 LOG_LEVEL=info
 IDLE_TTL=30m
 MAX_PROCS_PER_USER=4
+MEMPALACE_BASE=http://mempalace-server:8089
+MEMPALACE_TOKEN=<token>
+MEMPALACE_AUTO_SYNC_WING=engineering
+MEMPALACE_AUTO_SYNC_HALL=events
 ```
 
 > systemd unit loads via `EnvironmentFile=`; CLI flags take precedence over env vars.
-
-#### MySQL DSN Resolution for dev tools
-
-All `cmd/*` tools resolve MySQL DSN uniformly via `internal/devconf.ResolveMySQLDSN`, priority:
-
-1. `-mysql-dsn "..."` flag
-2. `$CBMEM_MYSQL_DSN` environment variable
-3. `$DSN` environment variable (legacy name, backward compatible)
-4. `dev default` (dev only — **not production credentials**)
 
 ### B. Related Documentation
 
@@ -1293,7 +1421,8 @@ All `cmd/*` tools resolve MySQL DSN uniformly via `internal/devconf.ResolveMySQL
 - **v2.2 (M3)**: Workflow engine + 3 built-in workflows
 - **v2.3 (M4)**: Repo pipeline + bp_candidate review + 2 MySQL views
 - **v3.0**: User manual rewrite (role-oriented)
+- **v4.0**: MemPalace auto-sync + M5/M6 API + session capture mechanism update
 
 ---
 
-*Last updated: 2026-07-08*
+*Last updated: 2026-07-20*

@@ -23,7 +23,3 @@ features:
 ## 快速入口
 
 - [双轨记忆控制台](/console/)
-- [更新日志](/guide/changelog)
-- [设计文档（DESIGN）](/DESIGN)
-- [控制台设计规格](/specs/2026-07-12-cbmem-team-console-design)
-- [文档站导航聚合设计](/specs/2026-07-12-docs-site-nav-aggregation-design)

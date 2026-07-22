@@ -65,7 +65,7 @@ func (db *DB) Migrate(ctx context.Context, extra ...ExtraSchema) error {
 func (db *DB) migrateConsole(ctx context.Context) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS sys_users (
-            id TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             display_name TEXT,
             project_paths TEXT,
             max_procs INTEGER,
@@ -74,21 +74,21 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             updated_at DATETIME
         )`,
 		`CREATE TABLE IF NOT EXISTS pm_projects (
-            id TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             path TEXT NOT NULL UNIQUE,
             wing TEXT,
             mcp_bin TEXT,
-            creator_id TEXT,
+            creator_id INTEGER,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             deleted INTEGER DEFAULT 0
         )`,
 		`CREATE INDEX IF NOT EXISTS idx_pm_projects_creator ON pm_projects(creator_id)`,
 `CREATE TABLE IF NOT EXISTS ai_sessions (
-           id TEXT PRIMARY KEY,
-           user_id TEXT NOT NULL,
-           project_id TEXT,
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           user_id INTEGER NOT NULL,
+           project_id INTEGER,
            project_path TEXT NOT NULL,
            started_at DATETIME NOT NULL,
            ended_at DATETIME,
@@ -114,8 +114,8 @@ func (db *DB) migrateConsole(ctx context.Context) error {
         )`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_session_turns_session ON ai_session_turns(session_id)`,
 		`CREATE TABLE IF NOT EXISTS ai_summarize_tasks (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             source_ids TEXT,
             depth TEXT,
             target_wing TEXT,
@@ -125,8 +125,8 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             finished_at DATETIME
         )`,
 		`CREATE TABLE IF NOT EXISTS ai_distill_tasks (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             source_ids TEXT,
             rules_json TEXT,
             status TEXT NOT NULL,
@@ -137,8 +137,8 @@ func (db *DB) migrateConsole(ctx context.Context) error {
             finished_at DATETIME
         )`,
 		`CREATE TABLE IF NOT EXISTS sys_console_sessions (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             created_at DATETIME NOT NULL,
             expires_at DATETIME NOT NULL,
             last_seen_at DATETIME,

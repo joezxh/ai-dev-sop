@@ -387,13 +387,7 @@ func (h *AuthHandlers) FirstAdmin() gin.HandlerFunc {
 			Fail(c, http.StatusBadRequest, 4000006, "hash: "+err.Error())
 			return
 		}
-		id, err := randomID(12)
-		if err != nil {
-			Fail(c, http.StatusInternalServerError, 5000016, "mint id: "+err.Error())
-			return
-		}
 		u := &User{
-			ID:                 "u_" + id,
 			Username:           r.Username,
 			DisplayName:        r.Username,
 			PasswordHash:       hash,

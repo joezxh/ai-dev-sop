@@ -1,8 +1,11 @@
 # 双轨记忆系统工具速查表
 
-> **版本**: v1.0
-> **最后更新**: 2026-07-14
-
+ - [安装](./ready.md#1-记忆体安装)  
+ - [项目理解](./SOP-M2-understanding.md)
+ - [开发调试](./SOP-M3-development.md)
+ - [知识沉淀](./SOP-M4-knowledge.md) [蒸馏部分开发中]
+ - [团队协作](./SOP-M5-collaboration.md)
+ 
 ---
 
 ## 1. MemPalace 工具 (轨道 A)

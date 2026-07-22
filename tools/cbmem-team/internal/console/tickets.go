@@ -41,7 +41,7 @@ type TicketRecord struct {
 	Source         string    `json:"source"`    // "high_risk_invocation" | "manual"
 	InvocationID   string    `json:"invocation_id,omitempty"`
 	ToolID         string    `json:"tool_id"`
-	UserID         string    `json:"user_id"`
+	UserID         int64     `json:"user_id"`
 	Severity       string    `json:"severity"`
 	Status         string    `json:"status"`
 	Title          string    `json:"title"`
@@ -93,7 +93,8 @@ func titleForInvocation(toolID, errCode string) string {
 // (we probe with a SELECT before INSERT).
 func autoOpenTicket(ctx context.Context, db *DB) (string, error) {
 	row := db.QueryRowContext(ctx, highRiskLatestSQL(db.driver))
-	var invID, toolID, userID, errCode string
+	var invID, toolID, errCode string
+	var userID int64
 	if err := row.Scan(&invID, &toolID, &userID, &errCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", nil

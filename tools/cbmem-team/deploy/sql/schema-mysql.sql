@@ -1,14 +1,15 @@
 -- =============================================================================
--- cbmem-team 完整 MySQL 8.0 建表语句 (v2)
+-- cbmem-team 完整 MySQL 8.0 建表语句 (v4)
 -- 覆盖 M1-M6 全量表：legacy 7表 + M1工具目录 + M2团队/最佳实践 + M3工作流 + M4仓库流水线 + M5记忆模板 + M6 AI工具
 -- =============================================================================
 -- 编码：utf8mb4_unicode_ci
 -- 引擎：InnoDB
 --
 -- 注意事项：
---   - TEXT/MEDIUMTEXT/LONGTEXT 列不能有 DEFAULT 值，应用层负责提供默认值
---   - VARCHAR(255) 用于短文本，TEXT 用于长文本
---   - JSON 列在 MySQL 5.7+ 支持，DEFAULT 用 NOT NULL DEFAULT (JSON_OBJECT())
+--   - 主键 id 使用 BIGINT AUTO_INCREMENT，由数据库自动生成
+--   - 外键关联使用 BIGINT 类型
+--   - TEXT/MEDIUMTEXT/LONGTEXT 列不能有 DEFAULT 值
+--   - JSON 列在 MySQL 5.7+ 支持
 --
 -- 应用顺序（严格按此顺序执行，因存在外键依赖）：
 --   1. sys_users / pm_teams (循环FK延迟到末尾)
@@ -29,14 +30,15 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- =============================================================================
 -- 1. sys_users — 平台用户表
+-- 主键使用 BIGINT AUTO_INCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS sys_users (
-    id                     VARCHAR(128) NOT NULL PRIMARY KEY,
+    id                     BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
     username              VARCHAR(128) NOT NULL,
     display_name          VARCHAR(255) NOT NULL DEFAULT '',
     email                 VARCHAR(255) NOT NULL DEFAULT '',
     password_hash         VARCHAR(255) NOT NULL DEFAULT '',
-    default_team_id       VARCHAR(128) NULL,
+    default_team_id       BIGINT       NULL,
     role                  VARCHAR(32)  NOT NULL DEFAULT 'developer',
     must_change_password  TINYINT(1)   NOT NULL DEFAULT 1,
     disabled              TINYINT(1)   NOT NULL DEFAULT 0,
@@ -51,13 +53,14 @@ CREATE TABLE IF NOT EXISTS sys_users (
 
 -- =============================================================================
 -- 2. pm_teams — 团队表
+-- 主键使用 BIGINT AUTO_INCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_teams (
-    id          VARCHAR(128) NOT NULL PRIMARY KEY,
+    id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(255) NOT NULL,
     slug        VARCHAR(128) NOT NULL,
     description TEXT         NOT NULL,
-    owner_id    VARCHAR(128) NULL,
+    owner_id    BIGINT       NULL,
     created_at  DATETIME(0)  NOT NULL,
     updated_at  DATETIME(0)  NOT NULL,
     deleted     TINYINT(1)   NOT NULL DEFAULT 0,
@@ -70,8 +73,8 @@ CREATE TABLE IF NOT EXISTS pm_teams (
 -- 3. pm_team_members — 团队成员关联表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_team_members (
-    team_id   VARCHAR(128) NOT NULL,
-    user_id   VARCHAR(128) NOT NULL,
+    team_id   BIGINT       NOT NULL,
+    user_id   BIGINT       NOT NULL,
     role      VARCHAR(32)  NOT NULL DEFAULT 'developer',
     joined_at DATETIME(0)  NOT NULL,
     PRIMARY KEY (team_id, user_id),
@@ -80,22 +83,23 @@ CREATE TABLE IF NOT EXISTS pm_team_members (
 
 -- =============================================================================
 -- 4. pm_projects — 项目表
+-- 主键使用 BIGINT AUTO_INCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_projects (
-    id              VARCHAR(128) NOT NULL PRIMARY KEY,
-    team_id         VARCHAR(128) NOT NULL,
+    id              BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    team_id         BIGINT       NOT NULL,
     name            VARCHAR(255) NOT NULL,
     slug            VARCHAR(128) NOT NULL,
     description     TEXT         NOT NULL,
     path            VARCHAR(512) NOT NULL,
     wing            VARCHAR(128) NOT NULL DEFAULT '',
     mcp_bin         VARCHAR(512) NOT NULL DEFAULT '',
-    creator_id      VARCHAR(128) NULL,
+    creator_id      BIGINT       NULL,
     git_url         VARCHAR(512) NOT NULL DEFAULT '',
     git_branch      VARCHAR(128) NOT NULL DEFAULT '',
     git_commit_sha  VARCHAR(64)  NOT NULL DEFAULT '',
     status          VARCHAR(32)  NOT NULL DEFAULT 'ready',
-    owner_id        VARCHAR(128) NULL,
+    owner_id        BIGINT       NULL,
     created_at      DATETIME(0)  NOT NULL,
     updated_at      DATETIME(0)  NOT NULL,
     deleted         TINYINT(1)   NOT NULL DEFAULT 0,
@@ -110,11 +114,12 @@ CREATE TABLE IF NOT EXISTS pm_projects (
 
 -- =============================================================================
 -- 5. pm_modules — 模块表（树形结构）
+-- 主键使用 BIGINT AUTO_INCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_modules (
-    id          VARCHAR(128) NOT NULL PRIMARY KEY,
-    project_id  VARCHAR(128) NOT NULL,
-    parent_id   VARCHAR(128) NULL,
+    id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    project_id  BIGINT       NOT NULL,
+    parent_id   BIGINT       NULL,
     name        VARCHAR(255) NOT NULL,
     path        VARCHAR(512) NOT NULL DEFAULT '',
     description TEXT         NOT NULL,
@@ -131,13 +136,14 @@ CREATE TABLE IF NOT EXISTS pm_modules (
 
 -- =============================================================================
 -- 6. ai_sessions — AI会话记录表
+-- 主键使用 BIGINT AUTO_INCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_sessions (
-    id                        VARCHAR(128) NOT NULL PRIMARY KEY,
-    user_id                   VARCHAR(128) NOT NULL,
-    team_id                   VARCHAR(128) NOT NULL,
-    project_id                VARCHAR(128) NOT NULL,
-    module_id                 VARCHAR(128) NOT NULL,
+    id                        BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id                   BIGINT       NOT NULL,
+    team_id                   BIGINT       NOT NULL,
+    project_id                BIGINT       NOT NULL,
+    module_id                 BIGINT       NOT NULL,
     project_path              VARCHAR(512) NOT NULL,
     started_at                DATETIME(0)  NOT NULL,
     ended_at                  DATETIME(0)  NULL,
@@ -160,7 +166,7 @@ CREATE TABLE IF NOT EXISTS ai_sessions (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_session_turns (
     id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    session_id  VARCHAR(128) NOT NULL,
+    session_id  BIGINT       NOT NULL,
     turn_no     INT          NOT NULL,
     role        VARCHAR(32)  NOT NULL,
     content     MEDIUMTEXT   NOT NULL,
@@ -174,8 +180,8 @@ CREATE TABLE IF NOT EXISTS ai_session_turns (
 -- 8. ai_summarize_tasks — 总结任务表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_summarize_tasks (
-    id           VARCHAR(128) NOT NULL PRIMARY KEY,
-    user_id      VARCHAR(128) NULL,
+    id           BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT       NULL,
     source_ids   JSON         NOT NULL,
     depth        VARCHAR(16)  NOT NULL DEFAULT 'deep',
     target_wing  VARCHAR(128) NOT NULL DEFAULT '',
@@ -191,8 +197,8 @@ CREATE TABLE IF NOT EXISTS ai_summarize_tasks (
 -- 9. ai_distill_tasks — 提炼任务表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_distill_tasks (
-    id                VARCHAR(128) NOT NULL PRIMARY KEY,
-    user_id           VARCHAR(128) NULL,
+    id                BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id           BIGINT       NULL,
     source_ids        JSON         NOT NULL,
     rules_json        JSON         NOT NULL,
     status            VARCHAR(16)  NOT NULL DEFAULT 'pending',
@@ -210,8 +216,8 @@ CREATE TABLE IF NOT EXISTS ai_distill_tasks (
 -- 10. sys_console_sessions — 控制台会话表（cookie认证）
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS sys_console_sessions (
-    id           VARCHAR(128) NOT NULL PRIMARY KEY,
-    user_id      VARCHAR(128) NOT NULL,
+    id           BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT       NOT NULL,
     created_at   DATETIME(0)  NOT NULL,
     expires_at   DATETIME(0)  NOT NULL,
     last_seen_at DATETIME(0)  NULL,
@@ -225,7 +231,7 @@ CREATE TABLE IF NOT EXISTS sys_console_sessions (
 -- 11. ai_memories_templates — 记忆模板表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_memories_templates (
-    id            VARCHAR(128) NOT NULL PRIMARY KEY,
+    id            BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
     name          VARCHAR(255) NOT NULL,
     description   TEXT         NOT NULL,
     fields_json   JSON         NOT NULL,
@@ -238,14 +244,14 @@ CREATE TABLE IF NOT EXISTS ai_memories_templates (
 -- 12. ai_memories — 记忆条目表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_memories (
-    id           VARCHAR(128) NOT NULL PRIMARY KEY,
-    team_id      VARCHAR(128) NOT NULL,
-    project_id   VARCHAR(128) NOT NULL,
-    module_id    VARCHAR(128) NOT NULL,
-    user_id      VARCHAR(128) NOT NULL,
+    id           BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    team_id      BIGINT       NOT NULL,
+    project_id   BIGINT       NOT NULL,
+    module_id    BIGINT       NOT NULL,
+    user_id      BIGINT       NOT NULL,
     title        VARCHAR(255) NOT NULL,
     content      MEDIUMTEXT   NOT NULL,
-    template_id  VARCHAR(128) NULL,
+    template_id  BIGINT       NULL,
     tags_json    JSON         NOT NULL,
     hall         VARCHAR(32)  NOT NULL DEFAULT 'facts',
     created_at   DATETIME(0)  NOT NULL,
@@ -264,8 +270,8 @@ CREATE TABLE IF NOT EXISTS ai_memories (
 -- 13. sys_refresh_tokens — JWT刷新令牌表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
-    id          VARCHAR(128) NOT NULL PRIMARY KEY,
-    user_id     VARCHAR(128) NOT NULL,
+    id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT       NOT NULL,
     token_hash  VARCHAR(255) NOT NULL,
     issued_at   DATETIME(0)  NOT NULL,
     expires_at  DATETIME(0)  NOT NULL,
@@ -281,8 +287,8 @@ CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
 CREATE TABLE IF NOT EXISTS sys_audit_logs (
     id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
     ts          DATETIME(0)  NOT NULL,
-    user_id     VARCHAR(128) NULL,
-    team_id     VARCHAR(128) NULL,
+    user_id     BIGINT       NULL,
+    team_id     BIGINT       NULL,
     kind        VARCHAR(64)  NOT NULL,
     target_id   VARCHAR(128) NOT NULL DEFAULT '',
     meta_json   JSON         NOT NULL,
@@ -294,6 +300,7 @@ CREATE TABLE IF NOT EXISTS sys_audit_logs (
 
 -- =============================================================================
 -- 15. ai_tool_directory — 工具目录表 (M1)
+-- tool_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tool_directory (
     tool_id              VARCHAR(128) NOT NULL PRIMARY KEY,
@@ -315,11 +322,12 @@ CREATE TABLE IF NOT EXISTS ai_tool_directory (
 
 -- =============================================================================
 -- 16. ai_tool_invocation_logs — 工具调用日志表 (M1)
+-- invocation_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tool_invocation_logs (
     invocation_id            VARCHAR(64)  NOT NULL PRIMARY KEY,
-    user_id                  VARCHAR(128) NOT NULL,
-    project_id               VARCHAR(128) NULL,
+    user_id                  BIGINT       NOT NULL,
+    project_id               BIGINT       NULL,
     project_path             VARCHAR(512) NULL,
     tool_id                  VARCHAR(128) NOT NULL,
     transport                VARCHAR(16)  NOT NULL DEFAULT 'stdio',
@@ -347,6 +355,7 @@ CREATE TABLE IF NOT EXISTS ai_tool_invocation_logs (
 
 -- =============================================================================
 -- 17. pm_best_practices — 最佳实践表 (M2)
+-- id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_best_practices (
     id           VARCHAR(64)  NOT NULL PRIMARY KEY,
@@ -360,7 +369,7 @@ CREATE TABLE IF NOT EXISTS pm_best_practices (
     priority     VARCHAR(8)   NOT NULL DEFAULT 'P3',
     status       VARCHAR(16)  NOT NULL DEFAULT 'draft',
     version      INT          NOT NULL DEFAULT 1,
-    created_by   VARCHAR(128) NOT NULL,
+    created_by   BIGINT       NOT NULL DEFAULT 0,
     created_at   DATETIME(0)  NOT NULL,
     updated_at   DATETIME(0)  NOT NULL,
     review_due   DATE         NOT NULL,
@@ -380,7 +389,7 @@ CREATE TABLE IF NOT EXISTS pm_bp_versions (
     bp_id         VARCHAR(64)  NOT NULL,
     version       INT          NOT NULL,
     snapshot_json LONGTEXT     NOT NULL,
-    changed_by    VARCHAR(128) NOT NULL,
+    changed_by    BIGINT       NOT NULL DEFAULT 0,
     change_note   VARCHAR(512),
     created_at    DATETIME(0) NOT NULL,
     PRIMARY KEY (bp_id, version),
@@ -389,10 +398,11 @@ CREATE TABLE IF NOT EXISTS pm_bp_versions (
 
 -- =============================================================================
 -- 19. ai_tools — AI工具表 (M6)
+-- id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tools (
     id                     VARCHAR(128) NOT NULL PRIMARY KEY,
-    team_id                VARCHAR(128) NOT NULL,
+    team_id                BIGINT       NOT NULL,
     name                   VARCHAR(255) NOT NULL,
     slug                   VARCHAR(128) NOT NULL,
     description            TEXT         NOT NULL,
@@ -405,21 +415,22 @@ CREATE TABLE IF NOT EXISTS ai_tools (
     timeout_seconds        INT          NOT NULL DEFAULT 300,
     enabled                TINYINT(1)   NOT NULL DEFAULT 1,
     created_at             DATETIME(0)  NOT NULL,
-    updated_at              DATETIME(0)  NOT NULL,
+    updated_at             DATETIME(0)  NOT NULL,
     UNIQUE KEY uk_ai_tools_team_slug (team_id, slug),
     KEY idx_ai_tools_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
 -- 20. ai_tool_invocations — AI工具调用记录表 (M6)
+-- id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tool_invocations (
     id           VARCHAR(128) NOT NULL PRIMARY KEY,
     tool_id      VARCHAR(128) NOT NULL,
-    user_id      VARCHAR(128) NOT NULL,
-    team_id      VARCHAR(128) NOT NULL,
-    project_id   VARCHAR(128) NOT NULL,
-    module_id    VARCHAR(128) NOT NULL,
+    user_id      BIGINT       NOT NULL,
+    team_id      BIGINT       NOT NULL,
+    project_id   BIGINT       NOT NULL,
+    module_id    BIGINT       NOT NULL,
     working_dir  VARCHAR(512) NOT NULL,
     input_json   JSON         NOT NULL,
     output_json  JSON         NOT NULL,
@@ -437,6 +448,7 @@ CREATE TABLE IF NOT EXISTS ai_tool_invocations (
 
 -- =============================================================================
 -- 21. pm_workflows — 工作流定义表 (M3)
+-- workflow_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_workflows (
     workflow_id  VARCHAR(64)  NOT NULL PRIMARY KEY,
@@ -448,7 +460,7 @@ CREATE TABLE IF NOT EXISTS pm_workflows (
     entry_id     VARCHAR(64)  NOT NULL,
     status       VARCHAR(16)  NOT NULL DEFAULT 'draft',
     version      INT          NOT NULL DEFAULT 1,
-    created_by   VARCHAR(128) NOT NULL DEFAULT 'anonymous',
+    created_by   BIGINT       NOT NULL DEFAULT 0,
     created_at   DATETIME(3) NOT NULL,
     updated_at   DATETIME(3) NOT NULL,
     KEY idx_workflow_status (status, category)
@@ -461,7 +473,7 @@ CREATE TABLE IF NOT EXISTS pm_workflow_versions (
     workflow_id    VARCHAR(64)  NOT NULL,
     version        INT          NOT NULL,
     snapshot_json  LONGTEXT     NOT NULL,
-    changed_by     VARCHAR(128) NOT NULL DEFAULT 'anonymous',
+    changed_by     BIGINT       NOT NULL DEFAULT 0,
     change_note    TEXT,
     created_at     DATETIME(3) NOT NULL,
     PRIMARY KEY (workflow_id, version)
@@ -469,12 +481,13 @@ CREATE TABLE IF NOT EXISTS pm_workflow_versions (
 
 -- =============================================================================
 -- 23. pm_workflow_runs — 工作流运行记录表 (M3)
+-- run_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_workflow_runs (
     run_id             VARCHAR(64)  NOT NULL PRIMARY KEY,
     workflow_id        VARCHAR(64)  NOT NULL,
     version            INT          NOT NULL,
-    triggered_by       VARCHAR(128) NOT NULL,
+    triggered_by       BIGINT       NOT NULL,
     project_path       VARCHAR(512) NULL,
     dry_run            TINYINT(1)   NOT NULL DEFAULT 0,
     status             VARCHAR(16)  NOT NULL DEFAULT 'pending',
@@ -490,13 +503,14 @@ CREATE TABLE IF NOT EXISTS pm_workflow_runs (
 
 -- =============================================================================
 -- 24. pm_tickets — 问题工单表 (M3)
+-- ticket_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_tickets (
     ticket_id        VARCHAR(64)  NOT NULL PRIMARY KEY,
     source           VARCHAR(64)  NOT NULL DEFAULT 'manual',
     invocation_id    VARCHAR(64),
     tool_id          VARCHAR(128) NOT NULL,
-    user_id          VARCHAR(128),
+    user_id          BIGINT,
     severity         VARCHAR(16)  NOT NULL DEFAULT 'medium',
     status           VARCHAR(16)  NOT NULL DEFAULT 'open',
     title            VARCHAR(255) NOT NULL,
@@ -510,6 +524,7 @@ CREATE TABLE IF NOT EXISTS pm_tickets (
 
 -- =============================================================================
 -- 25. pm_repo_pipelines — 仓库流水线表 (M4)
+-- pipeline_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_repo_pipelines (
     pipeline_id  VARCHAR(64)  NOT NULL PRIMARY KEY,
@@ -519,7 +534,7 @@ CREATE TABLE IF NOT EXISTS pm_repo_pipelines (
     cron_expr   VARCHAR(64),
     threshold   DOUBLE        NOT NULL DEFAULT 0.7,
     status      VARCHAR(16)  NOT NULL DEFAULT 'draft',
-    created_by  VARCHAR(128) NOT NULL DEFAULT 'anonymous',
+    created_by  BIGINT       NOT NULL DEFAULT 0,
     created_at  DATETIME(3) NOT NULL,
     updated_at  DATETIME(3) NOT NULL,
     KEY idx_rp_status (status, source)
@@ -527,6 +542,7 @@ CREATE TABLE IF NOT EXISTS pm_repo_pipelines (
 
 -- =============================================================================
 -- 26. pm_repo_pipeline_runs — 仓库流水线运行记录表 (M4)
+-- run_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_repo_pipeline_runs (
     run_id           VARCHAR(64)  NOT NULL PRIMARY KEY,
@@ -546,6 +562,7 @@ CREATE TABLE IF NOT EXISTS pm_repo_pipeline_runs (
 
 -- =============================================================================
 -- 27. pm_bp_candidates — 最佳实践候选表 (M4)
+-- candidate_id 使用 VARCHAR 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_bp_candidates (
     candidate_id VARCHAR(64)  NOT NULL PRIMARY KEY,

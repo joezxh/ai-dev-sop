@@ -1,20 +1,28 @@
 -- =============================================================================
--- cbmem-team 完整 SQLite 建表语句 (v2)
+-- cbmem-team 完整 SQLite 建表语句 (v4)
 -- 覆盖 M1-M6 全量表：legacy 7表 + M1工具目录 + M2团队/最佳实践 + M3工作流 + M4仓库流水线 + M5记忆模板 + M6 AI工具
 -- =============================================================================
 -- 引擎：SQLite 3.35+（支持 ALTER TABLE DROP COLUMN）
 -- 外键：PRAGMA foreign_keys = ON（默认开启）
 -- WAL模式：PRAGMA journal_mode = WAL（推荐）
 --
+-- 注意：
+--   - 主键使用 INTEGER PRIMARY KEY AUTOINCREMENT（BIGINT 等价）
+--   - 外键关联使用 INTEGER 类型
+--   - FOREIGN KEY 引用统一使用 INTEGER
+--
 -- 应用顺序（严格按此顺序执行）：
---   1. legacy 7表 (sys_users/pm_projects/ai_sessions/ai_session_turns/ai_summarize_tasks/ai_distill_tasks/sys_console_sessions)
---   2. M1: ai_tool_directory / ai_tool_invocation_logs
---   3. M2: pm_teams / pm_team_members / pm_modules / pm_best_practices / pm_bp_versions
---   4. M3: pm_workflows / pm_workflow_versions / pm_workflow_runs / pm_tickets
---   5. M4: pm_repo_pipelines / pm_repo_pipeline_runs / pm_bp_candidates
---   6. M5: ai_memories_templates / ai_memories
---   6. M6: ai_tools / ai_tool_invocations
+--   1. sys_users
+--   2. pm_teams
+--   3. pm_team_members / pm_projects / pm_modules
+--   4. ai_sessions / ai_session_turns / ai_summarize_tasks / ai_distill_tasks / sys_console_sessions
+--   5. ai_memories_templates / ai_memories
+--   6. ai_tools / ai_tool_invocations
 --   7. sys_refresh_tokens / sys_audit_logs
+--   8. ai_tool_directory / ai_tool_invocation_logs
+--   9. pm_best_practices / pm_bp_versions
+--  10. pm_workflows / pm_workflow_versions / pm_workflow_runs / pm_tickets
+--  11. pm_repo_pipelines / pm_repo_pipeline_runs / pm_bp_candidates
 
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
@@ -24,14 +32,15 @@ BEGIN;
 
 -- =============================================================================
 -- 1. sys_users — 平台用户表
+-- 主键使用 INTEGER PRIMARY KEY AUTOINCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS sys_users (
-    id                     TEXT PRIMARY KEY,
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
     username              TEXT NOT NULL DEFAULT '',
     display_name          TEXT NOT NULL DEFAULT '',
     email                 TEXT NOT NULL DEFAULT '',
-    password_hash         TEXT NOT NULL DEFAULT '!v1-legacy-must-reset!',
-    default_team_id       TEXT,
+    password_hash         TEXT NOT NULL DEFAULT '',
+    default_team_id       INTEGER,
     role                  TEXT NOT NULL DEFAULT 'developer',
     must_change_password  INTEGER NOT NULL DEFAULT 1,
     disabled              INTEGER NOT NULL DEFAULT 0,
@@ -46,23 +55,56 @@ CREATE INDEX IF NOT EXISTS idx_sys_users_role ON sys_users(role);
 CREATE INDEX IF NOT EXISTS idx_sys_users_disabled ON sys_users(disabled);
 
 -- =============================================================================
--- 2. pm_projects — 项目表
+-- 2. pm_teams — 团队表
+-- 主键使用 INTEGER PRIMARY KEY AUTOINCREMENT
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS pm_teams (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    slug        TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    owner_id    INTEGER,
+    created_at  DATETIME NOT NULL,
+    updated_at  DATETIME NOT NULL,
+    deleted     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_pm_teams_slug ON pm_teams(slug);
+CREATE INDEX IF NOT EXISTS idx_pm_teams_owner ON pm_teams(owner_id);
+CREATE INDEX IF NOT EXISTS idx_pm_teams_deleted ON pm_teams(deleted);
+
+-- =============================================================================
+-- 3. pm_team_members — 团队成员关联表
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS pm_team_members (
+    team_id   INTEGER NOT NULL,
+    user_id   INTEGER NOT NULL,
+    role      TEXT NOT NULL DEFAULT 'developer',
+    joined_at DATETIME NOT NULL,
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pm_team_members_user ON pm_team_members(user_id);
+
+-- =============================================================================
+-- 4. pm_projects — 项目表
+-- 主键使用 INTEGER PRIMARY KEY AUTOINCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_projects (
-    id              TEXT PRIMARY KEY,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
     path            TEXT NOT NULL UNIQUE,
     wing            TEXT,
     mcp_bin         TEXT,
-    creator_id      TEXT,
-    team_id         TEXT NOT NULL DEFAULT '',
+    creator_id      INTEGER,
+    team_id         INTEGER NOT NULL DEFAULT 0,
     slug            TEXT NOT NULL DEFAULT '',
     description     TEXT NOT NULL DEFAULT '',
     git_url         TEXT NOT NULL DEFAULT '',
     git_branch      TEXT NOT NULL DEFAULT '',
     git_commit_sha  TEXT NOT NULL DEFAULT '',
     status          TEXT NOT NULL DEFAULT 'ready',
-    owner_id        TEXT NOT NULL DEFAULT '',
+    owner_id        INTEGER NOT NULL DEFAULT 0,
     created_at      DATETIME NOT NULL,
     updated_at      DATETIME NOT NULL,
     deleted         INTEGER NOT NULL DEFAULT 0
@@ -76,14 +118,39 @@ CREATE INDEX IF NOT EXISTS idx_pm_projects_deleted ON pm_projects(deleted);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_pm_projects_team_slug ON pm_projects(team_id, slug);
 
 -- =============================================================================
--- 3. ai_sessions — AI会话记录表
+-- 5. pm_modules — 模块表
+-- 主键使用 INTEGER PRIMARY KEY AUTOINCREMENT
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS pm_modules (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  INTEGER NOT NULL,
+    parent_id   INTEGER,
+    name        TEXT NOT NULL,
+    path        TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    "order"     INTEGER NOT NULL DEFAULT 0,
+    is_leaf     INTEGER NOT NULL DEFAULT 1,
+    created_at  DATETIME NOT NULL,
+    updated_at  DATETIME NOT NULL,
+    deleted     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_pm_modules_project ON pm_modules(project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_modules_parent ON pm_modules(parent_id);
+CREATE INDEX IF NOT EXISTS idx_pm_modules_is_leaf ON pm_modules(is_leaf);
+CREATE INDEX IF NOT EXISTS idx_pm_modules_deleted ON pm_modules(deleted);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_pm_modules_parent_name ON pm_modules(project_id, parent_id, name);
+
+-- =============================================================================
+-- 6. ai_sessions — AI会话记录表
+-- 主键使用 INTEGER PRIMARY KEY AUTOINCREMENT
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_sessions (
-    id                         TEXT PRIMARY KEY,
-    user_id                    TEXT NOT NULL,
-    team_id                    TEXT NOT NULL DEFAULT '',
-    project_id                 TEXT,
-    module_id                  TEXT NOT NULL DEFAULT '',
+    id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id                    INTEGER NOT NULL,
+    team_id                    INTEGER NOT NULL DEFAULT 0,
+    project_id                 INTEGER,
+    module_id                  INTEGER NOT NULL DEFAULT 0,
     project_path               TEXT NOT NULL,
     started_at                 DATETIME NOT NULL,
     ended_at                   DATETIME,
@@ -103,11 +170,11 @@ CREATE INDEX IF NOT EXISTS idx_ai_sessions_module ON ai_sessions(module_id);
 CREATE INDEX IF NOT EXISTS idx_ai_sessions_mempalace_pending ON ai_sessions(mempalace_synced_turns, turn_count);
 
 -- =============================================================================
--- 4. ai_session_turns — 会话轮次详情表
+-- 7. ai_session_turns — 会话轮次详情表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_session_turns (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id  TEXT NOT NULL,
+    session_id  INTEGER NOT NULL,
     turn_no     INTEGER NOT NULL,
     role        TEXT NOT NULL,
     content     TEXT NOT NULL,
@@ -119,15 +186,15 @@ CREATE INDEX IF NOT EXISTS idx_ai_session_turns_session ON ai_session_turns(sess
 CREATE UNIQUE INDEX IF NOT EXISTS uk_ai_session_turns_no ON ai_session_turns(session_id, turn_no);
 
 -- =============================================================================
--- 5. ai_summarize_tasks — 总结任务表
+-- 8. ai_summarize_tasks — 总结任务表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_summarize_tasks (
-    id           TEXT PRIMARY KEY,
-    user_id      TEXT,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER,
     source_ids   TEXT NOT NULL DEFAULT '[]',
     depth        TEXT NOT NULL DEFAULT 'deep',
     target_wing  TEXT NOT NULL DEFAULT '',
-    admin_id     TEXT,
+    admin_id     INTEGER,
     status       TEXT NOT NULL DEFAULT 'pending',
     result_json  TEXT NOT NULL DEFAULT '',
     created_at   DATETIME NOT NULL,
@@ -138,14 +205,14 @@ CREATE INDEX IF NOT EXISTS idx_ai_summarize_tasks_user ON ai_summarize_tasks(use
 CREATE INDEX IF NOT EXISTS idx_ai_summarize_tasks_status ON ai_summarize_tasks(status);
 
 -- =============================================================================
--- 6. ai_distill_tasks — 提炼任务表
+-- 9. ai_distill_tasks — 提炼任务表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_distill_tasks (
-    id                TEXT PRIMARY KEY,
-    user_id           TEXT,
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id           INTEGER,
     source_ids        TEXT NOT NULL DEFAULT '[]',
     rules_json        TEXT NOT NULL DEFAULT '{}',
-    admin_id          TEXT,
+    admin_id          INTEGER,
     status            TEXT NOT NULL DEFAULT 'pending',
     result_json       TEXT NOT NULL DEFAULT '',
     mempalace_synced  INTEGER NOT NULL DEFAULT 0,
@@ -159,11 +226,11 @@ CREATE INDEX IF NOT EXISTS idx_ai_distill_tasks_status ON ai_distill_tasks(statu
 CREATE INDEX IF NOT EXISTS idx_ai_distill_tasks_synced ON ai_distill_tasks(mempalace_synced);
 
 -- =============================================================================
--- 7. sys_console_sessions — 控制台会话表
+-- 10. sys_console_sessions — 控制台会话表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS sys_console_sessions (
     id           TEXT PRIMARY KEY,
-    user_id      TEXT NOT NULL,
+    user_id      INTEGER NOT NULL,
     created_at   DATETIME NOT NULL,
     expires_at   DATETIME NOT NULL,
     last_seen_at DATETIME,
@@ -175,7 +242,82 @@ CREATE INDEX IF NOT EXISTS idx_sys_console_sessions_expires ON sys_console_sessi
 CREATE INDEX IF NOT EXISTS idx_sys_console_sessions_user ON sys_console_sessions(user_id);
 
 -- =============================================================================
--- 8. ai_tool_directory — 工具目录表 (M1)
+-- 11. ai_memories_templates — 记忆模板表
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ai_memories_templates (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    fields_json   TEXT NOT NULL DEFAULT '[]',
+    body_template TEXT NOT NULL DEFAULT '',
+    is_builtin    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_templates_builtin ON ai_memories_templates(is_builtin);
+
+-- =============================================================================
+-- 12. ai_memories — 记忆条目表
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ai_memories (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id      INTEGER NOT NULL,
+    project_id   INTEGER NOT NULL,
+    module_id    INTEGER NOT NULL,
+    user_id      INTEGER NOT NULL,
+    title        TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    template_id  INTEGER,
+    tags_json    TEXT NOT NULL DEFAULT '[]',
+    hall         TEXT NOT NULL DEFAULT 'facts',
+    created_at   DATETIME NOT NULL,
+    updated_at   DATETIME NOT NULL,
+    deleted      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_memories_team ON ai_memories(team_id);
+CREATE INDEX IF NOT EXISTS idx_memories_project ON ai_memories(project_id);
+CREATE INDEX IF NOT EXISTS idx_memories_module ON ai_memories(module_id);
+CREATE INDEX IF NOT EXISTS idx_memories_user ON ai_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_hall ON ai_memories(hall);
+CREATE INDEX IF NOT EXISTS idx_memories_template ON ai_memories(template_id);
+CREATE INDEX IF NOT EXISTS idx_memories_updated ON ai_memories(updated_at DESC);
+
+-- =============================================================================
+-- 13. sys_refresh_tokens — JWT刷新令牌表
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
+    id          TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL,
+    token_hash  TEXT NOT NULL,
+    issued_at   DATETIME NOT NULL,
+    expires_at  DATETIME NOT NULL,
+    revoked_at  DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON sys_refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON sys_refresh_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON sys_refresh_tokens(token_hash);
+
+-- =============================================================================
+-- 14. sys_audit_logs — 审计日志表
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS sys_audit_logs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          DATETIME NOT NULL,
+    user_id     INTEGER,
+    team_id     INTEGER,
+    kind        TEXT NOT NULL,
+    target_id   TEXT NOT NULL DEFAULT '',
+    meta_json   TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON sys_audit_logs(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON sys_audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_kind ON sys_audit_logs(kind);
+
+-- =============================================================================
+-- 15. ai_tool_directory — 工具目录表 (M1)
+-- tool_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tool_directory (
     tool_id              TEXT PRIMARY KEY,
@@ -197,12 +339,13 @@ CREATE INDEX IF NOT EXISTS idx_ai_tool_directory_track ON ai_tool_directory(trac
 CREATE INDEX IF NOT EXISTS idx_ai_tool_directory_status ON ai_tool_directory(status);
 
 -- =============================================================================
--- 9. ai_tool_invocation_logs — 工具调用日志表 (M1)
+-- 16. ai_tool_invocation_logs — 工具调用日志表 (M1)
+-- invocation_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tool_invocation_logs (
     invocation_id            TEXT PRIMARY KEY,
-    user_id                  TEXT NOT NULL,
-    project_id               TEXT,
+    user_id                  INTEGER NOT NULL,
+    project_id               INTEGER,
     project_path             TEXT,
     tool_id                  TEXT NOT NULL,
     transport                TEXT NOT NULL DEFAULT 'stdio',
@@ -230,61 +373,8 @@ CREATE INDEX IF NOT EXISTS idx_inv_workflow ON ai_tool_invocation_logs(workflow_
 CREATE INDEX IF NOT EXISTS idx_inv_error ON ai_tool_invocation_logs(error_code);
 
 -- =============================================================================
--- 10. pm_teams — 团队表 (M2)
--- =============================================================================
-CREATE TABLE IF NOT EXISTS pm_teams (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    slug        TEXT NOT NULL UNIQUE,
-    description TEXT NOT NULL DEFAULT '',
-    owner_id    TEXT,
-    created_at  DATETIME NOT NULL,
-    updated_at  DATETIME NOT NULL,
-    deleted     INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_pm_teams_slug ON pm_teams(slug);
-CREATE INDEX IF NOT EXISTS idx_pm_teams_owner ON pm_teams(owner_id);
-CREATE INDEX IF NOT EXISTS idx_pm_teams_deleted ON pm_teams(deleted);
-
--- =============================================================================
--- 11. pm_team_members — 团队成员关联表 (M2)
--- =============================================================================
-CREATE TABLE IF NOT EXISTS pm_team_members (
-    team_id   TEXT NOT NULL,
-    user_id   TEXT NOT NULL,
-    role      TEXT NOT NULL DEFAULT 'developer',
-    joined_at DATETIME NOT NULL,
-    PRIMARY KEY (team_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_pm_team_members_user ON pm_team_members(user_id);
-
--- =============================================================================
--- 12. pm_modules — 模块表 (M2)
--- =============================================================================
-CREATE TABLE IF NOT EXISTS pm_modules (
-    id          TEXT PRIMARY KEY,
-    project_id  TEXT NOT NULL,
-    parent_id   TEXT,
-    name        TEXT NOT NULL,
-    path        TEXT NOT NULL DEFAULT '',
-    description TEXT NOT NULL DEFAULT '',
-    "order"     INTEGER NOT NULL DEFAULT 0,
-    is_leaf     INTEGER NOT NULL DEFAULT 1,
-    created_at  DATETIME NOT NULL,
-    updated_at  DATETIME NOT NULL,
-    deleted     INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_pm_modules_project ON pm_modules(project_id);
-CREATE INDEX IF NOT EXISTS idx_pm_modules_parent ON pm_modules(parent_id);
-CREATE INDEX IF NOT EXISTS idx_pm_modules_is_leaf ON pm_modules(is_leaf);
-CREATE INDEX IF NOT EXISTS idx_pm_modules_deleted ON pm_modules(deleted);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_pm_modules_parent_name ON pm_modules(project_id, parent_id, name);
-
--- =============================================================================
--- 13. pm_best_practices — 最佳实践表 (M2)
+-- 17. pm_best_practices — 最佳实践表 (M2)
+-- id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_best_practices (
     id           TEXT PRIMARY KEY,
@@ -299,7 +389,7 @@ CREATE TABLE IF NOT EXISTS pm_best_practices (
     status       TEXT NOT NULL DEFAULT 'draft'
                     CHECK (status IN ('draft','published','deprecated','review_due')),
     version      INTEGER NOT NULL DEFAULT 1,
-    created_by   TEXT NOT NULL,
+    created_by   INTEGER NOT NULL,
     created_at   DATETIME NOT NULL,
     updated_at   DATETIME NOT NULL,
     review_due   DATE NOT NULL,
@@ -312,13 +402,13 @@ CREATE INDEX IF NOT EXISTS idx_bp_track_category ON pm_best_practices(track, cat
 CREATE INDEX IF NOT EXISTS idx_bp_tools_first ON pm_best_practices(json_extract(tools, '$[0]'));
 
 -- =============================================================================
--- 14. pm_bp_versions — 最佳实践版本历史表 (M2)
+-- 18. pm_bp_versions — 最佳实践版本历史表 (M2)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_bp_versions (
     bp_id         TEXT NOT NULL,
     version       INTEGER NOT NULL,
     snapshot_json TEXT NOT NULL,
-    changed_by   TEXT NOT NULL,
+    changed_by    INTEGER NOT NULL,
     change_note   TEXT,
     created_at    DATETIME NOT NULL,
     PRIMARY KEY (bp_id, version)
@@ -327,86 +417,12 @@ CREATE TABLE IF NOT EXISTS pm_bp_versions (
 CREATE INDEX IF NOT EXISTS idx_bpv_created ON pm_bp_versions(bp_id, created_at);
 
 -- =============================================================================
--- 15. ai_memories_templates — 记忆模板表 (M5)
--- =============================================================================
-CREATE TABLE IF NOT EXISTS ai_memories_templates (
-    id            TEXT PRIMARY KEY,
-    name          TEXT NOT NULL,
-    description   TEXT NOT NULL DEFAULT '',
-    fields_json   TEXT NOT NULL DEFAULT '[]',
-    body_template TEXT NOT NULL DEFAULT '',
-    is_builtin    INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_memory_templates_builtin ON ai_memories_templates(is_builtin);
-
--- =============================================================================
--- 16. ai_memories — 记忆条目表 (M5)
--- =============================================================================
-CREATE TABLE IF NOT EXISTS ai_memories (
-    id           TEXT PRIMARY KEY,
-    team_id      TEXT NOT NULL,
-    project_id   TEXT NOT NULL,
-    module_id    TEXT NOT NULL,
-    user_id      TEXT NOT NULL,
-    title        TEXT NOT NULL,
-    content      TEXT NOT NULL,
-    template_id  TEXT,
-    tags_json    TEXT NOT NULL DEFAULT '[]',
-    hall         TEXT NOT NULL DEFAULT 'facts',
-    created_at   DATETIME NOT NULL,
-    updated_at   DATETIME NOT NULL,
-    deleted      INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_memories_team ON ai_memories(team_id);
-CREATE INDEX IF NOT EXISTS idx_memories_project ON ai_memories(project_id);
-CREATE INDEX IF NOT EXISTS idx_memories_module ON ai_memories(module_id);
-CREATE INDEX IF NOT EXISTS idx_memories_user ON ai_memories(user_id);
-CREATE INDEX IF NOT EXISTS idx_memories_hall ON ai_memories(hall);
-CREATE INDEX IF NOT EXISTS idx_memories_template ON ai_memories(template_id);
-CREATE INDEX IF NOT EXISTS idx_memories_updated ON ai_memories(updated_at DESC);
-
--- =============================================================================
--- 17. sys_refresh_tokens — JWT刷新令牌表
--- =============================================================================
-CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
-    id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL,
-    token_hash  TEXT NOT NULL,
-    issued_at   DATETIME NOT NULL,
-    expires_at  DATETIME NOT NULL,
-    revoked_at  DATETIME
-);
-
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON sys_refresh_tokens(user_id);
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON sys_refresh_tokens(expires_at);
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON sys_refresh_tokens(token_hash);
-
--- =============================================================================
--- 18. sys_audit_logs — 审计日志表
--- =============================================================================
-CREATE TABLE IF NOT EXISTS sys_audit_logs (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts          DATETIME NOT NULL,
-    user_id     TEXT,
-    team_id     TEXT,
-    kind        TEXT NOT NULL,
-    target_id   TEXT NOT NULL DEFAULT '',
-    meta_json   TEXT NOT NULL DEFAULT '{}'
-);
-
-CREATE INDEX IF NOT EXISTS idx_audit_ts ON sys_audit_logs(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_user ON sys_audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_team ON sys_audit_logs(team_id);
-CREATE INDEX IF NOT EXISTS idx_audit_kind ON sys_audit_logs(kind);
-
--- =============================================================================
 -- 19. ai_tools — AI工具表 (M6)
+-- id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tools (
     id                     TEXT PRIMARY KEY,
-    team_id                TEXT NOT NULL,
+    team_id                INTEGER NOT NULL,
     name                   TEXT NOT NULL,
     slug                   TEXT NOT NULL,
     description            TEXT NOT NULL DEFAULT '',
@@ -427,14 +443,15 @@ CREATE INDEX IF NOT EXISTS idx_ai_tools_enabled ON ai_tools(enabled);
 
 -- =============================================================================
 -- 20. ai_tool_invocations — AI工具调用记录表 (M6)
+-- id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_tool_invocations (
     id           TEXT PRIMARY KEY,
     tool_id      TEXT NOT NULL,
-    user_id      TEXT NOT NULL,
-    team_id      TEXT NOT NULL,
-    project_id   TEXT NOT NULL,
-    module_id    TEXT NOT NULL,
+    user_id      INTEGER NOT NULL,
+    team_id      INTEGER NOT NULL,
+    project_id   INTEGER NOT NULL,
+    module_id    INTEGER NOT NULL,
     working_dir  TEXT NOT NULL,
     input_json   TEXT NOT NULL DEFAULT '{}',
     output_json  TEXT NOT NULL DEFAULT '{}',
@@ -453,6 +470,7 @@ CREATE INDEX IF NOT EXISTS idx_invocations_status ON ai_tool_invocations(status)
 
 -- =============================================================================
 -- 21. pm_workflows — 工作流定义表 (M3)
+-- workflow_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_workflows (
     workflow_id  TEXT PRIMARY KEY,
@@ -464,7 +482,7 @@ CREATE TABLE IF NOT EXISTS pm_workflows (
     entry_id     TEXT NOT NULL,
     status       TEXT NOT NULL DEFAULT 'draft',
     version      INTEGER NOT NULL DEFAULT 1,
-    created_by   TEXT NOT NULL DEFAULT 'anonymous',
+    created_by   INTEGER NOT NULL,
     created_at   DATETIME NOT NULL,
     updated_at   DATETIME NOT NULL
 );
@@ -478,7 +496,7 @@ CREATE TABLE IF NOT EXISTS pm_workflow_versions (
     workflow_id    TEXT NOT NULL,
     version        INTEGER NOT NULL,
     snapshot_json  TEXT NOT NULL,
-    changed_by    TEXT NOT NULL DEFAULT 'anonymous',
+    changed_by     INTEGER NOT NULL,
     change_note   TEXT,
     created_at     DATETIME NOT NULL,
     PRIMARY KEY (workflow_id, version)
@@ -488,12 +506,13 @@ CREATE INDEX IF NOT EXISTS idx_wfv_created ON pm_workflow_versions(workflow_id, 
 
 -- =============================================================================
 -- 23. pm_workflow_runs — 工作流运行记录表 (M3)
+-- run_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_workflow_runs (
     run_id             TEXT PRIMARY KEY,
     workflow_id        TEXT NOT NULL,
     version            INTEGER NOT NULL,
-    triggered_by       TEXT NOT NULL,
+    triggered_by       INTEGER NOT NULL,
     project_path       TEXT,
     dry_run            INTEGER NOT NULL DEFAULT 0,
     status             TEXT NOT NULL DEFAULT 'pending',
@@ -510,13 +529,14 @@ CREATE INDEX IF NOT EXISTS idx_wfrun_trigger ON pm_workflow_runs(triggered_by, s
 
 -- =============================================================================
 -- 24. pm_tickets — 问题工单表 (M3)
+-- ticket_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_tickets (
     ticket_id        TEXT PRIMARY KEY,
     source           TEXT NOT NULL DEFAULT 'manual',
     invocation_id    TEXT,
     tool_id          TEXT NOT NULL,
-    user_id          TEXT,
+    user_id          INTEGER,
     severity         TEXT NOT NULL DEFAULT 'medium',
     status           TEXT NOT NULL DEFAULT 'open',
     title            TEXT NOT NULL,
@@ -531,6 +551,7 @@ CREATE INDEX IF NOT EXISTS idx_ticket_invocation ON pm_tickets(invocation_id);
 
 -- =============================================================================
 -- 25. pm_repo_pipelines — 仓库流水线表 (M4)
+-- pipeline_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_repo_pipelines (
     pipeline_id  TEXT PRIMARY KEY,
@@ -540,7 +561,7 @@ CREATE TABLE IF NOT EXISTS pm_repo_pipelines (
     cron_expr   TEXT,
     threshold   REAL NOT NULL DEFAULT 0.7,
     status      TEXT NOT NULL DEFAULT 'draft',
-    created_by  TEXT NOT NULL DEFAULT 'anonymous',
+    created_by  INTEGER NOT NULL,
     created_at  DATETIME NOT NULL,
     updated_at  DATETIME NOT NULL
 );
@@ -549,13 +570,14 @@ CREATE INDEX IF NOT EXISTS idx_rp_status ON pm_repo_pipelines(status, source);
 
 -- =============================================================================
 -- 26. pm_repo_pipeline_runs — 仓库流水线运行记录表 (M4)
+-- run_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_repo_pipeline_runs (
     run_id           TEXT PRIMARY KEY,
     pipeline_id      TEXT NOT NULL,
     stage_status    TEXT,
     items_ingested   INTEGER NOT NULL DEFAULT 0,
-    items_parsed    INTEGER NOT NULL DEFAULT 0,
+    items_parsed     INTEGER NOT NULL DEFAULT 0,
     items_graded     INTEGER NOT NULL DEFAULT 0,
     items_accepted  INTEGER NOT NULL DEFAULT 0,
     status          TEXT NOT NULL DEFAULT 'pending',
@@ -569,6 +591,7 @@ CREATE INDEX IF NOT EXISTS idx_rprun_status ON pm_repo_pipeline_runs(status, sta
 
 -- =============================================================================
 -- 27. pm_bp_candidates — 最佳实践候选表 (M4)
+-- candidate_id 使用 TEXT 因为这是业务标识符
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS pm_bp_candidates (
     candidate_id TEXT PRIMARY KEY,

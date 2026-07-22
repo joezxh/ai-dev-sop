@@ -250,9 +250,15 @@ func (db *DB) CountMembersInTeam(ctx context.Context, teamID string) (int, error
 
 // AddTeamMember inserts a (team_id, user_id, role) row. ON CONFLICT
 // DO NOTHING so the handler can map "already a member" to ErrMemberExists.
-func (db *DB) AddTeamMember(ctx context.Context, teamID, userID string, role ProjectRole) error {
-	if teamID == "" || userID == "" {
-		return errors.New("AddTeamMember: team_id/user_id required")
+// AddTeamMember adds userID as a member of teamID with the given role.
+// Both ids are bigint on disk; the model layer keeps them as decimal
+// strings so the on-the-wire JSON shape is preserved.
+func (db *DB) AddTeamMember(ctx context.Context, teamID string, userID string, role ProjectRole) error {
+	if teamID == "" {
+		return errors.New("AddTeamMember: team_id required")
+	}
+	if userID == "" {
+		return errors.New("AddTeamMember: user_id required")
 	}
 	if role == "" {
 		role = ProjectRoleDeveloper

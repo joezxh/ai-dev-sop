@@ -137,7 +137,10 @@ export default withMermaidWithoutDayjs(defineConfig({
               text: 'SOP 入口',
               collapsible: true,
               items: [
+                { text: '开发SOP', link: '/sop/sop' },
+                { text: '多场景SOP', link: '/sop/scenes' },
                 { text: '研发 SOP 主体', link: '/sop/' },
+                { text: '产品设计SOP', link: '/guide/prod-design' },
                 { text: 'QA-Dev Skill', link: '/guide/intro' },
                 { text: 'AI Skill 字典', link: '/guide/skills' },
                 { text: 'Repo Wiki 技术参考', link: '/sop/repo-wiki-tech' },
@@ -145,7 +148,7 @@ export default withMermaidWithoutDayjs(defineConfig({
               ]
             },
             {
-              text: '§4 Pipeline',
+              text: 'Pipeline',
               collapsible: true,
               items: [
                 { text: '一句话 Pipeline', link: '/sop/one-sentence-pipeline' },
@@ -157,7 +160,7 @@ export default withMermaidWithoutDayjs(defineConfig({
               ]
             },
             {
-              text: '§5 范例开发文档',
+              text: '范例开发文档',
               collapsible: true,
               items: [
                 { text: 'System 服务场景', link: '/sop/system-scene' },
@@ -182,10 +185,20 @@ export default withMermaidWithoutDayjs(defineConfig({
             {
               text: '使用指南',
               items: [
-                { text: '全局开发SOP', link: '/guide/index' },
-                { text: '开发模板', link: '/guide/scene-template' },
-                { text: 'QA-Dev Skill', link: '/guide/intro' },
-                { text: 'AI Skill 字典', link: '/guide/skills' }
+                { text: '概述', link: '/guide/overview' },
+                { text: '准备工作', link: '/guide/ready' },
+                { text: '记忆tools字典', collapsible: true,
+                  items: [
+                    { text: '安装', link: '/guide/ready.md#1-记忆体安装' },
+                    { text: '速查表', link: '/guide/mem-tools' },
+                    { text: '项目理解', link: '/guide/SOP-M2-understanding' },
+                    { text: '开发调试', link: '/guide/SOP-M3-development' },
+                    { text: '知识沉淀', link: '/guide/SOP-M4-knowledge' },
+                    { text: '团队协作', link: '/guide/SOP-M5-collaboration' }
+                  ]},
+                { text: 'AI Skill 字典', link: '/guide/skills' },
+                { text: 'QA-Dev Skill', link: '/guide/qa-dev-intro' },
+                { text: '市场规划', link: '/guide/market' }
               ]
             }
           ]

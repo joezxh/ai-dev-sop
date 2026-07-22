@@ -49,7 +49,7 @@ func (h *SessionHandlersV2) ListSessions() gin.HandlerFunc {
 		f.TeamID = c.Query("team_id")
 		f.ProjectID = c.Query("project_id")
 		f.ModuleID = c.Query("module_id")
-		f.UserID = c.Query("user_id")
+		f.UserID, _ = strconv.ParseInt(c.Query("user_id"), 10, 64)
 		f.ProjectPath = c.Query("project_path")
 		if raw := c.Query("include_legacy"); raw != "" {
 			b, err := strconv.ParseBool(raw)
@@ -174,7 +174,7 @@ func (h *SessionHandlersV2) Stats() gin.HandlerFunc {
 		f.TeamID = c.Query("team_id")
 		f.ProjectID = c.Query("project_id")
 		f.ModuleID = c.Query("module_id")
-		f.UserID = c.Query("user_id")
+		f.UserID, _ = strconv.ParseInt(c.Query("user_id"), 10, 64)
 		stats, err := h.DB.AggregateSessions(ctx, f)
 		if err != nil {
 			Fail(c, http.StatusInternalServerError, 5000074, "aggregate: "+err.Error())
