@@ -175,7 +175,7 @@ type SessionTurn struct {
 // (string|list|date) and whether they're required; BodyTemplate is a
 // Go text/template that gets rendered with the field values.
 type MemoryTemplate struct {
-	ID           string `json:"id"`
+	ID           int64  `json:"id"`
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	FieldsJSON   string `json:"fields_json"`
@@ -194,7 +194,7 @@ type Memory struct {
 	UserID     string    `json:"user_id"`
 	Title      string    `json:"title"`
 	Content    string    `json:"content"`
-	TemplateID string    `json:"template_id,omitempty"`
+	TemplateID int64    `json:"template_id,omitempty"`
 	TagsJSON   string    `json:"tags_json,omitempty"`
 	Tags       []string  `json:"tags,omitempty"`
 	Hall       string    `json:"hall"`

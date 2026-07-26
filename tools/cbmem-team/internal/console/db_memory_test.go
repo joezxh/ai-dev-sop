@@ -15,9 +15,19 @@ import (
 //
 // The v2 schema is seeded by setupTestDB (which calls newTestDB +
 // MigrateV2). The migration also runs migrateV2Phase6, so the five
-// built-in templates (tpl_adr/tpl_lesson/tpl_snippet/tpl_runbook/
-// tpl_decision) are pre-seeded before each test starts.
+// built-in templates are pre-seeded before each test starts.
 // =============================================================================
+
+// findTemplateIDByName is a test helper that returns the int64 ID of
+// a template by its unique name. It fails the test if not found.
+func findTemplateIDByName(t *testing.T, db *DB, name string) int64 {
+	t.Helper()
+	tpl, err := db.GetMemoryTemplateByName(context.Background(), name)
+	if err != nil {
+		t.Fatalf("lookup template %q: %v", name, err)
+	}
+	return tpl.ID
+}
 
 func TestMemoryDBTemplatesSeeded(t *testing.T) {
 	db := setupTestDB(t)
@@ -30,18 +40,21 @@ func TestMemoryDBTemplatesSeeded(t *testing.T) {
 		t.Fatalf("expected 5 built-in templates, got %d", len(rows))
 	}
 	want := map[string]bool{
-		"tpl_adr": false, "tpl_lesson": false, "tpl_snippet": false,
-		"tpl_runbook": false, "tpl_decision": false,
+		"Architecture Decision Record (ADR)": false,
+		"Lessons Learned":                    false,
+		"Reusable Code Snippet":              false,
+		"Operational Runbook":                false,
+		"Lightweight Decision":               false,
 	}
 	for _, r := range rows {
-		want[r.ID] = true
+		want[r.Name] = true
 		if !r.IsBuiltin {
-			t.Errorf("template %s should be marked built-in", r.ID)
+			t.Errorf("template %s should be marked built-in", r.Name)
 		}
 	}
-	for id, seen := range want {
+	for name, seen := range want {
 		if !seen {
-			t.Errorf("missing seeded template %s", id)
+			t.Errorf("missing seeded template %q", name)
 		}
 	}
 }
@@ -51,12 +64,13 @@ func TestMemoryDBCreateAndGetMemory(t *testing.T) {
 	ctx := context.Background()
 	// Setup: user + team + project + leaf module.
 	seedMem5Fixtures(t, db)
-	tpl, err := db.GetMemoryTemplate(ctx, "tpl_adr")
+	adrID := findTemplateIDByName(t, db, "Architecture Decision Record (ADR)")
+	tpl, err := db.GetMemoryTemplate(ctx, adrID)
 	if err != nil {
 		t.Fatalf("template: %v", err)
 	}
 	if tpl.BodyTemplate == "" {
-		t.Fatal("tpl_adr body_template should not be empty")
+		t.Fatal("ADR body_template should not be empty")
 	}
 	mem := &Memory{
 		ID:         "mem_alpha",
@@ -65,8 +79,8 @@ func TestMemoryDBCreateAndGetMemory(t *testing.T) {
 		ModuleID:   "mod_leaf_alpha",
 		UserID:     "u_owner",
 		Title:      "Use MemPalace for vector retrieval",
-		Content:    "Replace SQL FTS5 with MemPalace for semantic search.",
-		TemplateID: "tpl_adr",
+		Content:    "Replace Sql FTS5 with MemPalace for semantic search.",
+		TemplateID: adrID,
 		Tags:       []string{"retrieval", "mem-palace"},
 		Hall:       "discoveries",
 	}
@@ -83,8 +97,8 @@ func TestMemoryDBCreateAndGetMemory(t *testing.T) {
 	if len(got.Tags) != 2 || got.Tags[0] != "retrieval" || got.Tags[1] != "mem-palace" {
 		t.Fatalf("tags roundtrip: %+v", got.Tags)
 	}
-	if got.TemplateID != "tpl_adr" {
-		t.Fatalf("template_id roundtrip: %q", got.TemplateID)
+	if got.TemplateID != adrID {
+		t.Fatalf("template_id roundtrip: got %d, want %d", got.TemplateID, adrID)
 	}
 }
 

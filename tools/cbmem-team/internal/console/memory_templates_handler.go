@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -57,7 +58,11 @@ func (h *MemoryTemplateHandlers) List() gin.HandlerFunc {
 func (h *MemoryTemplateHandlers) Get() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		id := c.Param("id")
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			Fail(c, http.StatusBadRequest, 4000082, "invalid template id")
+			return
+		}
 		t, err := h.DB.GetMemoryTemplate(ctx, id)
 		if err != nil {
 			if errors.Is(err, ErrTemplateMissing) {
@@ -77,7 +82,11 @@ func (h *MemoryTemplateHandlers) Get() gin.HandlerFunc {
 func (h *MemoryTemplateHandlers) Render() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		id := c.Param("id")
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			Fail(c, http.StatusBadRequest, 4000083, "invalid template id")
+			return
+		}
 		t, err := h.DB.GetMemoryTemplate(ctx, id)
 		if err != nil {
 			if errors.Is(err, ErrTemplateMissing) {
@@ -102,7 +111,7 @@ func (h *MemoryTemplateHandlers) Render() gin.HandlerFunc {
 		}
 		// Parse and execute. Missing keys render as "<no value>" so
 		// the UI can flag missing required fields.
-		tpl, err := template.New(t.ID).Option("missingkey=default").Parse(t.BodyTemplate)
+		tpl, err := template.New(t.Name).Option("missingkey=default").Parse(t.BodyTemplate)
 		if err != nil {
 			Fail(c, http.StatusInternalServerError, 5000093, "parse template: "+err.Error())
 			return
@@ -135,7 +144,6 @@ func (h *MemoryTemplateHandlers) Create() gin.HandlerFunc {
 			return
 		}
 		t := &MemoryTemplate{
-			ID:           "tpl_" + randomHex(4),
 			Name:         req.Name,
 			Description:  req.Description,
 			FieldsJSON:   req.FieldsJSON,
@@ -155,7 +163,7 @@ func (h *MemoryTemplateHandlers) Create() gin.HandlerFunc {
 func templateToDTO(t *MemoryTemplate) MemoryTemplateDTO {
 	fields := parseTemplateFields(t.FieldsJSON)
 	return MemoryTemplateDTO{
-		ID:          t.ID,
+		ID:          strconv.FormatInt(t.ID, 10),
 		Name:        t.Name,
 		Description: t.Description,
 		Fields:      fields,

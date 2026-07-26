@@ -133,30 +133,31 @@ export default withMermaidWithoutDayjs(defineConfig({
         ],
         sidebar: {
           '/sop/': [
+            {text: '文档模板', link: '/sop/dev-template'},
+            {text: '常规流程', link: '/sop/normal'},
             {
-              text: 'SOP 入口',
+              text: '新工程制作',
               collapsible: true,
               items: [
-                { text: '开发SOP', link: '/sop/sop' },
-                { text: '多场景SOP', link: '/sop/scenes' },
-                { text: '研发 SOP 主体', link: '/sop/' },
-                { text: '产品设计SOP', link: '/guide/prod-design' },
-                { text: 'QA-Dev Skill', link: '/guide/intro' },
-                { text: 'AI Skill 字典', link: '/guide/skills' },
-                { text: 'Repo Wiki 技术参考', link: '/sop/repo-wiki-tech' },
-                { text: '更新日志', link: '/guide/changelog' }
+                { text: '产品研究 <span style="font-size:0.75em">✅</span>', link: '/sop/prod-design' },
+                { text: '需求到PRD <span style="font-size:0.75em">❌</span>', link: '/sop/requirement-prd' },
+                { text: '需求到原型 <span style="font-size:0.75em">❌</span>', link: '/sop/requirement-prototype' },
+                { text: 'UI设计 <span style="font-size:0.75em">❌</span>', link: '/sop/ui-design' },
+                { text: '前端框架制作 <span style="font-size:0.75em">❓</span>', link: '/sop/frontend-fw' },
+                { text: '后端框架制作 <span style="font-size:0.75em">❓</span>', link: '/guide/backend-fw' },
+                { text: '基于框架开发 <span style="font-size:0.75em">❓</span>', link: '/sop/fw-dev' }
               ]
             },
             {
-              text: 'Pipeline',
+              text: '已有工程改造',
               collapsible: true,
               items: [
-                { text: '一句话 Pipeline', link: '/sop/one-sentence-pipeline' },
-                { text: '框架 Pipeline', link: '/sop/framework-pipeline' },
-                { text: '文档 Pipeline', link: '/sop/docs-pipeline' },
-                { text: '复制 Web', link: '/sop/copy-web-pipeline' },
-                { text: '复制 App', link: '/sop/copy-app-pipeline' },
-                { text: 'Java 升级迁移', link: '/sop/java-upgrade-pipeline' }
+                { text: '已有工程文档制作 <span style="font-size:0.75em">❓</span>', link: '/sop/write-docs' },
+                { text: '已有工程转提示词 <span style="font-size:0.75em">✅</span>', link: '/sop/exists-scene' },
+                { text: '复制已有Web应用 <span style="font-size:0.75em">❓</span>', link: '/sop/copy-webapp' },
+                { text: '复制已有移动应用 <span style="font-size:0.75em">❌</span>', link: '/sop/copy-uniapp' },
+                { text: '前端升级 <span style="font-size:0.75em">❓</span>', link: '/sop/frontend-upgrade' },
+                { text: '后端升级 <span style="font-size:0.75em">❓</span>', link: '/sop/backend-upgrade' }
               ]
             },
             {
@@ -168,17 +169,39 @@ export default withMermaidWithoutDayjs(defineConfig({
               ]
             }
           ],
-          '/reference/': [
+          '/reference/': [{ text: 'AI-Coding 16个实战技巧', link: '/reference/16-coding-skill/16-coding-skill' 
+            },
             {
-              text: '配套文档（指向 SOP 主体）',
+              text: 'Agentic Design Patterns',
+              collapsible: true,
               items: [
-                { text: '场景模板', link: '/reference/scene-template' },
-                { text: '一句话 Pipeline', link: '/reference/one-sentence-pipeline' },
-                { text: '框架 Pipeline', link: '/reference/framework-pipeline' },
-                { text: '文档 Pipeline', link: '/reference/docs-pipeline' },
-                { text: '复制 Web Pipeline', link: '/reference/copy-web-pipeline' },
-                { text: '复制 App Pipeline', link: '/reference/copy-app-pipeline' },
-                { text: '升级 Pipeline', link: '/reference/java-upgrade-pipeline' }
+                { text: '概览', link: '/reference/agentic-design-patterns/README' },
+                { text: '简介', link: '/reference/agentic-design-patterns/00-intro' },
+                { text: '前言', link: '/reference/agentic-design-patterns/00-preface' },
+                { text: '译者序', link: '/reference/agentic-design-patterns/00-translator' },
+                { text: '智能体的特征', link: '/reference/agentic-design-patterns/01-intro-agent' },
+                { text: '智能体未来：五大假设', link: '/reference/agentic-design-patterns/02-agent-hypotheses' },
+                { text: '第1章：提示链', link: '/reference/agentic-design-patterns/ch01-prompt-chaining' },
+                { text: '第2章：路由', link: '/reference/agentic-design-patterns/ch02-routing' },
+                { text: '第3章：并行化', link: '/reference/agentic-design-patterns/ch03-parallelization' },
+                { text: '第4章：反思', link: '/reference/agentic-design-patterns/ch04-reflection' },
+                { text: '第5章：工具使用', link: '/reference/agentic-design-patterns/ch05-tool-use' },
+                { text: '第6章：规划', link: '/reference/agentic-design-patterns/ch06-planning' },
+                { text: '第7章：多智能体协作', link: '/reference/agentic-design-patterns/ch07-multi-agent' },
+                { text: '第8章：记忆管理', link: '/reference/agentic-design-patterns/ch08-memory' },
+                { text: '第9章：学习与适应', link: '/reference/agentic-design-patterns/ch09-learning' },
+                { text: '第10章：模型上下文协议（MCP）', link: '/reference/agentic-design-patterns/ch10-mcp' },
+                { text: '第11章：目标设定与监控', link: '/reference/agentic-design-patterns/ch11-goal-setting' },
+                { text: '第12章：异常处理与恢复', link: '/reference/agentic-design-patterns/ch12-error-handling' },
+                { text: '第13章：人类参与环节', link: '/reference/agentic-design-patterns/ch13-hitl' },
+                { text: '第14章：知识检索（RAG）', link: '/reference/agentic-design-patterns/ch14-rag' },
+                { text: '第15章：智能体间通信（A2A）', link: '/reference/agentic-design-patterns/ch15-a2a' },
+                { text: '第16章：资源感知优化', link: '/reference/agentic-design-patterns/ch16-resource-awareness' },
+                { text: '第17章：推理技术', link: '/reference/agentic-design-patterns/ch17-reasoning' },
+                { text: '第18章：护栏与安全模式', link: '/reference/agentic-design-patterns/ch18-guardrails' },
+                { text: '第19章：评估与监控', link: '/reference/agentic-design-patterns/ch19-evaluation' },
+                { text: '第20章：优先级排序', link: '/reference/agentic-design-patterns/ch20-prioritization' },
+                { text: '第21章：探索与发现', link: '/reference/agentic-design-patterns/ch21-exploration' }
               ]
             }
           ],'/guide/': [

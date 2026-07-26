@@ -253,17 +253,18 @@ CREATE TABLE IF NOT EXISTS ai_memories_templates (
     is_builtin    INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_memories_templates_name ON ai_memories_templates(name);
 CREATE INDEX IF NOT EXISTS idx_memory_templates_builtin ON ai_memories_templates(is_builtin);
 
 -- =============================================================================
 -- 12. ai_memories — 记忆条目表
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ai_memories (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    team_id      INTEGER NOT NULL,
-    project_id   INTEGER NOT NULL,
-    module_id    INTEGER NOT NULL,
-    user_id      INTEGER NOT NULL,
+    id           TEXT PRIMARY KEY,
+    team_id      TEXT NOT NULL,
+    project_id   TEXT NOT NULL,
+    module_id    TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
     title        TEXT NOT NULL,
     content      TEXT NOT NULL,
     template_id  INTEGER,

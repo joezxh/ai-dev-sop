@@ -49,7 +49,11 @@ func (h *SessionHandlersV2) ListSessions() gin.HandlerFunc {
 		f.TeamID = c.Query("team_id")
 		f.ProjectID = c.Query("project_id")
 		f.ModuleID = c.Query("module_id")
-		f.UserID, _ = strconv.ParseInt(c.Query("user_id"), 10, 64)
+		if uid := c.Query("user_id"); uid != "" {
+			if v, err := strconv.ParseInt(uid, 10, 64); err == nil {
+				f.UserID = strconv.FormatInt(v, 10)
+			}
+		}
 		f.ProjectPath = c.Query("project_path")
 		if raw := c.Query("include_legacy"); raw != "" {
 			b, err := strconv.ParseBool(raw)
@@ -174,7 +178,11 @@ func (h *SessionHandlersV2) Stats() gin.HandlerFunc {
 		f.TeamID = c.Query("team_id")
 		f.ProjectID = c.Query("project_id")
 		f.ModuleID = c.Query("module_id")
-		f.UserID, _ = strconv.ParseInt(c.Query("user_id"), 10, 64)
+		if uid := c.Query("user_id"); uid != "" {
+			if v, err := strconv.ParseInt(uid, 10, 64); err == nil {
+				f.UserID = strconv.FormatInt(v, 10)
+			}
+		}
 		stats, err := h.DB.AggregateSessions(ctx, f)
 		if err != nil {
 			Fail(c, http.StatusInternalServerError, 5000074, "aggregate: "+err.Error())

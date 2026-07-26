@@ -79,33 +79,47 @@ func (db *DB) ListMemoryTemplates(ctx context.Context, builtinOnly bool) ([]*Mem
 }
 
 // GetMemoryTemplate returns one template by id.
-func (db *DB) GetMemoryTemplate(ctx context.Context, id string) (*MemoryTemplate, error) {
+func (db *DB) GetMemoryTemplate(ctx context.Context, id int64) (*MemoryTemplate, error) {
 	const q = `SELECT id, name, description, fields_json, body_template, is_builtin
                  FROM ai_memories_templates WHERE id = ?`
 	row := db.QueryRowContext(ctx, q, id)
 	return scanMemoryTemplate(row)
 }
 
+// GetMemoryTemplateByName returns one template by its unique name.
+func (db *DB) GetMemoryTemplateByName(ctx context.Context, name string) (*MemoryTemplate, error) {
+	const q = `SELECT id, name, description, fields_json, body_template, is_builtin
+                 FROM ai_memories_templates WHERE name = ?`
+	row := db.QueryRowContext(ctx, q, name)
+	return scanMemoryTemplate(row)
+}
+
 // CreateMemoryTemplate inserts a user-supplied template (non-builtin).
-// The five seeded tpl_adr/tpl_lesson/tpl_snippet/tpl_runbook/tpl_decision
-// rows are owned by the migration and cannot be re-created here.
+// The five seeded rows are owned by the migration and cannot be
+// re-created here. The id is auto-generated (AUTO_INCREMENT); on
+// success t.ID is populated with the new row id.
 func (db *DB) CreateMemoryTemplate(ctx context.Context, t *MemoryTemplate) error {
-	if t.ID == "" {
-		return errors.New("CreateMemoryTemplate: id required")
-	}
 	if t.Name == "" {
 		return errors.New("CreateMemoryTemplate: name required")
 	}
-	if _, err := db.ExecContext(ctx,
-		`INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
-         VALUES (?, ?, ?, ?, ?, 0)`,
-		t.ID, t.Name, t.Description, t.FieldsJSON, t.BodyTemplate,
-	); err != nil {
+	if t.BodyTemplate == "" {
+		return errors.New("CreateMemoryTemplate: body_template required")
+	}
+	res, err := db.ExecContext(ctx,
+		`INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
+         VALUES (?, ?, ?, ?, 0)`,
+		t.Name, t.Description, t.FieldsJSON, t.BodyTemplate,
+	); if err != nil {
 		if isUniqueViolation(err) {
 			return ErrModuleExists
 		}
 		return fmt.Errorf("insert template: %w", err)
 	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("last insert id: %w", err)
+	}
+	t.ID = id
 	t.IsBuiltin = false
 	return nil
 }
@@ -135,7 +149,7 @@ type MemoryFilter struct {
 	ModuleID   string
 	UserID     string
 	Hall       string
-	TemplateID string
+	TemplateID int64
 	Tag        string // optional — substring match against the JSON-encoded tags array
 	Limit      int
 	Offset     int
@@ -183,10 +197,10 @@ func (db *DB) CreateMemory(ctx context.Context, m *Memory) error {
 	if err != nil {
 		return fmt.Errorf("encode tags: %w", err)
 	}
-	// template_id is nullable. Empty string → NULL.
-	var templateID sql.NullString
-	if m.TemplateID != "" {
-		templateID = sql.NullString{String: m.TemplateID, Valid: true}
+	// template_id is nullable. Zero value → NULL.
+	var templateID sql.NullInt64
+	if m.TemplateID != 0 {
+		templateID = sql.NullInt64{Int64: m.TemplateID, Valid: true}
 	}
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO ai_memories
@@ -517,7 +531,7 @@ func memoriesWhere(f MemoryFilter) (string, []any) {
 		clauses = append(clauses, "hall = ?")
 		args = append(args, f.Hall)
 	}
-	if f.TemplateID != "" {
+	if f.TemplateID != 0 {
 		clauses = append(clauses, "template_id = ?")
 		args = append(args, f.TemplateID)
 	}
@@ -567,7 +581,7 @@ func decodeTags(raw string) []string {
 
 func scanMemory(s scanner) (*Memory, error) {
 	m := &Memory{}
-	var templateID sql.NullString
+	var templateID sql.NullInt64
 	var tagsJSON string
 	var deleted int
 	if err := s.Scan(
@@ -580,7 +594,7 @@ func scanMemory(s scanner) (*Memory, error) {
 		return nil, err
 	}
 	if templateID.Valid {
-		m.TemplateID = templateID.String
+		m.TemplateID = templateID.Int64
 	}
 	m.Tags = decodeTags(tagsJSON)
 	m.Deleted = deleted != 0

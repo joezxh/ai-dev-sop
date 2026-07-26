@@ -54,7 +54,7 @@ https://www.youtube.com/watch?v=A8JU9_GQApg，
 #### 6. 六边形终极审查（核心 Prompt）
 
 **技巧：** 完成后使用 Sonnet 4.5 进行闭环审计。
-![ai审稿师.png](images/ai%E5%AE%A1%E7%A8%BF%E5%B8%88.png)
+![ai审稿师.png](images/ai审稿师.png)
 * **实战 Prompt：**
 
 > “请对代码进行六边形审计：

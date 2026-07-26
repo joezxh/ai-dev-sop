@@ -16,3 +16,6 @@ example
 prev_dom
 /tools/cbmem-team/stderr.log
 /tools/cbmem-team/stdout.log
+skills
+/tools/codebase-memory-mcp/
+/tools/mempalace/

@@ -302,7 +302,7 @@ docker run -i --rm ghcr.io/deusdata/codebase-memory-mcp:latest --version
 3. get-shit-done  本地已经clone路径: d:\work\get-shit-done
 4. OpenSpec  本地已经clone路径: d:\work\openspec
 5. Agent-skills  本地已经clone路径: d:\work\agent-skills
-6. awesome-design-md  本地已经clone路径: d:\work\awesome-design-md
+6. everything-claude-code  本地已经clone路径: d:\work\everything-claude-code
 
 # 执行步骤与规范（请严格按顺序执行）：
 

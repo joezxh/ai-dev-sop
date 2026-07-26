@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Design Patterns — Neural Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ===== CSS VARIABLES — LIGHT THEME ===== */
+    :root {
+      --bg-primary: #F0F4FF;
+      --bg-secondary: #E8EEFF;
+      --bg-card: #FFFFFF;
+      --bg-glass: rgba(255,255,255,0.6);
+      --border-color: rgba(59,130,246,0.15);
+      --border-glow: rgba(59,130,246,0.3);
+      --text-primary: #1E3A5F;
+      --text-secondary: #4A6FA5;
+      --text-muted: #7A8FB0;
+      --accent-primary: #3B82F6;
+      --accent-secondary: #06B6D4;
+      --accent-success: #10B981;
+      --accent-warning: #F59E0B;
+      --accent-danger: #EF4444;
+      --accent-purple: #8B5CF6;
+      --glow-color: rgba(59,130,246,0.25);
+      --glow-color-strong: rgba(59,130,246,0.5);
+      --shadow-card: 0 4px 24px rgba(30,58,95,0.08), 0 0 0 1px rgba(59,130,246,0.08);
+      --shadow-glow: 0 0 20px var(--glow-color), 0 0 40px rgba(59,130,246,0.1);
+      --scanline-color: rgba(59,130,246,0.03);
+      --font-display: 'Orbitron', 'Share Tech Mono', monospace;
+      --font-body: 'Exo 2', system-ui, sans-serif;
+      --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+    }
+
+    /* ===== CSS VARIABLES — DARK THEME ===== */
+    [data-theme="dark"] {
+      --bg-primary: #050B18;
+      --bg-secondary: #0A1628;
+      --bg-card: #0D1B2A;
+      --bg-glass: rgba(13,27,42,0.7);
+      --border-color: rgba(59,130,246,0.2);
+      --border-glow: rgba(59,130,246,0.4);
+      --text-primary: #E2E8F0;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      --accent-primary: #60A5FA;
+      --accent-secondary: #22D3EE;
+      --accent-success: #34D399;
+      --accent-warning: #FBBF24;
+      --accent-danger: #F87171;
+      --accent-purple: #A78BFA;
+      --glow-color: rgba(59,130,246,0.3);
+      --glow-color-strong: rgba(59,130,246,0.6);
+      --shadow-card: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(59,130,246,0.15);
+      --shadow-glow: 0 0 30px var(--glow-color), 0 0 60px rgba(59,130,246,0.15);
+      --scanline-color: rgba(59,130,246,0.04);
+    }
+
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background 0.4s ease, color 0.4s ease;
+      position: relative;
+    }
+
+    /* ===== GRID BACKGROUND ===== */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ===== SCANLINE OVERLAY ===== */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        var(--scanline-color) 2px,
+        var(--scanline-color) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ===== LAYOUT ===== */
+    .app-container {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ===== HEADER ===== */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: var(--bg-glass);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 2rem;
+    }
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      position: relative;
+    }
+    .logo-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent-primary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px var(--glow-color);
+    }
+    [data-theme="dark"] .logo-text {
+      text-shadow: 0 0 20px var(--glow-color-strong);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ===== CONTROL BUTTONS ===== */
+    .ctrl-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-family: var(--font-body);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .ctrl-btn:hover {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+      box-shadow: 0 0 12px var(--glow-color);
+    }
+    .ctrl-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .ctrl-btn.active {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+      background: rgba(59,130,246,0.08);
+    }
+
+    /* ===== LANGUAGE SWITCHER ===== */
+    .lang-switcher {
+      position: relative;
+    }
+    .lang-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 160px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px);
+      transition: all 0.2s ease;
+      z-index: 200;
+    }
+    .lang-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .lang-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lang-option:hover { background: var(--bg-secondary); color: var(--accent-primary); }
+    .lang-option.selected { color: var(--accent-primary); background: rgba(59,130,246,0.06); }
+    .lang-flag { font-size: 1.1rem; }
+    .lang-tag {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    /* ===== HERO SECTION ===== */
+    .hero {
+      padding: 5rem 2rem 3rem;
+      text-align: center;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--accent-primary);
+      color: var(--accent-primary);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      margin-bottom: 1.5rem;
+      animation: pulse-glow 3s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 8px var(--glow-color); }
+      50% { box-shadow: 0 0 20px var(--glow-color-strong); }
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 4vw, 3.2rem);
+      font-weight: 900;
+      color: var(--text-primary);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+    }
+    .hero h1 span {
+      color: var(--accent-primary);
+      text-shadow: 0 0 30px var(--glow-color-strong);
+    }
+    .hero-sub {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 1rem auto 0;
+      line-height: 1.6;
+    }
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 3rem;
+      margin-top: 2.5rem;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent-primary);
+      text-shadow: 0 0 20px var(--glow-color);
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    /* ===== FILTER BAR ===== */
+    .filter-bar {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .filter-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-tag {
+      padding: 5px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-tag:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .filter-tag.active {
+      border-color: var(--accent-primary);
+      background: rgba(59,130,246,0.1);
+      color: var(--accent-primary);
+      box-shadow: 0 0 12px var(--glow-color);
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      transition: all 0.2s;
+    }
+    .search-box:focus-within {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 12px var(--glow-color);
+    }
+    .search-box input {
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      outline: none;
+      width: 180px;
+    }
+    .search-box input::placeholder { color: var(--text-muted); }
+    .search-box svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+
+    /* ===== PATTERN GRID ===== */
+    .patterns-section {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+    .patterns-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    /* ===== PATTERN CARD ===== */
+    .pattern-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .pattern-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-lg);
+      padding: 1px;
+      background: linear-gradient(135deg, transparent 40%, var(--accent-primary) 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .pattern-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent-primary);
+      box-shadow: var(--shadow-glow);
+    }
+    .pattern-card:hover::before { opacity: 1; }
+    .pattern-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .pattern-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      background: rgba(59,130,246,0.08);
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .pattern-icon {
+      background: rgba(59,130,246,0.12);
+    }
+    .pattern-number {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+    }
+    .pattern-name {
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 0.4rem;
+      letter-spacing: 1px;
+    }
+    .pattern-name-en {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 0.6rem;
+    }
+    .pattern-desc {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+    .pattern-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .tag-foundation { background: rgba(59,130,246,0.12); color: var(--accent-primary); }
+    .tag-cognition { background: rgba(139,92,246,0.12); color: var(--accent-purple); }
+    .tag-action { background: rgba(6,182,212,0.12); color: var(--accent-secondary); }
+    .tag-collaboration { background: rgba(16,185,129,0.12); color: var(--accent-success); }
+    .tag-evolution { background: rgba(245,158,11,0.12); color: var(--accent-warning); }
+    .tag-safety { background: rgba(239,68,68,0.12); color: var(--accent-danger); }
+    .tag-done {
+      background: rgba(16,185,129,0.15);
+      color: var(--accent-success);
+      border: 1px solid rgba(16,185,129,0.3);
+    }
+
+    /* ===== SECTION DIVIDER ===== */
+    .section-divider {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .section-divider-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border-color), transparent);
+    }
+    .section-divider-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ===== FOOTER ===== */
+    .footer {
+      border-top: 1px solid var(--border-color);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+    .footer a { color: var(--accent-primary); text-decoration: none; }
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes glitch {
+      0%, 90%, 100% { transform: none; }
+      92% { transform: skew(-2deg) translateX(3px); opacity: 0.9; }
+      94% { transform: skew(1deg) translateX(-2px); }
+      96% { transform: none; }
+    }
+    .glitch-text {
+      display: inline-block;
+      animation: glitch 6s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .float-anim { animation: float 4s ease-in-out infinite; }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .header-inner { height: 56px; }
+      .hero { padding: 3rem 1rem 2rem; }
+      .hero-stats { gap: 2rem; }
+      .patterns-section, .filter-bar, .section-divider { padding-left: 1rem; padding-right: 1rem; }
+      .filter-bar { flex-direction: column; align-items: flex-start; }
+      .search-box input { width: 140px; }
+    }
+
+    /* ===== LIVE DEMO PANEL ===== */
+    .demo-panel {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+    .demo-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .demo-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+    }
+    .demo-title {
+      font-family: var(--font-display);
+      font-size: 0.8rem;
+      color: var(--accent-primary);
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .demo-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-success);
+      box-shadow: 0 0 8px var(--accent-success);
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    .demo-body {
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 1.5rem;
+    }
+    @media (max-width: 900px) { .demo-body { grid-template-columns: 1fr; } }
+    .demo-left {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .detail-panel {
+      display: grid;
+      gap: 1rem;
+    }
+    .detail-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+    }
+    .detail-hero {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .detail-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.16);
+      flex-shrink: 0;
+    }
+    .detail-meta {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .detail-overline {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--accent-primary);
+    }
+    .detail-name {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      color: var(--text-primary);
+      letter-spacing: 0.6px;
+    }
+    .detail-code {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .detail-summary {
+      font-size: 0.84rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .detail-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .detail-section-title {
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      color: var(--text-primary);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .detail-line {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .detail-line strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .detail-list {
+      margin: 0;
+      padding-left: 1rem;
+      display: grid;
+      gap: 8px;
+    }
+    .detail-list li {
+      font-size: 0.8rem;
+      line-height: 1.65;
+      color: var(--text-secondary);
+    }
+    .detail-step-list {
+      display: grid;
+      gap: 10px;
+    }
+    .detail-step {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-color);
+    }
+    .detail-step-title {
+      font-size: 0.8rem;
+      color: var(--text-primary);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .detail-step-desc {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      line-height: 1.65;
+    }
+    .detail-pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .detail-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.16);
+      color: var(--text-secondary);
+      font-size: 0.76rem;
+      line-height: 1.4;
+    }
+    .detail-column {
+      display: grid;
+      gap: 10px;
+    }
+    .detail-empty {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    @media (max-width: 700px) { .detail-grid { grid-template-columns: 1fr; } }
+    .demo-chat {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      animation: fadeInUp 0.3s ease;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.2);
+      color: var(--text-primary);
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg.assistant {
+      align-self: flex-start;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+    }
+    .chat-msg .typing {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .typing span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      animation: typing-bounce 1.4s ease-in-out infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing-bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-6px); opacity: 1; }
+    }
+    .demo-config {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .config-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .config-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .config-value {
+      font-size: 0.82rem;
+      color: var(--accent-primary);
+      font-weight: 500;
+    }
+    .config-bar {
+      height: 6px;
+      background: var(--bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .config-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+      transition: width 1s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-inner">
+        <a class="logo" href="#">
+          <div class="logo-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="18,2 34,10 34,26 18,34 2,26 2,10" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-primary)"/>
+              <polygon points="18,8 28,13 28,23 18,28 8,23 8,13" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--accent-secondary);opacity:0.6"/>
+              <circle cx="18" cy="18" r="4" fill="var(--accent-primary)" opacity="0.8"/>
+              <line x1="18" y1="2" x2="18" y2="8" stroke="var(--accent-primary)" stroke-width="1" opacity="0.5"/>
+              <line x1="18" y1="28" x2="18" y2="34" stroke="var(--accent-primary)" stroke-width="1" opacity="0.5"/>
+              <line x1="2" y1="10" x2="8" y2="13" stroke="var(--accent-primary)" stroke-width="1" opacity="0.5"/>
+              <line x1="28" y1="23" x2="34" y2="26" stroke="var(--accent-primary)" stroke-width="1" opacity="0.5"/>
+            </svg>
+          </div>
+          <span class="logo-text">NeuralCore</span>
+        </a>
+        <div class="header-actions">
+          <!-- Theme Toggle -->
+          <button class="ctrl-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+            <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <span data-i18n="theme">Theme</span>
+          </button>
+          <!-- Language Switcher -->
+          <div class="lang-switcher">
+            <button class="ctrl-btn" onclick="toggleLang()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <span id="currentLang">EN</span>
+            </button>
+            <div class="lang-dropdown" id="langDropdown">
+              <div class="lang-option" onclick="setLang('zh-CN')"><span class="lang-flag">&#x1F1E8;&#x1F1F3;</span> 简体中文 <span class="lang-tag">zh-CN</span></div>
+              <div class="lang-option" onclick="setLang('zh-TW')"><span class="lang-flag">&#x1F1F9;&#x1F1FC;</span> 繁體中文 <span class="lang-tag">zh-TW</span></div>
+              <div class="lang-option selected" onclick="setLang('en-US')"><span class="lang-flag">&#x1F1FA;&#x1F1F8;</span> English <span class="lang-tag">en-US</span></div>
+              <div class="lang-option" onclick="setLang('ja-JP')"><span class="lang-flag">&#x1F1EF;&#x1F1F5;</span> 日本語 <span class="lang-tag">ja-JP</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-badge">
+        <span style="font-size:0.6rem">&#x25C6;</span>
+        <span data-i18n="badge">21 INTELLIGENT AGENT DESIGN PATTERNS</span>
+      </div>
+      <h1 class="glitch-text"><span data-i18n="heroTitle">Agentic Design</span><br/><span data-i18n="heroTitle2">Patterns</span></h1>
+      <p class="hero-sub" data-i18n="heroSub">A comprehensive framework for building autonomous AI agents — from prompt chaining to multi-agent collaboration, 21 battle-tested patterns with interactive demos.</p>
+      <div class="hero-stats">
+        <div class="stat-item">
+          <div class="stat-value">21</div>
+          <div class="stat-label" data-i18n="stat1">Design Patterns</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">6</div>
+          <div class="stat-label" data-i18n="stat2">Core Categories</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">4</div>
+          <div class="stat-label" data-i18n="stat3">Languages</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">2</div>
+          <div class="stat-label" data-i18n="stat4">Themes</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOPIC OVERVIEW -->
+    <section class="overview-grid" style="max-width:1400px;margin:0 auto;padding:0 2rem 2rem;display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:16px;">
+      <div class="card" style="padding:24px;">
+        <h3 style="font-family:var(--font-display);font-size:0.95rem;margin-bottom:12px;"> <span data-i18n="overviewTitle">Topic Overview</span></h3>
+        <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8;" data-i18n="overviewBody">This static prototype turns pattern browsing into a multilingual topic experience.</p>
+      </div>
+      <div class="card" style="padding:24px;">
+        <h3 style="font-family:var(--font-display);font-size:0.9rem;margin-bottom:12px;" data-i18n="readingPathsTitle">Recommended Reading Paths</h3>
+        <ul style="padding-left:1rem;display:grid;gap:8px;color:var(--text-secondary);font-size:0.82rem;line-height:1.7;">
+          <li data-i18n="readingPath1">Start with foundation patterns.</li>
+          <li data-i18n="readingPath2">Then move to action patterns.</li>
+          <li data-i18n="readingPath3">Finish with cognition and safety patterns.</li>
+        </ul>
+      </div>
+      <div class="card" style="padding:24px;">
+        <h3 style="font-family:var(--font-display);font-size:0.9rem;margin-bottom:12px;" data-i18n="knowledgeTitle">Knowledge Sources</h3>
+        <ul style="padding-left:1rem;display:grid;gap:8px;color:var(--text-secondary);font-size:0.82rem;line-height:1.7;">
+          <li data-i18n="knowledge1">PDF chapter synthesis</li>
+          <li data-i18n="knowledge2">Java implementation mapping</li>
+          <li data-i18n="knowledge3">Interactive demos</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- FILTER -->
+    <div class="filter-bar">
+      <div class="filter-tags">
+        <span class="filter-tag active" onclick="filterPatterns('all', this)" data-i18n="filterAll">All</span>
+        <span class="filter-tag" onclick="filterPatterns('foundation', this)" data-i18n="filterFoundation">Foundation</span>
+        <span class="filter-tag" onclick="filterPatterns('cognition', this)" data-i18n="filterCognition">Cognition</span>
+        <span class="filter-tag" onclick="filterPatterns('action', this)" data-i18n="filterAction">Action</span>
+        <span class="filter-tag" onclick="filterPatterns('collaboration', this)" data-i18n="filterCollab">Collaboration</span>
+        <span class="filter-tag" onclick="filterPatterns('evolution', this)" data-i18n="filterEvolution">Evolution</span>
+        <span class="filter-tag" onclick="filterPatterns('safety', this)" data-i18n="filterSafety">Safety</span>
+      </div>
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" placeholder="Search patterns..." data-i18n-placeholder="searchPlaceholder" id="searchInput" oninput="searchPatterns(this.value)" />
+      </div>
+    </div>
+
+    <!-- PATTERNS GRID -->
+    <section class="patterns-section">
+      <div class="patterns-grid" id="patternsGrid">
+        <!-- Cards injected by JS -->
+      </div>
+    </section>
+
+    <!-- LIVE DEMO PANEL -->
+    <div class="demo-panel">
+      <div class="demo-card">
+        <div class="demo-header">
+          <div class="demo-title">
+            <div class="demo-dot"></div>
+            <span data-i18n="liveDemo">LIVE INTERACTIVE DEMO</span>
+          </div>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-muted);" data-i18n="demoSubtitle">Real-time agent orchestration</span>
+        </div>
+        <div class="demo-body">
+          <div class="demo-left">
+            <div class="detail-panel" id="detailPanel">
+              <div class="detail-card">
+                <div class="detail-hero">
+                  <div class="detail-icon">⛓️</div>
+                  <div class="detail-meta">
+                    <div class="detail-overline">CH-01 · Foundation</div>
+                    <div class="detail-name">Prompt Chaining</div>
+                    <div class="detail-code">prompt_chaining</div>
+                    <p class="detail-summary">Select a pattern card to inspect its Java mapping, PDF insights, and related patterns in a structured view.</p>
+                    <div class="detail-tags">
+                      <span class="tag tag-foundation">Foundation</span>
+                      <span class="tag tag-collaboration">Java</span>
+                      <span class="tag tag-evolution">PDF</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="detail-grid">
+                <div class="detail-card">
+                  <div class="detail-section-title">Java Mapping</div>
+                  <div class="detail-line"><strong>Class:</strong> PromptChainingPattern</div>
+                  <div class="detail-line">Break a complex task into ordered, inspectable steps for more reliable execution.</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-section-title">PDF Summary</div>
+                  <div class="detail-line">Prompt chaining turns a large task into smaller, verifiable stages so each step is easier to review and refine.</div>
+                </div>
+              </div>
+              <div class="detail-grid">
+                <div class="detail-card">
+                  <div class="detail-section-title">References</div>
+                  <ul class="detail-list">
+                    <li>Chapter 1: Prompt Chaining</li>
+                    <li>Pattern overview</li>
+                  </ul>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-section-title">Related Patterns</div>
+                  <ul class="detail-list">
+                    <li><strong>planner</strong> — Planner can produce the decomposition before the chain executes.</li>
+                    <li><strong>self_correction</strong> — A final verification step often closes the chain.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div class="demo-chat" id="demoChat">
+              <div class="chat-msg assistant">
+                <span data-i18n="demoWelcome">Welcome to NeuralCore! Select a pattern above to see an interactive demo. The agent will reason, plan, and execute steps in real-time.</span>
+              </div>
+              <div class="chat-msg user" data-i18n="demoQ">Show me how Prompt Chaining works with a practical example.</div>
+              <div class="chat-msg assistant">
+                <div class="typing">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="demo-config">
+            <div class="config-item">
+              <div class="config-label" data-i18n="configModel">Active Model</div>
+              <div class="config-value">qwen-plus (DashScope)</div>
+              <div class="config-bar"><div class="config-bar-fill" style="width:87%"></div></div>
+            </div>
+            <div class="config-item">
+              <div class="config-label" data-i18n="configTokens">Tokens Used</div>
+              <div class="config-value">2,847 / 8,192</div>
+              <div class="config-bar"><div class="config-bar-fill" style="width:35%"></div></div>
+            </div>
+            <div class="config-item">
+              <div class="config-label" data-i18n="configPatterns">Patterns Active</div>
+              <div class="config-value" data-i18n="configPatternValue">Prompt Chaining + Tool Use + Reflection</div>
+              <div class="config-bar"><div class="config-bar-fill" style="width:75%"></div></div>
+            </div>
+            <div class="config-item">
+              <div class="config-label" data-i18n="configLatency">Avg Latency</div>
+              <div class="config-value">1,240ms</div>
+              <div class="config-bar"><div class="config-bar-fill" style="width:55%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <p>Agentic Design Patterns Framework &mdash; Spring AI Alibaba + Vue 3 &mdash; <a href="#">Documentation</a> &mdash; <a href="#">GitHub</a></p>
+    </footer>
+  </div>
+
+  <script src="./prototype-content.js"></script>
+  <script>
+    const i18n = PROTOTYPE_I18N;
+    const patterns = PROTOTYPE_PATTERNS;
+    const categoryMap = PROTOTYPE_CATEGORY_MAP;
+    const topicIndex = PROTOTYPE_TOPIC_INDEX;
+
+    // ===== RENDER PATTERNS =====
+    let activeFilter = 'all';
+    let activeLang = 'en-US';
+
+    function getPatternName(pattern) {
+      return pattern.names[activeLang] || pattern.names['en-US'];
+    }
+
+    function getPatternDesc(pattern) {
+      return pattern.descs[activeLang] || pattern.descs['en-US'];
+    }
+
+    function getCategoryLabel(category) {
+      return categoryMap[category]?.labels?.[activeLang] || categoryMap[category]?.labels?.['en-US'] || category;
+    }
+
+    function renderDetailPanel(topic) {
+      const panel = document.getElementById('detailPanel');
+      if (!panel || !topic) return;
+      const texts = i18n[activeLang] || i18n['en-US'];
+      const localizedName = topic.names[activeLang] || topic.names['en-US'];
+      const localizedSummary = topic.summaries[activeLang] || topic.summaries['en-US'];
+      const categoryLabel = getCategoryLabel(topic.category);
+      const steps = topic.steps?.[activeLang] || topic.steps?.['en-US'] || [];
+      const keyPoints = topic.keyPoints?.[activeLang] || topic.keyPoints?.['en-US'] || [];
+      const suitableScenarios = topic.suitableScenarios?.[activeLang] || topic.suitableScenarios?.['en-US'] || [];
+      const unsuitableScenarios = topic.unsuitableScenarios?.[activeLang] || topic.unsuitableScenarios?.['en-US'] || [];
+      const javaBlock = topic.javaClass
+        ? `
+          <div class="detail-line"><strong>Class:</strong> ${topic.javaClass}</div>
+          <div class="detail-line">${topic.javaSummary || texts.noJavaMapping}</div>
+        `
+        : `<div class="detail-empty">${texts.noJavaMapping}</div>`;
+      const pdfBlock = topic.hasPdf
+        ? `<div class="detail-line">${topic.pdfSummary || texts.noPdfSummary}</div>`
+        : `<div class="detail-empty">${texts.noPdfSummary}</div>`;
+      const referencesBlock = topic.pdfReferences?.length
+        ? `<ul class="detail-list">${topic.pdfReferences.map((ref) => `<li>${ref}</li>`).join('')}</ul>`
+        : `<div class="detail-empty">${texts.noPdfSummary}</div>`;
+      const relatedBlock = topic.relatedPatterns?.length
+        ? `<ul class="detail-list">${topic.relatedPatterns.map((item) => `<li><strong>${item.code}</strong> — ${item.reason}</li>`).join('')}</ul>`
+        : `<div class="detail-empty">${texts.noRelatedPatterns}</div>`;
+      const stepsBlock = steps.length
+        ? `<div class="detail-step-list">${steps.map((step, index) => `
+            <div class="detail-step">
+              <div class="detail-step-title">${index + 1}. ${step.title}</div>
+              <div class="detail-step-desc">${step.desc}</div>
+            </div>
+          `).join('')}</div>`
+        : `<div class="detail-empty">${texts.noSteps}</div>`;
+      const keyPointsBlock = keyPoints.length
+        ? `<ul class="detail-list">${keyPoints.map((item) => `<li>${item}</li>`).join('')}</ul>`
+        : `<div class="detail-empty">${texts.noKeyPoints}</div>`;
+      const suitableBlock = suitableScenarios.length
+        ? `<div class="detail-pill-list">${suitableScenarios.map((item) => `<span class="detail-pill">${item}</span>`).join('')}</div>`
+        : `<div class="detail-empty">${texts.noSuitableScenarios}</div>`;
+      const unsuitableBlock = unsuitableScenarios.length
+        ? `<div class="detail-pill-list">${unsuitableScenarios.map((item) => `<span class="detail-pill">${item}</span>`).join('')}</div>`
+        : `<div class="detail-empty">${texts.noUnsuitableScenarios}</div>`;
+      panel.innerHTML = `
+        <div class="detail-card">
+          <div class="detail-hero">
+            <div class="detail-icon">${topic.icon}</div>
+            <div class="detail-meta">
+              <div class="detail-overline">${topic.chapter} · ${categoryLabel}</div>
+              <div class="detail-name">${localizedName}</div>
+              <div class="detail-code">${topic.code}</div>
+              <p class="detail-summary">${localizedSummary}</p>
+              <div class="detail-tags">
+                <span class="tag ${categoryMap[topic.category]?.class || ''}">${categoryLabel}</span>
+                ${topic.javaClass ? `<span class="tag tag-collaboration">${texts.javaBadge}</span>` : ''}
+                ${topic.hasPdf ? `<span class="tag tag-evolution">${texts.pdfBadge}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <div class="detail-section-title">Java Mapping</div>
+            ${javaBlock}
+          </div>
+          <div class="detail-card">
+            <div class="detail-section-title">${texts.pdfSummaryLabel}</div>
+            ${pdfBlock}
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <div class="detail-section-title">${texts.stepsLabel}</div>
+            ${stepsBlock}
+          </div>
+          <div class="detail-card">
+            <div class="detail-section-title">${texts.keyPointsLabel}</div>
+            ${keyPointsBlock}
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-card detail-column">
+            <div>
+              <div class="detail-section-title">${texts.suitableScenariosLabel}</div>
+              ${suitableBlock}
+            </div>
+            <div>
+              <div class="detail-section-title">${texts.unsuitableScenariosLabel}</div>
+              ${unsuitableBlock}
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-section-title">${texts.relatedPatternsLabel}</div>
+            ${relatedBlock}
+          </div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-section-title">${texts.referencesLabel}</div>
+          ${referencesBlock}
+        </div>
+      `;
+    }
+
+    function renderPatterns(filter = 'all', search = '') {
+      const grid = document.getElementById('patternsGrid');
+      const query = search.toLowerCase();
+      const filtered = patterns.filter(p => {
+        const name = getPatternName(p);
+        const desc = getPatternDesc(p);
+        const matchCat = filter === 'all' || p.category === filter;
+        const matchSearch = search === '' ||
+          name.toLowerCase().includes(query) ||
+          (p.names['en-US'] || '').toLowerCase().includes(query) ||
+          desc.toLowerCase().includes(query) ||
+          (p.java || '').toLowerCase().includes(query);
+        return matchCat && matchSearch;
+      });
+
+      grid.innerHTML = filtered.map(p => {
+        const cat = categoryMap[p.category];
+        const texts = i18n[activeLang] || i18n['en-US'];
+        return `
+          <div class="pattern-card" onclick="selectPattern(${p.id})">
+            <div class="pattern-card-header">
+              <div class="pattern-icon">${p.icon}</div>
+              <span class="pattern-number">#${String(p.id).padStart(2,'0')} ${p.chapter}</span>
+            </div>
+            <div class="pattern-name">${getPatternName(p)}</div>
+            <div class="pattern-name-en">${p.names['en-US'] || ''}</div>
+            <div class="pattern-desc">${getPatternDesc(p)}</div>
+            <div class="pattern-tags">
+              <span class="tag ${cat.class}">${getCategoryLabel(p.category)}</span>
+              <span class="tag tag-collaboration">${texts.javaBadge}</span>
+              ${p.pdf ? `<span class="tag tag-evolution">${texts.pdfBadge}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterPatterns(cat, el) {
+      activeFilter = cat;
+      document.querySelectorAll('.filter-tag').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      renderPatterns(cat, document.getElementById('searchInput').value);
+    }
+
+    function searchPatterns(q) {
+      renderPatterns(activeFilter, q);
+    }
+
+    function selectPattern(id) {
+      const p = patterns.find(x => x.id === id);
+      const topic = topicIndex[id] || p;
+      const texts = i18n[activeLang] || i18n['en-US'];
+      const chat = document.getElementById('demoChat');
+      const localizedName = topic.names[activeLang] || topic.names['en-US'];
+      const localizedSummary = topic.summaries[activeLang] || topic.summaries['en-US'];
+      const javaLine = topic.javaClass
+        ? `Java: ${topic.javaClass}${topic.javaSummary ? ` · ${topic.javaSummary}` : ''}`
+        : `Java: ${texts.noJavaMapping}`;
+      const pdfLine = topic.hasPdf
+        ? `${texts.pdfSummaryLabel}: ${topic.pdfSummary || texts.noPdfSummary}`
+        : `${texts.pdfSummaryLabel}: ${texts.noPdfSummary}`;
+      const referencesBlock = topic.pdfReferences?.length
+        ? `<div class="chat-msg assistant">${texts.referencesLabel}: ${topic.pdfReferences.join(' · ')}</div>`
+        : '';
+      const relatedBlock = topic.relatedPatterns?.length
+        ? `<div class="chat-msg assistant">${texts.relatedPatternsLabel}: ${topic.relatedPatterns.map(item => `${item.code} (${item.reason})`).join(' · ')}</div>`
+        : `<div class="chat-msg assistant">${texts.relatedPatternsLabel}: ${texts.noRelatedPatterns}</div>`;
+      renderDetailPanel(topic);
+      chat.innerHTML = `
+        <div class="chat-msg assistant">${localizedName} (${topic.names['en-US']}): ${localizedSummary}</div>
+        <div class="chat-msg assistant">${texts.categoryLabel}: ${getCategoryLabel(topic.category)} · ${topic.chapter}</div>
+        <div class="chat-msg assistant">${javaLine}</div>
+        <div class="chat-msg assistant">${texts.pdfBadge}: ${topic.hasPdf ? texts.yesLabel : texts.noLabel}</div>
+        <div class="chat-msg assistant">${pdfLine}</div>
+        ${referencesBlock}
+        ${relatedBlock}
+        <div class="chat-msg user">${texts.demoQ2}</div>
+      `;
+    }
+
+    // ===== THEME =====
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+      updateThemeIcon(!isDark);
+    }
+
+    function updateThemeIcon(isDark) {
+      const icon = document.getElementById('themeIcon');
+      if (isDark) {
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+      } else {
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+      }
+    }
+
+    // ===== LANGUAGE =====
+    function toggleLang() {
+      document.getElementById('langDropdown').classList.toggle('open');
+    }
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.lang-switcher')) {
+        document.getElementById('langDropdown').classList.remove('open');
+      }
+    });
+
+    function setLang(lang) {
+      activeLang = lang;
+      document.getElementById('currentLang').textContent = lang.split('-')[1];
+      document.querySelectorAll('.lang-option').forEach(o => {
+        o.classList.toggle('selected', o.getAttribute('onclick').includes(`'${lang}'`));
+      });
+      document.getElementById('langDropdown').classList.remove('open');
+      applyI18n(lang);
+    }
+
+    function applyI18n(lang) {
+      const texts = i18n[lang] || i18n['en-US'];
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (texts[key]) el.textContent = texts[key];
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (texts[key]) el.placeholder = texts[key];
+      });
+      document.documentElement.setAttribute('lang', lang);
+      renderPatterns(activeFilter, document.getElementById('searchInput').value);
+      renderDetailPanel(topicIndex[1]);
+    }
+
+    // ===== INIT =====
+    (function init() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      updateThemeIcon(savedTheme === 'dark');
+      applyI18n(activeLang);
+      renderPatterns();
+    })();
+  </script>
+</body>
+</html>

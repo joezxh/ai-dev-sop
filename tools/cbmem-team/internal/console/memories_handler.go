@@ -48,7 +48,11 @@ func (h *MemoryHandlers) List() gin.HandlerFunc {
 		f.ModuleID = c.Query("module_id")
 		f.UserID = c.Query("user_id")
 		f.Hall = c.Query("hall")
-		f.TemplateID = c.Query("template_id")
+		if tid := c.Query("template_id"); tid != "" {
+			if v, err := strconv.ParseInt(tid, 10, 64); err == nil {
+				f.TemplateID = v
+			}
+		}
 		f.Tag = c.Query("tag")
 		f.Limit, _ = strconv.Atoi(c.Query("limit"))
 		f.Offset, _ = strconv.Atoi(c.Query("offset"))
@@ -158,6 +162,13 @@ func (h *MemoryHandlers) Create() gin.HandlerFunc {
 		if !h.assertMemoryWrite(c, teamID) {
 			return
 		}
+		// Parse optional template_id.
+		var templateID int64
+		if req.TemplateID != "" {
+			if v, err := strconv.ParseInt(req.TemplateID, 10, 64); err == nil {
+				templateID = v
+			}
+		}
 		m := &Memory{
 			ID:         "mem_" + randomHex(4),
 			TeamID:     teamID,
@@ -166,7 +177,7 @@ func (h *MemoryHandlers) Create() gin.HandlerFunc {
 			UserID:     uid,
 			Title:      req.Title,
 			Content:    req.Content,
-			TemplateID: req.TemplateID,
+			TemplateID: templateID,
 			Tags:       req.Tags,
 			Hall:       req.Hall,
 		}
@@ -377,6 +388,10 @@ func memoryToDTO(m *Memory) MemoryDTO {
 	if m == nil {
 		return MemoryDTO{}
 	}
+	var templateID string
+	if m.TemplateID != 0 {
+		templateID = strconv.FormatInt(m.TemplateID, 10)
+	}
 	return MemoryDTO{
 		ID:         m.ID,
 		TeamID:     m.TeamID,
@@ -385,7 +400,7 @@ func memoryToDTO(m *Memory) MemoryDTO {
 		UserID:     m.UserID,
 		Title:      m.Title,
 		Content:    m.Content,
-		TemplateID: m.TemplateID,
+		TemplateID: templateID,
 		Tags:       m.Tags,
 		Hall:       m.Hall,
 		CreatedAt:  m.CreatedAt.UTC().Format(time.RFC3339),

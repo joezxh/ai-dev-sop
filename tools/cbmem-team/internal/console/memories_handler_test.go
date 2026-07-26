@@ -168,13 +168,16 @@ func TestMemoryTemplatesListAndGet(t *testing.T) {
 	if len(list) != 5 {
 		t.Fatalf("expected 5 templates, got %d", len(list))
 	}
-	// Get one
-	w = memDoJSON(t, h, http.MethodGet, "/api/v2/memory-templates/tpl_adr", tok, "")
+	// Extract the first template's id for the GET test.
+	first := list[0].(map[string]any)
+	firstID := first["id"].(string)
+	// Get one by id
+	w = memDoJSON(t, h, http.MethodGet, "/api/v2/memory-templates/"+firstID, tok, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("get: %d %s", w.Code, w.Body.String())
 	}
-	// Missing
-	w = memDoJSON(t, h, http.MethodGet, "/api/v2/memory-templates/tpl_doesnotexist", tok, "")
+	// Missing — use a very large id that won't exist
+	w = memDoJSON(t, h, http.MethodGet, "/api/v2/memory-templates/999999", tok, "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing template, got %d", w.Code)
 	}
@@ -185,6 +188,26 @@ func TestMemoryTemplatesRender(t *testing.T) {
 	h.seedUser(t, "u_admin", RoleAdmin)
 	tok := h.MintToken("u_admin", RoleAdmin)
 
+	// Find the ADR template id by listing.
+	w := memDoJSON(t, h, http.MethodGet, "/api/v2/memory-templates", tok, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", w.Code, w.Body.String())
+	}
+	var env envelope
+	_ = json.Unmarshal(w.Body.Bytes(), &env)
+	list := env.Data.(map[string]any)["list"].([]any)
+	var adrID string
+	for _, item := range list {
+		tpl := item.(map[string]any)
+		if tpl["name"] == "Architecture Decision Record (ADR)" {
+			adrID = tpl["id"].(string)
+			break
+		}
+	}
+	if adrID == "" {
+		t.Fatal("ADR template not found in list")
+	}
+
 	body := `{"fields":{
 		"title":"My Title",
 		"status":"accepted",
@@ -192,11 +215,10 @@ func TestMemoryTemplatesRender(t *testing.T) {
 		"decision":"we decided X",
 		"consequences":"easier to test"
 	}}`
-	w := memDoJSON(t, h, http.MethodPost, "/api/v2/memory-templates/tpl_adr/render", tok, body)
+	w = memDoJSON(t, h, http.MethodPost, "/api/v2/memory-templates/"+adrID+"/render", tok, body)
 	if w.Code != http.StatusOK {
 		t.Fatalf("render: %d %s", w.Code, w.Body.String())
 	}
-	var env envelope
 	_ = json.Unmarshal(w.Body.Bytes(), &env)
 	m := env.Data.(map[string]any)
 	rendered := m["rendered"].(string)

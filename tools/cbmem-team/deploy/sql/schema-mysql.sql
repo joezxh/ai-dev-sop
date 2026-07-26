@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS ai_memories_templates (
     fields_json   JSON         NOT NULL,
     body_template MEDIUMTEXT   NOT NULL,
     is_builtin    TINYINT(1)   NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_ai_memories_templates_name (name),
     KEY idx_memory_templates_builtin (is_builtin)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

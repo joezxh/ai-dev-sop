@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -65,6 +66,13 @@ func (db *DB) MigrateV2(ctx context.Context, warn func(string, ...any)) error {
 	if err := db.migrateV2Phase1(ctx, warn); err != nil {
 		return fmt.Errorf("phase1 create v2 tables: %w", err)
 	}
+	// Fix legacy TEXT/VARCHAR id columns in ai_memories_templates and
+	// ai_memories that pre-date the v2 BIGINT AUTO_INCREMENT schema.
+	// Must run after phase1 (so the table exists to probe) but before
+	// phase6 (so the upsert by name does not collide on old rows).
+	if err := db.migrateV2FixLegacyIntIds(ctx, warn); err != nil {
+		return fmt.Errorf("fix legacy int ids: %w", err)
+	}
 	if err := db.migrateV2Phase2(ctx, warn); err != nil {
 		return fmt.Errorf("phase2 add columns: %w", err)
 	}
@@ -100,6 +108,105 @@ func (db *DB) migrateV2Phase1(ctx context.Context, warn func(string, ...any)) er
 		}
 	}
 	return nil
+}
+
+// migrateV2FixLegacyIntIds detects and repairs ai_memories_templates (and
+// ai_memories) tables whose id column was created as VARCHAR(128) / TEXT
+// by a previous revision of the v2 schema.  The current schema uses
+// BIGINT AUTO_INCREMENT (MySQL) / INTEGER AUTOINCREMENT (SQLite) for
+// ai_memories_templates.id so phase6 can seed built-in templates without
+// colliding on string ids.
+//
+// Strategy: probe information_schema (MySQL) or pragma_table_info (SQLite)
+// for the column type; if it is a text type, drop both tables (child
+// first to satisfy FK) and let phase1 recreate them with the correct DDL.
+// Phase6 will then re-seed the template rows.
+//
+// This is safe because:
+//   - ai_memories_templates only holds the 5 built-in rows (re-seeded by
+//     phase6) plus any user-created templates (rare on a fresh deploy that
+//     hit this bug).
+//   - ai_memories is empty on a fresh deploy; on an upgrade the user can
+//     re-run the manual fix SQL (deploy/sql/fix-ai_memories-id-to-varchar.sql)
+//     after backing up data.
+func (db *DB) migrateV2FixLegacyIntIds(ctx context.Context, warn func(string, ...any)) error {
+	needFix, err := db.isLegacyTextId(ctx, "ai_memories_templates", "id")
+	if err != nil {
+		return fmt.Errorf("probe ai_memories_templates.id: %w", err)
+	}
+	if !needFix {
+		return nil
+	}
+	warn("ai_memories_templates.id is text type — dropping and recreating with BIGINT AUTO_INCREMENT")
+
+	// Drop child table first (FK dependency), then parent.
+	for _, tbl := range []string{"ai_memories", "ai_memories_templates"} {
+		if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tbl); err != nil {
+			return fmt.Errorf("drop %s: %w", tbl, err)
+		}
+	}
+
+	// Re-create both tables with the correct v2 DDL (phase1 statements).
+	for _, ddl := range db.v2DDL().createTables {
+		tblName := firstLine(ddl)
+		if !strings.Contains(tblName, "ai_memories_templates") &&
+			!strings.Contains(tblName, "ai_memories ") {
+			// Only recreate the two affected tables; skip the rest
+			// (they were already created successfully in phase1).
+			//
+			// We match "ai_memories " (with trailing space) to avoid
+			// also matching "ai_memories_templates".
+			continue
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			return fmt.Errorf("recreate %q: %w", tblName, err)
+		}
+	}
+	return nil
+}
+
+// isLegacyTextId returns true when the given table.column is a text type
+// (text / varchar / char) — i.e. the pre-revision schema that used string
+// ids for ai_memories_templates.  The current schema uses BIGINT /
+// INTEGER AUTOINCREMENT so the upsert in phase6 does not collide.
+func (db *DB) isLegacyTextId(ctx context.Context, table, column string) (bool, error) {
+	if db.driver == "mysql" {
+		const q = `SELECT DATA_TYPE FROM information_schema.columns
+		           WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`
+		var dataType string
+		if err := db.QueryRowContext(ctx, q, table, column).Scan(&dataType); err != nil {
+			if err == sql.ErrNoRows {
+				// Table or column does not exist yet — not a legacy text id.
+				return false, nil
+			}
+			return false, err
+		}
+		switch strings.ToLower(dataType) {
+		case "varchar", "char", "text", "mediumtext", "longtext":
+			return true, nil
+		}
+		return false, nil
+	}
+	// SQLite: check PRAGMA table_info.
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(name, column) {
+			upper := strings.ToUpper(ctype)
+			return strings.Contains(upper, "TEXT") || strings.Contains(upper, "CHAR"), nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // migrateV2Phase2 adds new columns to v1 tables. SQLite 3.35+ and MySQL 8.0.29
@@ -312,9 +419,9 @@ func (db *DB) migrateV2Phase6(ctx context.Context, warn func(string, ...any)) er
 	for _, tpl := range builtInMemoryTemplates {
 		if _, err := db.ExecContext(ctx,
 			db.v2DDL().upsertTemplateSQL,
-			tpl.ID, tpl.Name, tpl.Description, tpl.FieldsJSON, tpl.BodyTemplate, 1,
+			tpl.Name, tpl.Description, tpl.FieldsJSON, tpl.BodyTemplate, 1,
 		); err != nil {
-			return fmt.Errorf("seed template %s: %w", tpl.ID, err)
+			return fmt.Errorf("seed template %s: %w", tpl.Name, err)
 		}
 	}
 	return nil
@@ -436,13 +543,14 @@ var sqliteV2DDL = ddlBundle{
             FOREIGN KEY (parent_id) REFERENCES pm_modules(id) ON DELETE CASCADE ON UPDATE CASCADE
         )`,
 		`CREATE TABLE IF NOT EXISTS ai_memories_templates (
-            id TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
             fields_json TEXT NOT NULL DEFAULT '[]',
             body_template TEXT NOT NULL DEFAULT '',
             is_builtin INTEGER NOT NULL DEFAULT 0
         )`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_memories_templates_name ON ai_memories_templates(name)`,
 		`CREATE TABLE IF NOT EXISTS ai_memories (
             id TEXT PRIMARY KEY,
             team_id TEXT NOT NULL,
@@ -451,7 +559,7 @@ var sqliteV2DDL = ddlBundle{
             user_id TEXT NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
-            template_id TEXT,
+            template_id INTEGER,
             tags_json TEXT NOT NULL DEFAULT '[]',
             hall TEXT NOT NULL DEFAULT 'facts',
             created_at DATETIME NOT NULL,
@@ -599,10 +707,9 @@ var sqliteV2DDL = ddlBundle{
 		return `ALTER TABLE sys_users DROP COLUMN project_paths`
 	}(),
 
-	upsertTemplateSQL: `INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
-	                    VALUES (?,?,?,?,?,?)
-	                    ON CONFLICT(id) DO UPDATE SET
-	                        name=excluded.name,
+	upsertTemplateSQL: `INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
+	                    VALUES (?,?,?,?,?)
+	                    ON CONFLICT(name) DO UPDATE SET
 	                        description=excluded.description,
 	                        fields_json=excluded.fields_json,
 	                        body_template=excluded.body_template`,
@@ -644,12 +751,13 @@ var mysqlV2DDL = ddlBundle{
             deleted TINYINT(1) NOT NULL DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS ai_memories_templates (
-            id VARCHAR(128) NOT NULL PRIMARY KEY,
+            id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             description TEXT NOT NULL,
             fields_json JSON NOT NULL,
             body_template MEDIUMTEXT NOT NULL,
-            is_builtin TINYINT(1) NOT NULL DEFAULT 0
+            is_builtin TINYINT(1) NOT NULL DEFAULT 0,
+            UNIQUE KEY uk_ai_memories_templates_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS ai_memories (
             id VARCHAR(128) NOT NULL PRIMARY KEY,
@@ -659,7 +767,7 @@ var mysqlV2DDL = ddlBundle{
             user_id VARCHAR(128) NOT NULL,
             title VARCHAR(255) NOT NULL,
             content MEDIUMTEXT NOT NULL,
-            template_id VARCHAR(128) NULL,
+            template_id BIGINT NULL,
             tags_json JSON NOT NULL,
             hall VARCHAR(32) NOT NULL DEFAULT 'facts',
             created_at DATETIME(0) NOT NULL,
@@ -780,10 +888,9 @@ var mysqlV2DDL = ddlBundle{
 	// at runtime and the warn() downgrade in migrateV2Phase5 hides it.
 	dropProjectPaths: `ALTER TABLE sys_users DROP COLUMN project_paths`,
 
-	upsertTemplateSQL: `INSERT INTO ai_memories_templates (id, name, description, fields_json, body_template, is_builtin)
-	                    VALUES (?,?,?,?,?,?)
+	upsertTemplateSQL: `INSERT INTO ai_memories_templates (name, description, fields_json, body_template, is_builtin)
+	                    VALUES (?,?,?,?,?)
 	                    ON DUPLICATE KEY UPDATE
-	                        name=VALUES(name),
 	                        description=VALUES(description),
 	                        fields_json=VALUES(fields_json),
 	                        body_template=VALUES(body_template)`,
@@ -794,7 +901,6 @@ var mysqlV2DDL = ddlBundle{
 // ----------------------------------------------------------------------------
 
 type builtinTemplate struct {
-	ID           string
 	Name         string
 	Description  string
 	FieldsJSON   string
@@ -806,7 +912,6 @@ type builtinTemplate struct {
 // half-screen on the console UI.
 var builtInMemoryTemplates = []builtinTemplate{
 	{
-		ID:          "tpl_adr",
 		Name:        "Architecture Decision Record (ADR)",
 		Description: "Capture one architectural decision with context, options, and consequences.",
 		FieldsJSON: `[
@@ -835,7 +940,6 @@ var builtInMemoryTemplates = []builtinTemplate{
 `,
 	},
 	{
-		ID:          "tpl_lesson",
 		Name:        "Lessons Learned",
 		Description: "Document a problem, root cause, fix, and long-term impact.",
 		FieldsJSON: `[
@@ -862,7 +966,6 @@ var builtInMemoryTemplates = []builtinTemplate{
 `,
 	},
 	{
-		ID:          "tpl_snippet",
 		Name:        "Reusable Code Snippet",
 		Description: "Save a small, language-tagged code snippet with usage notes.",
 		FieldsJSON: `[
@@ -877,7 +980,6 @@ var builtInMemoryTemplates = []builtinTemplate{
 ` + "```",
 	},
 	{
-		ID:          "tpl_runbook",
 		Name:        "Operational Runbook",
 		Description: "A trigger-and-steps manual for an on-call or ops procedure.",
 		FieldsJSON: `[
@@ -899,7 +1001,6 @@ var builtInMemoryTemplates = []builtinTemplate{
 `,
 	},
 	{
-		ID:          "tpl_decision",
 		Name:        "Lightweight Decision",
 		Description: "Capture a small decision without the full ADR ceremony.",
 		FieldsJSON: `[
