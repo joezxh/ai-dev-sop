@@ -3,3 +3,5 @@ allowBuilds:
   '1': esbuild
   '2': vue-demi
   core-js: true
+  esbuild: true
+  vue-demi: true

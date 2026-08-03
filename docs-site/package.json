@@ -29,6 +29,7 @@
     "cytoscape": "^3.28.1",
     "cytoscape-cose-bilkent": "^4.1.0",
     "debug": "^4.4.3",
+    "element-plus": "^2.14.3",
     "mermaid": "^10.9.0",
     "pinia": "^3.0.4",
     "vitepress-plugin-mermaid": "^2.0.17"

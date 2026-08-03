@@ -173,7 +173,9 @@ flowchart LR
 | 方向 | 内容 | 格式 |
 |------|------|------|
 | 输入 | 业务诉求、目标、约束 | Markdown / 自由文本 |
-| 输出 | `openspec/changes/<id>/proposal.md`<br>`openspec/changes/<id>/tasks.md`<br>`requirements.md` | Markdown |
+| 输出 | `openspec/changes/<id>/proposal.md`  |
+|      | `openspec/changes/<id>/tasks.md`  |
+|      | `requirements.md` | Markdown |
 | 验收 | 提案评审通过 + 利益相关方签收 | `approval.md` 含签名/时间戳 |
 | 移交 N2 | `proposal.md`、`tasks.md`、基线技术栈约束(如指定) | — |
 
@@ -234,7 +236,10 @@ flowchart LR
 | 方向 | 内容 | 格式 |
 |------|------|------|
 | 输入 | N1 提案 + 既有架构(可选) | Markdown |
-| 输出 | `decisions/ADR-*.md`<br>`baseline-stack.json`<br>`design-system/tokens.md`<br>`.planning/codebase/ARCHITECTURE.md` | Markdown + JSON |
+| 输出 | `decisions/ADR-*.md`  |
+|      | `baseline-stack.json`  |
+|      | `design-system/tokens.md`  |
+|      | `.planning/codebase/ARCHITECTURE.md` | Markdown + JSON |
 | 验收 | 所有 [LOCKED] 项被基线化,变更需新开 ADR | ADR 内"Status" 字段 |
 | 移交 N3 | `baseline-stack.json` + ADR 列表 | — |
 
@@ -537,7 +542,7 @@ flowchart LR
   5. 全部通过 → 触发 N6;任一失败 → 回退 N4
 
 [输出要求]
-  - 报告目录:qa-reports/<yyyy-mm-dd>/
+  - 报告目录:qa-reports/&lt;yyyy-mm-dd&gt;/
   - 包含 summary.md + 详细子报告
   - 最终质量门禁结论:[PASS] / [FAIL] / [WARN]
 ```
