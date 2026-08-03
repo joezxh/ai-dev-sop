@@ -3,6 +3,7 @@
 本书是 Anthropic 发布的 [Agentic Design Patterns](https://www.anthropic.com/news/five-architectural-patterns-for-agents) 的中文翻译版本，深入探讨了 21 种智能体系统设计模式，包括提示链、路由、并行化、反思、工具使用、规划、多智能体协作等。
 
 ---
+由 Jimmy Song 翻译，原文地址：https://jimmysong.io/zh/book/agentic-design-patterns/introduction/
 
 ## 目录
 

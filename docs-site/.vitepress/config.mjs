@@ -169,8 +169,11 @@ export default withMermaidWithoutDayjs(defineConfig({
               ]
             }
           ],
-          '/reference/': [{ text: 'AI-Coding 16个实战技巧', link: '/reference/16-coding-skill/16-coding-skill' 
-            },
+          '/reference/': [
+            { text: 'AI-Coding 16个实战技巧', link: '/reference/16-coding-skill/16-coding-skill'},
+            { text: 'Graph Engineering', link: '/reference/graph-engineering/graph-engineering'},
+            { text: 'Codex 进阶指南', link: '/reference/codex-multi-agent-guide/codex-multi-agent-guide'},
+            { text: 'FDE 到底是干嘛的', link: '/reference/fde-ai-position/fde-position'},
             {
               text: 'Agentic Design Patterns',
               collapsible: true,

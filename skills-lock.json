@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "skills": {
+    "api-and-interface-design": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "0fabf9c3fc2577eab57833f660efef943b78d5c6ae5f0d8e82b600cc22563dbc"
+    },
+    "brainstorming": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "b73750a92bc4b5deeaafa0680fba706b9e89e091cdea40ee36a0420fc059fe4c"
+    },
+    "browser-testing-with-devtools": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "abb28c4569e416f114d10190db6554e1977b6f512b1699d1760632b1a9ebba60"
+    },
+    "ci-cd-and-automation": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "f927700883a2b0f47d150d6ba27faf9006046641404480167d0b860564d11176"
+    },
+    "code-review-and-quality": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "a0443878e502530a78d51920f7abd7e0f517ecd68d7d21a0892b30aca850e838"
+    },
+    "code-simplification": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "aa9393832e77d2a89d91a8004dfb9d32670f4dcb46f2fd873c1dcad53e1f1f61"
+    },
+    "context-engineering": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "1296ce5de6ca27323e8ad6dba640744770bc868c8cf49d0934b484c553c80243"
+    },
+    "debugging-and-error-recovery": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "46facf7328efeb51e32cb25835a83f4ec4e69b600c818a255e88645cfca1d0c4"
+    },
+    "deprecation-and-migration": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "3671326de345b4a60a19c6d665bd0c3c6761792df0b553cf54200901d8f756b2"
+    },
+    "dispatching-parallel-agents": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "85df55d2235a7623b315dac4bc340c14a37dcdc57c869c80a829e1a53a174689"
+    },
+    "documentation-and-adrs": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "d751b98cb2894feb833af869f397aaaadd9a3a679882331c1a5b254e8ed1399a"
+    },
+    "doubt-driven-development": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "1595be2b80bb3ac1029431e8e63023cf1954b19106738480967fa93c2fe56a64"
+    },
+    "executing-plans": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "08604f93f2e38dd3575e5503c79cda5c623c78a8df0e472457ac5ef7a33f22b8"
+    },
+    "finishing-a-development-branch": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "aa2632ed96df59c36348bd8f8ec1ff0fb0c5cc68b60691834687bf4cedc6be3f"
+    },
+    "frontend-ui-engineering": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "195659873a8fe0bac6947e44731c3e23b97ec2caf2c124ce4c808658c555f98d"
+    },
+    "git-workflow-and-versioning": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "f4687d5f0edc5693f1414546cd02909b22f4de61ef89d17254ed1ee7cdcffab5"
+    },
+    "gstack": {
+      "source": "D:\\projects\\github\\gstack",
+      "sourceType": "local",
+      "computedHash": "de4e373eb62b6d2180c70018436777ed1ed1bbf3496179b32fe5a8e6ec9a78be"
+    },
+    "idea-refine": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "a0d312496bd9267af9e76499c3d493df41ecd933f118511773c2789a77c5e681"
+    },
+    "incremental-implementation": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "48c4b3d1b17ddc6dfed75cb455d6bcc9036018b7d916c0f1836628ae79ae7daa"
+    },
+    "interview-me": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "85726440a832ced82cc55c5b550daba3f693db1013d771dc7b8e41c6b565ba8e"
+    },
+    "observability-and-instrumentation": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "ae5ddba4019fc5057796bf022e5fd348cbb88376a3a5f39debf8380789e4601d"
+    },
+    "performance-optimization": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "e143bfc3b19f8009b3399bdd96deba13e4edb6cdbd9f7f30b570ba5ea49e3613"
+    },
+    "planning-and-task-breakdown": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "7625801d03c01b920da0854b9744f0ac9921167e3d91522d2faede89094cd42c"
+    },
+    "receiving-code-review": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "3f56080356c62e4f74a183d7371686babc661e41a952dc67a97c2c76fe8a9329"
+    },
+    "requesting-code-review": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "cde520e9118d7e6b74b5ab0123cff2f68d9c07bddb3f82c997753b6126600aed"
+    },
+    "security-and-hardening": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "149ac0ecdf73998b17ba8edb51aaf614771dd576e50924058bf3bdedff3329f4"
+    },
+    "shipping-and-launch": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "f4a86ad75ffb5f43b172c89fd10322aba9fa3bb9ecfa89ff66cb1030ac1ec67d"
+    },
+    "source-driven-development": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "c8af82fc8af511521f7881fecd312752c14af3081e933388414e1c5da108d2fe"
+    },
+    "spec-driven-development": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "09e8d56513241754714d9e71a5cd4c4b45c094a7790819ccc1396a8e139f2ba0"
+    },
+    "subagent-driven-development": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "13f644a90690df7ffe77f85e078c37402fe24016e3e0e8732b6693b17625f160"
+    },
+    "systematic-debugging": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "792a368e074981d7e3138edb439e138489b2ac247cd1e5739fab52af680fb17b"
+    },
+    "test-driven-development": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "909cbc5298acd30d064ba014463ebdecbabc253caf7986ba8cc25633af86f3df"
+    },
+    "using-agent-skills": {
+      "source": "D:\\projects\\github\\agent-skills",
+      "sourceType": "local",
+      "computedHash": "138a6713d68f0d752928ecb6b5594404448d15d83a6510fc873b1703e0af2683"
+    },
+    "using-git-worktrees": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "212ad917e5543e84ea3adf4e3fab537675db976fdab05d4de432870e38b49e80"
+    },
+    "using-superpowers": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "e94af48fd52e1c329952fae638bde84671997744901c780281aff6e6986b8f1d"
+    },
+    "verification-before-completion": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "9b446f0c7fe1cfb560b1d34439523b1a76d5f177290007b2c053a1c749a4a8ba"
+    },
+    "writing-plans": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "b73b59d43c34c3fc225bfae419c458bb216af80df25fc0c545dfa7fd2a161722"
+    },
+    "writing-skills": {
+      "source": "D:\\projects\\github\\superpowers",
+      "sourceType": "local",
+      "computedHash": "2ad61dd96d969b2f582b11bb581f2fa912523e22c8763fbd105d6e46414bdaf2"
+    }
+  }
+}
