@@ -10,8 +10,14 @@ dist
 target
 .DS_Store
 example
-.github
-.vitepress
+# Allow GitHub workflows
+!.github/
+!.github/workflows/
+
+# Allow VitePress config (but not cache/dist)
+!docs-site/.vitepress/
+.vitepress/cache/
+.vitepress/dist/
 prev_dom
 /tools/cbmem-team/stderr.log
 /tools/cbmem-team/stdout.log

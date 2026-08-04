@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="c7904d69-263f-4631-b0af-73aa9721d5aa" name="Changes" comment="docs(agentic-design-patterns): 删除智能体设计模式文档的前言和介绍章节&#10;&#10;- 移除前言部分，包含智能体系统演变和画布概念介绍&#10;- 删除简介章节，涉及智能体系统特性和设计模式重要性说明&#10;- 移除译者序，包含在线阅读地址信息&#10;- 删除智能体特征介绍章节，涵盖五步循环和复杂度等级内容&#10;- 移除智能体未来假设章节，包含五大发展趋势预测&#10;- 删除AI编码技能插件包完整查询字典&#10;- 从.gitignore中移除docs-site/.vitepress/条目">
+      <change afterPath="$PROJECT_DIR$/.github/workflows/deploy.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/config.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/dayjs-plugin-shims.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/Layout.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/components/BookmarkButton.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/components/ContributorCard.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/components/DocComments.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/components/Mermaid.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/components/ProgressBar.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/Layout.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/AITools.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Distill.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Login.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Logs.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Memories.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Modules.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Projects.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Sessions.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Status.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Summarize.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Teams.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Users.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/router.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/store/api.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/store/session.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/index.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/styles/custom.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="GOROOT" url="file://$PROJECT_DIR$/../../devtools/go/go1.26.5" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;joezxh&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/joezxh/ai-dev-sop.git&quot;,
+    &quot;accountId&quot;: &quot;15ee67a4-a799-48e3-8858-e54e5a4860e9&quot;
+  }
+}</component>
+  <component name="GoVcsConfiguration">
+    <option name="GO_FMT" value="false" />
+  </component>
+  <component name="KubernetesApiPersistence">{}</component>
+  <component name="KubernetesApiProvider">{
+  &quot;isMigrated&quot;: true
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
+  <component name="ProjectId" id="3G9degqvPvYQiUuPYBz9e02PXBc" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+    <option name="showMembers" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Go Build.cbmem-team.executor&quot;: &quot;Run&quot;,
+    &quot;Go Build.go build cbmem-team/cmd/cbmem-team.executor&quot;: &quot;Debug&quot;,
+    &quot;Go Build.go build main.go.executor&quot;: &quot;Debug&quot;,
+    &quot;Go Build.mcp-stub.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoLinterPluginOnboardingV2&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoLinterPluginStorageMigration&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.analysis.ui.options.defaults&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;bazel.project.detector.is.bazel.project&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/projects/ai-dev-sop/docs-site/guide&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.stylelint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.stylelint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;pnpm&quot;,
+    &quot;npm.dev.executor&quot;: &quot;Run&quot;,
+    &quot;run.configurations.included.in.services&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;D:\\devtools\\GoLand 2025.3.3\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\projects\ai-dev-sop\docs-site\guide" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\projects\ai-dev-sop\docs-site\reference\graph-engineering" />
+      <recent name="D:\projects\ai-dev-sop\docs-site\reference\16-coding-skill" />
+    </key>
+  </component>
+  <component name="RunManager" selected="npm.dev">
+    <configuration name="cbmem-team" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
+      <module name="ai-dev-sop" />
+      <working_directory value="$PROJECT_DIR$/tools/cbmem-team" />
+      <parameters value="-listen &quot;:8787&quot; -data &quot;./bin/data-dev&quot; -mcp-bin &quot;codebase-memory-mcp&quot; -jwt-secret myjwtsecret -admin-token myadmintoken -log &quot;debug&quot; -llm-provider &quot;fake&quot; -mysql-dsn &quot;root:root_password@tcp(127.0.0.1:3306)/cbmem?parseTime=true&amp;loc=Local&amp;charset=utf8mb4&quot;" />
+      <EXTENSION ID="net.ashald.envfile">
+        <option name="IS_ENABLED" value="false" />
+        <option name="IS_SUBST" value="false" />
+        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+        <option name="IS_IGNORE_MISSING_FILES" value="false" />
+        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+        <ENTRIES>
+          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+        </ENTRIES>
+      </EXTENSION>
+      <kind value="PACKAGE" />
+      <package value="cbmem-team/cmd/cbmem-team" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="mcp-stub" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
+      <module name="ai-dev-sop" />
+      <working_directory value="$PROJECT_DIR$/tools/cbmem-team" />
+      <EXTENSION ID="net.ashald.envfile">
+        <option name="IS_ENABLED" value="false" />
+        <option name="IS_SUBST" value="false" />
+        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+        <option name="IS_IGNORE_MISSING_FILES" value="false" />
+        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+        <ENTRIES>
+          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+        </ENTRIES>
+      </EXTENSION>
+      <kind value="FILE" />
+      <package value="cbmem-team" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/tools/cbmem-team/cmd/mcp-stub/main.go" />
+      <method v="2" />
+    </configuration>
+    <configuration name="dev" type="js.build_tools.npm" nameIsGenerated="true">
+      <package-json value="$PROJECT_DIR$/docs-site/package.json" />
+      <command value="run" />
+      <scripts>
+        <script value="dev" />
+      </scripts>
+      <node-interpreter value="project" />
+      <package-manager value="D:\devtools\nvm\v22.20.0\node.exe" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Go Build.cbmem-team" />
+      <item itemvalue="Go Build.mcp-stub" />
+      <item itemvalue="npm.dev" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Build.cbmem-team" />
+        <item itemvalue="Go Build.mcp-stub" />
+        <item itemvalue="Go Build.cbmem-team" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-gosdk-72a9cf600ed8-dfa3e7267ae0-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-253.31033.129" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-GO-253.31033.129" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="StructureViewState">
+    <option name="selectedTab" value="Logical" />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="c7904d69-263f-4631-b0af-73aa9721d5aa" name="Changes" comment="" />
+      <created>1783387815757</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1783387815757</updated>
+      <workItem from="1783387817129" duration="4563000" />
+      <workItem from="1783472959240" duration="1321000" />
+      <workItem from="1783994649690" duration="4050000" />
+      <workItem from="1784089135758" duration="598000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <option name="CHECK_NEW_TODO" value="false" />
+    <MESSAGE value="init" />
+    <MESSAGE value="chore(config): 添加项目配置文件和基础组件&#10;&#10;- 添加 .editorconfig 文件配置代码风格&#10;- 添加多环境配置文件 (.env, .env.dev, .env.local, .env.prod, .env.stage, .env.test)&#10;- 添加 ESLint 自动导入配置文件&#10;- 添加 Git 忽略文件配置&#10;- 添加 Prettier 和 StyleLint 忽略配置&#10;- 添加错误页面组件 (403, 404, 500)&#10;- 添加文件客户端抽象基类&#10;- 添加 Redis 消息队列相关抽象类&#10;- 添加数据脱敏处理器抽象类&#10;- 添加短信客户端抽象基类" />
+    <MESSAGE value="docs(design): 添加设计系统文档并修复 dayjs 插件解析问题&#10;&#10;- 添加完整的 DESIGN.md 设计系统文档，包含颜色、排版、组件规范&#10;- 实现 dayjs ESM 插件解析器解决 element-plus 时间选择器导入问题&#10;- 替换 withMermaid 为自定义 withMermaidWithoutDayjs 配置&#10;- 添加 dayjs 别名配置指向 ESM 版本入口&#10;- 排除 dayjs 和 element-plus 从依赖预构建中&#10;- 移除 mermaid 插件注入的错误 dayjs 插件别名配置" />
+    <MESSAGE value="docs(site): 更新文档站点配置和用户手册&#10;&#10;- 添加 rewrites 配置项&#10;- 调整导航链接路径&#10;- 重构侧边栏结构，优化章节组织&#10;- 新增指南页面导航&#10;- 重写 cbmem-team 用户手册，更新为角色导向版本&#10;- 添加详细的开发者和运维指南&#10;- 更新 MCP 客户端配置说明&#10;- 扩展控制台操作和 MemPalace 集成文档&#10;- 优化部署和启动流程说明" />
+    <MESSAGE value="refactor(database): 重构数据库表结构以统一命名规范&#10;&#10;- 将 projects 表重命名为 pm_projects&#10;- 将 sessions 表重命名为 ai_sessions&#10;- 将 session_turns 表重命名为 ai_session_turns&#10;- 将 summarize_tasks 表重命名为 ai_summarize_tasks&#10;- 将 distill_tasks 表重命名为 ai_distill_tasks&#10;- 将 users 表重命名为 sys_users&#10;- 将 console_sessions 表重命名为 sys_console_sessions&#10;- 将 memory_templates 表重命名为 ai_memories_templates&#10;- 将 memories 表重命名为 ai_memories&#10;- 更新所有相关的查询语句以使用新的表名&#10;- 修复配置文件中 auth_bcrypt_cost 的拼写错误&#10;- 添加默认管理员用户初始化功能" />
+    <MESSAGE value="fix(api): 更新AIToolsAPI列表接口以支持团队ID参数&#10;&#10;- 修改list方法添加teamId参数&#10;- 在请求URL中添加team_id查询参数&#10;- 使用encodeURIComponent对团队ID进行编码确保安全性" />
+    <MESSAGE value="feat(mempalace): 更新MemPalace集成以支持JSON-RPC MCP协议&#10;&#10;- 将MemPalace通信从REST API迁移到JSON-RPC MCP协议&#10;- 添加对/mcp端点的认证令牌支持&#10;- 实现JSON-RPC请求构建器和响应解析器&#10;- 更新测试以验证JSON-RPC工具调用和错误处理&#10;- 添加对通知响应返回202状态码的支持&#10;- 修改配置文件和命令行参数以包含MemPalace令牌选项&#10;- 在文档网站依赖中添加Ant Design Vue组件库相关包" />
+    <MESSAGE value="chore(build): 更新 .gitignore 配置&#10;&#10;- 添加 tools/cbmem-team/stderr.log 到忽略列表&#10;- 添加 tools/cbmem-team/stdout.log 到忽略列表&#10;- 保持 prev_dom 的忽略配置不变" />
+    <MESSAGE value="refactor(auth): 将用户ID从字符串改为自增整数并优化认证中间件&#10;&#10;- 修改数据库迁移脚本，将sys_users.id等字段从TEXT改为INTEGER PRIMARY KEY AUTOINCREMENT&#10;- 移除用户注册时随机ID生成逻辑，改用数据库自增ID&#10;- 添加CurrentUserIDInt函数用于解析用户ID为整数类型&#10;- 更新认证中间件中的用户ID比较逻辑，统一使用整数ID进行匹配&#10;- 重构CreateUser方法支持测试场景中的硬编码ID以及自动生成ID&#10;- 更新数据库查询和插入操作以适配新的整数ID类型&#10;- 移除e2e测试脚本中过时的ID相关测试代码&#10;- 更新文档站点导航配置，调整SOP和使用指南的菜单结构" />
+    <MESSAGE value="feat(console): 初始化文档站点配置并实现记忆存储功能&#10;&#10;- 添加 VitePress 站点配置支持多语言和主题定制&#10;- 实现记忆模板的数据访问层操作方法&#10;- 创建记忆数据结构的增删改查功能&#10;- 集成 Mermaid 图表支持和 Element Plus 组件库&#10;- 添加分页查询和软删除机制&#10;- 实现摘要和提炼任务的数据访问功能&#10;- 配置开发服务器代理和依赖优化选项" />
+    <MESSAGE value="docs(guides): 添加智能体设计模式文档并更新.gitignore&#10;&#10;- 添加智能体设计模式系列文档，包括介绍、前言、译者序和智能体特征章节&#10;- 添加AI编程实战技巧文档，包含16个Vibe Coding实战技巧&#10;- 更新.gitignore文件，添加skills目录和工具目录忽略规则&#10;- 删除旧的AI开发skill字典文档&#10;- 修改IDE模块配置，简化Go模块设置" />
+    <MESSAGE value="docs(codex): 添加 Codex 多 Agent 编排控制平面进阶指南&#10;&#10;- 详细介绍 Codex 对象模型，包括 Project、Task、Turn、Subagent 等核心概念&#10;- 阐述项目绑定、执行位置、Agent 拓扑等关键架构设计原理&#10;- 完整梳理多 Agent 编排的六种拓扑模式及适用场景&#10;- 详述子 Agent 类型定义、运行控制机制和时间触发功能&#10;- 提供可观察性与治理方案，包含事件流和 Hook 机制&#10;- 整理编排原语清单，涵盖 Task 内和跨 Task 控制原语&#10;- 介绍 App Server 协议层原语及实际调度用法&#10;- 给出编排控制环九个环节的标准流程和最佳实践&#10;- 包含八种典型拓扑模式的原语序列和应用场景说明" />
+    <MESSAGE value="docs(agentic-design-patterns): 删除智能体设计模式文档的前言和介绍章节&#10;&#10;- 移除前言部分，包含智能体系统演变和画布概念介绍&#10;- 删除简介章节，涉及智能体系统特性和设计模式重要性说明&#10;- 移除译者序，包含在线阅读地址信息&#10;- 删除智能体特征介绍章节，涵盖五步循环和复杂度等级内容&#10;- 移除智能体未来假设章节，包含五大发展趋势预测&#10;- 删除AI编码技能插件包完整查询字典&#10;- 从.gitignore中移除docs-site/.vitepress/条目" />
+    <option name="LAST_COMMIT_MESSAGE" value="docs(agentic-design-patterns): 删除智能体设计模式文档的前言和介绍章节&#10;&#10;- 移除前言部分，包含智能体系统演变和画布概念介绍&#10;- 删除简介章节，涉及智能体系统特性和设计模式重要性说明&#10;- 移除译者序，包含在线阅读地址信息&#10;- 删除智能体特征介绍章节，涵盖五步循环和复杂度等级内容&#10;- 移除智能体未来假设章节，包含五大发展趋势预测&#10;- 删除AI编码技能插件包完整查询字典&#10;- 从.gitignore中移除docs-site/.vitepress/条目" />
+    <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
+  </component>
+  <component name="VgoProject">
+    <environment>
+      <map>
+        <entry key="GOPROXY" value="https://goproxy.cn,direct" />
+        <entry key="GOSUMDB" value="off" />
+      </map>
+    </environment>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/tools/cbmem-team/internal/console/auth_handler.go</url>
+          <line>119</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>
