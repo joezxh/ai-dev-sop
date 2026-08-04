@@ -16,8 +16,10 @@ example
 
 # Allow VitePress config (but not cache/dist)
 !docs-site/.vitepress/
-.vitepress/cache/
-.vitepress/dist/
+docs-site/.vitepress/cache/
+docs-site/.vitepress/dist/
+docs-site/console/.vitepress/cache/
+docs-site/console/.vitepress/dist/
 prev_dom
 /tools/cbmem-team/stderr.log
 /tools/cbmem-team/stdout.log
