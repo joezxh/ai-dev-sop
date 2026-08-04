@@ -439,6 +439,13 @@ export default withMermaidWithoutDayjs(defineConfig({
     'reference/workbuddy-bench/**',
   ],
 
+  // NOTE: `isCustomElement` is intentionally omitted from the top-level `vue`
+  // config because Vue 3.5+'s compiler-core AST is incompatible with
+  // VitePress 1.3.x's internal code-gen.  Non-standard HTML tags (like
+  // <feature>, <module>) are already escaped to &lt;/&gt; by the
+  // `vitepress-escape-md` Vite plugin below, so `isCustomElement` is not
+  // needed.
+
   vite: {
     plugins: [
       // Escape angle-bracket tags and {{ }} interpolation in markdown files
@@ -488,41 +495,6 @@ export default withMermaidWithoutDayjs(defineConfig({
         }
       }
     ],
-    vue: {
-      template: {
-        compilerOptions: {
-          isCustomElement: (tag) => {
-            // Whitelist of standard HTML + SVG tags that the Vue compiler
-            // should handle natively.  EVERYTHING else (placeholders like
-            // <feature>, Maven/XML tags like <properties>, hyphenated tags
-            // like <commit-sha-1>, etc.) is treated as a custom element so
-            // the compiler does not throw "missing end tag" errors.
-            const STANDARD_TAGS = new Set([
-              // HTML
-              'a','abbr','address','area','article','aside','audio','b','base','bdi','bdo',
-              'blockquote','body','br','button','canvas','caption','cite','code','col','colgroup',
-              'data','datalist','dd','del','details','dfn','dialog','div','dl','dt','em','embed',
-              'fieldset','figcaption','figure','footer','form','h1','h2','h3','h4','h5','h6',
-              'head','header','hgroup','hr','html','i','iframe','img','input','ins','kbd','label',
-              'legend','li','link','main','map','mark','menu','meta','meter','nav','noscript',
-              'object','ol','optgroup','option','output','p','picture','pre','progress','q',
-              'rp','rt','ruby','s','samp','script','section','select','slot','small','source',
-              'span','strong','style','sub','summary','sup','table','tbody','td','template',
-              'textarea','tfoot','th','thead','time','title','tr','track','u','ul','var','video','wbr',
-              // SVG (common)
-              'svg','circle','clippath','defs','ellipse','g','line','lineargradient','mask',
-              'path','pattern','polygon','polyline','radialgradient','rect','stop','text','tspan','use',
-              // VitePress / Vue built-ins
-              'ClientOnly','Content','Badge','CodeGroup','CodeBlock','Mermaid',
-              'Feature','VPHome','VPDoc','VPNavBar','VPSidebar','VPFooter',
-              'VPHomeHero','VPHomeFeatures','VPHomeContent','VPButton',
-              'VPLink','VPIcon','VPSwitch','VPImage','VPBackdrop',
-            ])
-            return !STANDARD_TAGS.has(tag)
-          }
-        }
-      }
-    },
     resolve: {
       // Only alias the bare `dayjs` import to its ESM entry so consumers get a
       // proper `dayjs` function. `dayjs/plugin/*` subpaths are NOT aliased here
