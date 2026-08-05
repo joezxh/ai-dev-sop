@@ -147,7 +147,7 @@ export default withMermaidWithoutDayjs(defineConfig({
                 { text: '需求到原型 <span style="font-size:0.75em">❌</span>', link: '/sop/requirement-prototype' },
                 { text: 'UI设计 <span style="font-size:0.75em">❌</span>', link: '/sop/ui-design' },
                 { text: '前端框架制作 <span style="font-size:0.75em">❓</span>', link: '/sop/frontend-fw' },
-                { text: '后端框架制作 <span style="font-size:0.75em">❓</span>', link: '/guide/backend-fw' },
+                { text: '后端框架制作 <span style="font-size:0.75em">❓</span>', link: '/sop/backend-fw' },
                 { text: '基于框架开发 <span style="font-size:0.75em">❓</span>', link: '/sop/fw-dev' }
               ]
             },
@@ -172,8 +172,12 @@ export default withMermaidWithoutDayjs(defineConfig({
               ]
             }
           ],
-          '/reference/': [{ text: 'AI-Coding 16个实战技巧', link: '/reference/16-coding-skill/16-coding-skill' 
-            },
+          '/reference/': [
+            { text: 'AI-Coding 16个实战技巧', link: '/reference/16-coding-skill/16-coding-skill'},
+            { text: 'Graph Engineering', link: '/reference/graph-engineering/graph-engineering'},
+            { text: 'Codex 进阶指南', link: '/reference/codex-multi-agent-guide/codex-multi-agent-guide'},
+            { text: 'FDE 到底是干嘛的', link: '/reference/fde-ai-position/fde-position'},
+            { text: 'Tencent WorkBuddy Bench paper', link: '/reference/workbuddy-bench/paper'},
             {
               text: 'Agentic Design Patterns',
               collapsible: true,
@@ -430,21 +434,6 @@ export default withMermaidWithoutDayjs(defineConfig({
   ignoreDeadLinks: true,
   lastUpdated: true,
   contributors: true,
-
-  // Exclude backup and non-documentation directories from the build
-  srcExclude: [
-    'reference/codex-multi-agent-guide.bak/**',
-    'reference/fde-ai-position/**',
-    'reference/graph-engineering/**',
-    'reference/workbuddy-bench/**',
-  ],
-
-  // NOTE: `isCustomElement` is intentionally omitted from the top-level `vue`
-  // config because Vue 3.5+'s compiler-core AST is incompatible with
-  // VitePress 1.3.x's internal code-gen.  Non-standard HTML tags (like
-  // <feature>, <module>) are already escaped to &lt;/&gt; by the
-  // `vitepress-escape-md` Vite plugin below, so `isCustomElement` is not
-  // needed.
 
   vite: {
     plugins: [
