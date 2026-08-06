@@ -170,6 +170,13 @@ export default withMermaidWithoutDayjs(defineConfig({
                 { text: 'System 服务场景', link: '/sop/system-scene' },
                 { text: 'UAA 场景', link: '/sop/uaa-scene' }
               ]
+            },
+            {
+              text: 'Skill 创建流程',
+              collapsible: true,
+              items: [
+                { text: 'Skill 创建 SOP', link: '/sop/skill-create' }
+              ]
             }
           ],
           '/reference/': [
