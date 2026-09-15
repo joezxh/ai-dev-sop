@@ -78,10 +78,12 @@ projects   (id PK uuid, project_id unique indexed, name, description,
 - 依赖：官方 `mcp` Python SDK（fastmcp），pin `<2` 以兼容 starlette/fastapi；以 `streamable-http` 暴露，监听 `MEM0_MCP_PORT`（默认 **8080**，compose 已映射 `8080:8080`）。
 - 开发工具配置示例（CodeBuddy/Qoder 的 MCP 配置）：工具入参 `api_key` 填用户个人 API Key，`git_remote` 填 `git remote -v` 输出的地址（支持多个）。
 
-## 8. Dashboard（简洁完整版）
+## 8. Dashboard（shadcn 弹窗式交互版）
 
 - 新增 TENANT 导航组（`main-nav.tsx`）：Users、Departments、Projects（`nav.users/departments/projects` i18n 键，zh/en 双语）。
-- 页面（列表 + 内联新建/编辑表单 + 删除确认）：
+- 页面交互（shadcn `Dialog` 新建/编辑弹窗 + `DeleteConfirmationModal` 删除确认 + `TableSkeleton`/`EmptyState` 状态）：
+  - 列表搜索：工具栏搜索框，服务端 `q` 模糊过滤（users 按 name/email、departments 按 name/description、projects 按 project_id/name），回车触发。
+  - 分页：客户端分页（每页 10 条），Previous/Next 与「x–y of N」指示，同 memories 页风格。
   - `users/page.tsx`：name/email/password/role 创建；展示 department 归属；删除。
   - `departments/page.tsx`：name/description CRUD；展示成员数。
   - `projects/page.tsx`：project_id/name/description/git_remotes（多行文本，每行一个地址）CRUD；「测试 Git 地址匹配」面板调 `/projects/match`。
@@ -105,6 +107,5 @@ projects   (id PK uuid, project_id unique indexed, name, description,
 
 - 部门级记忆共享池（项目级共享池已纳入范围；部门维度仅作 metadata 归属展示）。
 - 项目级 ACL（当前任何已认证用户可读任意项目池；按部门/成员限制后续再做）。
-- shadcn 弹窗式交互重构、分页/搜索高级功能。
 - fork mem0 实现顶层 project 过滤（方案 B）。
 - git 未匹配自动建项目。
