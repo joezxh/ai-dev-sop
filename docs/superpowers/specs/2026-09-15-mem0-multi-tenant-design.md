@@ -24,6 +24,7 @@
 | 隔离强度 | **强隔离**：普通用户（API Key/JWT）强制 `user_id = 当前认证用户`；传他人 user_id → 403。管理员/ADMIN_API_KEY/AUTH_DISABLED 可跨用户。 |
 | Git 未匹配 | **只匹配不创建**：返回 `project_id=null`，记忆照常入库（保留 `git_remote` 元数据）。 |
 | MCP 身份传递 | **工具参数**：MCP 工具带 `api_key` / `git_remote` 入参，服务端以 `X-API-Key` 转发给 mem0-api。 |
+| 项目级共享池 | **启用**（2026-09-15 追加）：读路径带项目范围（`project_id` 或可解析 `git_remote`）时 = 项目池，跨用户可读；写路径 owner 不变。 |
 | Dashboard 形态 | **功能完整、风格简洁**：与现有 Tailwind 风格一致的列表+表单 CRUD；不做 shadcn 弹窗重构。 |
 
 ## 2. 方案选型（project 维度如何进入记忆并可检索）
@@ -64,12 +65,15 @@ projects   (id PK uuid, project_id unique indexed, name, description,
 - `POST /memories` 新增字段：`project_id?`、`git_remote?: str|list`。
   - 解析优先级：显式 `project_id` 优先；同时给出且与 git 解析结果冲突 → **400**。
   - 写入 metadata：`project_id`（若有）、`git_remote`（若有）、`department_id`（普通用户且其有部门时自动附带）。
-- `GET /memories`、`POST /search` 新增 `project_id`：先按 user_id 检索（Mem0 顶层过滤）→ `_filter_by_project_id` 应用层后过滤（比对 `metadata.project_id`）。
+- `GET /memories`、`POST /search` 新增 `project_id` 与 `git_remote`（读路径同样支持 git 地址解析项目）：
+  - **带项目范围**（`project_id` 或 `git_remote` 解析命中）→ **项目共享池**：任何已认证调用方可跨用户读取该项目全部记忆（先全量/无 user 过滤检索，再 `_filter_by_project_id` 后过滤；结果保留 owner `user_id`）。
+  - **不带项目范围** → 个人强隔离（user_id 钉死为当前用户）。
 - 返回体沿用现有 `_serialize_memory`，metadata 随结果透出。
 
 ## 7. MCP（`mcp_server.py`，同容器 supervisord 双进程）
 
-- 工具：`add_memory(text, api_key, git_remote?, project_id?, metadata?, user_id?)`、`search_memories(query, api_key, project_id?, top_k)`、`get_memories(api_key, project_id?, limit)`、`get_memory / update_memory / delete_memory(memory_id, api_key?)`、`match_project(git_remote, api_key?)`。
+- 工具：`add_memory(text, api_key, git_remote?, project_id?, metadata?, user_id?)`、`search_memories(query, api_key, git_remote?, project_id?, top_k)`、`get_memories(api_key, git_remote?, project_id?, limit)`、`get_memory / update_memory / delete_memory(memory_id, api_key?)`、`match_project(git_remote, api_key?)`。
+- **拉取项目记忆**：`get_memories` / `search_memories` 传入 `git_remote`（如 `git remote -v` 输出）即可拉取/检索该项目的共享池记忆（含各条目的 owner 与 metadata），供 Qoder/CodeBuddy 同步到本地。
 - 鉴权：`api_key` → `X-API-Key` 转发；未传时回退 `MEM0_API_KEY`（管理员 Bearer）。user_id 隔离与项目解析全部由 mem0-api 完成。
 - 依赖：官方 `mcp` Python SDK（fastmcp），pin `<2` 以兼容 starlette/fastapi；以 `streamable-http` 暴露，监听 `MEM0_MCP_PORT`（默认 **8080**，compose 已映射 `8080:8080`）。
 - 开发工具配置示例（CodeBuddy/Qoder 的 MCP 配置）：工具入参 `api_key` 填用户个人 API Key，`git_remote` 填 `git remote -v` 输出的地址（支持多个）。
@@ -99,7 +103,8 @@ projects   (id PK uuid, project_id unique indexed, name, description,
 
 ## 11. 非目标（本轮不做）
 
-- 部门/项目级记忆共享池（普通用户只见自己的记忆）。
+- 部门级记忆共享池（项目级共享池已纳入范围；部门维度仅作 metadata 归属展示）。
+- 项目级 ACL（当前任何已认证用户可读任意项目池；按部门/成员限制后续再做）。
 - shadcn 弹窗式交互重构、分页/搜索高级功能。
 - fork mem0 实现顶层 project 过滤（方案 B）。
 - git 未匹配自动建项目。
