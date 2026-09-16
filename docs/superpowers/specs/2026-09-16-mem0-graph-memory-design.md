@@ -1,7 +1,8 @@
 # Mem0 自建图记忆层设计（对齐 1.x graph_store，方案 C）
 
 - 日期：2026-09-16
-- 状态：已确认（用户批准）
+- 状态：已确认（用户批准；2026-09-16 追加：Dashboard 图谱可视化纳入范围）
+
 - 参考基线：mem0 v1.0.11 `mem0/memory/graph_memory.py`（`MemoryGraph`）与 `mem0/graphs/configs.py`（`GraphStoreConfig`）
 - 范围：`mem0/server`（后端）；Dashboard 仅 P1 的 relations 展示
 - 背景：mem0ai 2.0.20 OSS 已移除图引擎（无 `graph_store` 配置、无 `mem0.graphs` 模块；Dockerfile 的 `mem0ai[graph]` 为无效安装）；Neo4j 5.26 容器（`mwb-neo4j`，端口 7687 已发布宿主机）现成可用
@@ -72,14 +73,43 @@ NEO4J_URI / NEO4J_USERNAME / NEO4J_PASSWORD   # 复用现有变量，组装 Grap
 - 集成（手动，需真实 key）：`GRAPH_ENABLED=true` → add → Neo4j Browser `:7474` 验图 → search 出 relations → 软删验证；无 key 环境如实记录为运行时限制
 - 回归：既有 92 个测试全部通过
 
-## 8. 非目标（P2/后续）
+## 8. Dashboard 图谱可视化（2026-09-16 追加，对齐云端 Graph 页）
 
-- Dashboard 图谱可视化 UI（本轮仅 Memories 详情展示 relations）
+### 8.1 页面：`/dashboard/graph`（ACTIVITY 导航组，admin 可见）
+
+- **顶部检索区**：检索框（实体名或语句）+ 作用域选择（个人 / 项目池：项目下拉复用 `PROJECT_ENDPOINTS.BASE`，admin only）+ 范围（limit）；提交调 `POST /graph/search`，空检索/无 query 时调 `GET /graph/get_all` 浏览全图。
+- **画布**：`react-force-graph-2d`（新增依赖，选型理由：canvas 渲染性能好、内置拖拽/缩放/平移/悬停/点击交互，知识图谱场景成熟；备选 cytoscape.js/d3-force 因交互成本更高否决）。数据由前端把三元组转为 `{nodes: [{id, name, type, mentions}], links: [{source, target, relationship, mentions}]}`（按节点 name+scope 去重、自环过滤）。
+- **交互行为**：
+  - 缩放/平移；节点可拖拽（松手固定位置）；
+  - 悬停节点/边：高亮该节点及其邻接（其余降透明度），tooltip 显示 name/type/relationship；
+  - 点击节点：右侧详情侧栏显示节点属性（name/type/mentions/度数）与其关联边列表；点击边：显示 relationship 与两端节点；
+  - 工具条：重建布局（重置力导）、清除高亮、适应画布（zoom-to-fit）。
+- **详情侧栏**：shadcn `Sheet` 或右侧固定卡片，风格与 Memories 详情 Sheet 一致（Label + 属性列表 + 关联边列表）。
+- **风格适配**：复用现有 token（`border-memBorder-primary`、`bg-surface-default-*`、`text-onSurface-*`），画布背景透明、节点/边配色随 light/dark 主题（`useTheme`）；空态/无命中用 `EmptyState`（引导去 Playground/添加记忆）。
+
+### 8.2 入口联通
+
+- Memories 详情 Sheet：显示该条记忆 relations（后端 delete/详情链路返回的 metadata 关联）并提供「查看关联图」按钮 → 携带 `?q=<记忆文本>` 跳转 graph 页；
+- 检索结果（/search 返回 relations）：结果条目提供「查看关联图」入口 → 携带 `?q=<query>&project=<scope>` 跳转；
+- 侧边栏 ACTIVITY 组新增 Graph 导航项（icon 需验证存在，如 `Share2`/`Waypoints`）。
+
+### 8.3 数据契约（前端消费）
+
+- `POST /graph/search` → `{relations: [{source, relationship, destination}]}`（§6 已定义；前端负责三元组→nodes/edges 的转换与去重）；
+- `GET /graph/get_all?project_id&limit` → 同构 `relations`。
+
+### 8.4 实施顺序与依赖
+
+本节功能依赖 §4–§6 的图后端先行（relations 端点不存在时页面渲染 EmptyState 并提示后端未启用）。实施顺序：图后端 → relations 融合 → 可视化页面。
+
+## 9. 非目标（P2/后续）
+
+- 3D 图谱、图谱快照导出
 - MCP 新增 graph 工具
 - 图数据重试队列、导出
 - Dockerfile 中无效的 `mem0ai[graph]` 安装清理（随本实现单独提交移除）
 
-## 9. 风险与已知取舍
+## 10. 风险与已知取舍
 
 - LLM 抽取质量依赖模型能力；`custom_prompt` 可约束领域
 - 图写入最终一致（异步）：检索可能短暂查不到刚写入的图
