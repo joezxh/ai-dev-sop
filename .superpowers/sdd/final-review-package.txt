@@ -1,0 +1,1518 @@
+72f7e6e1 feat(dashboard): project context switcher in sidebar
+484b371a fix(dashboard): surface backend error detail from blob export responses
+23587e3c feat(dashboard): JSONL memory export page
+2881f8e3 feat(dashboard): real webhooks management page
+80b9bdd5 fix(server): push requests action filter to SQL and restore limit; cover range filtering
+c13c25ea feat(dashboard): requests action and range filters
+9556e9dc feat(server): requests action/range filters
+31fa248e fix(server): clear git_remotes on explicit null and strengthen update tests
+4a4a7196 fix(dashboard): trim project fields and unify purge warning wording
+4531d1e5 fix(server): reject null name in project update (NOT NULL guard)
+8f413045 fix(dashboard): clear project fields via null and warn on truncated purge
+95c0942b fix(server): honor explicit nulls in project update and report delete truncation
+effaedd1 fix(dashboard): send empty string to clear project custom instructions
+44ffe074 feat(dashboard): project custom instructions, expiration, danger zone
+322ba5a6 fix(dashboard): correct playground admin-only wording
+4f644186 fix(dashboard): gate playground for non-admins and escape cURL snippet
+8edc8d50 feat(dashboard): playground sandbox (add/search, infer switch, instructions)
+895c32f4 fix(dashboard): escape quote entity to satisfy react/no-unescaped-entities
+d4471c49 fix(dashboard): render Windows note for cURL snippet on get-started page
+f67a0d52 fix(dashboard): align get-started MCP tool docs with server and fix placeholder hints
+fa5e95a8 feat(dashboard): get-started wizard (MCP/Python/cURL)
+5e4e34ff fix(dashboard): move overview refetch into effect and render error state
+bc343225 fix(dashboard): harden overview page (typed response, race guard, all-time labels)
+b59f934f feat(dashboard): overview page backed by /stats
+cf63d919 fix(dashboard): localize collapsed nav tooltips and drop dead upgrade-banner/i18n keys
+ab81d8ff feat(dashboard): reorganize nav into SETUP/ACTIVITY/TENANT/ACCOUNT; drop cloud-upsell stubs
+556cdb4d feat(server): JSONL memory export with project/user/date filters
+6b9d4099 fix(server): harden webhook dispatch (no-throw guard) and validate webhook URL scheme
+0b3c23ad feat(server): webhooks CRUD + fire-and-forget memory event delivery
+27f11b4e feat(server): project-scoped delete-all memories endpoint
+2a989800 feat(server): project-level custom instructions + expiration defaults; restore write params
+1b349988 feat(server): add GET /stats aggregation endpoint
+ .../src/app/(root)/dashboard/analytics/page.tsx    |  54 ----
+ .../src/app/(root)/dashboard/api-keys/page.tsx     |  11 -
+ .../src/app/(root)/dashboard/categories/page.tsx   |  36 ---
+ .../app/(root)/dashboard/components/main-nav.tsx   | 350 +++++++++++----------
+ .../app/(root)/dashboard/configuration/page.tsx    |   9 -
+ .../src/app/(root)/dashboard/export/page.tsx       |  65 ----
+ .../src/app/(root)/dashboard/get-started/page.tsx  | 189 +++++++++++
+ .../src/app/(root)/dashboard/memories/page.tsx     |  39 ++-
+ .../app/(root)/dashboard/memory-exports/page.tsx   | 189 +++++++++++
+ .../src/app/(root)/dashboard/overview/page.tsx     |  87 +++++
+ .../src/app/(root)/dashboard/playground/page.tsx   | 271 ++++++++++++++++
+ .../src/app/(root)/dashboard/projects/page.tsx     |  90 +++++-
+ .../src/app/(root)/dashboard/requests/page.tsx     |  91 +++++-
+ .../src/app/(root)/dashboard/webhooks/page.tsx     | 343 +++++++++++++++++---
+ .../src/components/self-hosted/upgrade-banner.tsx  |  70 -----
+ .../components/ui/delete-confirmation-modal.tsx    |   7 +-
+ server/dashboard/src/components/ui/use-toast.ts    |   4 +-
+ server/dashboard/src/i18n/en.ts                    |  21 +-
+ server/dashboard/src/i18n/zh.ts                    |  20 +-
+ server/dashboard/src/types/api.ts                  |  24 ++
+ server/dashboard/src/utils/api-endpoints.ts        |  17 +
+ server/db.py                                       |   6 +
+ server/main.py                                     | 186 ++++++++++-
+ server/models.py                                   |  17 +-
+ server/routers/projects.py                         |  50 ++-
+ server/routers/requests.py                         |  42 ++-
+ server/routers/stats.py                            |  73 +++++
+ server/routers/webhooks.py                         |  79 +++++
+ server/tests/test_delete_project_memories.py       |  54 ++++
+ server/tests/test_exports.py                       |  50 +++
+ server/tests/test_project_defaults.py              | 162 ++++++++++
+ server/tests/test_stats.py                         | 196 ++++++++++++
+ server/tests/test_webhooks.py                      |  62 ++++
+ server/webhooks_client.py                          |  28 ++
+ 34 files changed, 2488 insertions(+), 504 deletions(-)
+diff --git a/server/db.py b/server/db.py
+index c9c153fa..4888596d 100644
+--- a/server/db.py
++++ b/server/db.py
+@@ -50,10 +50,16 @@ def ensure_tenant_schema(target_engine) -> None:
+         )
+         conn.execute(
+             text(
+                 "DO $$ BEGIN "
+                 "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_department_id') THEN "
+                 "ALTER TABLE users ADD CONSTRAINT fk_users_department_id "
+                 "FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL; "
+                 "END IF; END $$;"
+             )
+         )
++        conn.execute(
++            text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS custom_instructions TEXT NULL")
++        )
++        conn.execute(
++            text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS memory_expiration_date DATE NULL")
++        )
+diff --git a/server/main.py b/server/main.py
+index abd1e490..4335a932 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -1,42 +1,47 @@
+ import asyncio
++import json
+ import logging
+ import os
+ import time
+ import openai as openai_sdk
++from datetime import datetime, timezone
+ from typing import Any, Dict, List, Optional
+ 
+ import telemetry
+ from auth import ADMIN_API_KEY, AUTH_DISABLED, JWT_SECRET, require_admin, verify_auth
+ from db import SessionLocal
+ from dotenv import load_dotenv
+ from errors import (
+     UpstreamError,
+     install_request_id_logging,
+     new_request_id,
+     request_id_var,
+     upstream_error,
+     upstream_error_handler,
+ )
+ from fastapi import Depends, FastAPI, HTTPException, Query, Request
+ from fastapi.middleware.cors import CORSMiddleware
+-from fastapi.responses import JSONResponse, RedirectResponse
++from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+ from models import RequestLog, User
+ from pydantic import BaseModel, Field
+ from rate_limit import limiter
+ from routers import api_keys as api_keys_router
+ from routers import auth as auth_router
+ from routers import departments as departments_router
+ from routers import entities as entities_router
+ from routers import projects as projects_router
+ from routers import requests as requests_router
++from routers import stats as stats_router
+ from routers import users as users_router
++from routers import webhooks as webhooks_router
++from webhooks_client import events_from_add_response, trigger_webhooks
+ from gitmatch import resolve_project_id
+ from schemas import MessageResponse
+ from server_state import (
+     get_current_config,
+     get_memory_instance,
+     initialize_state,
+     set_session_factory,
+     update_config,
+ )
+ from slowapi import _rate_limit_exceeded_handler
+@@ -215,20 +220,22 @@ app.add_middleware(
+     allow_headers=["*"],
+ )
+ 
+ app.include_router(auth_router.router)
+ app.include_router(api_keys_router.router)
+ app.include_router(entities_router.router)
+ app.include_router(requests_router.router)
+ app.include_router(departments_router.router)
+ app.include_router(projects_router.router)
+ app.include_router(users_router.router)
++app.include_router(stats_router.router)
++app.include_router(webhooks_router.router)
+ 
+ 
+ class Message(BaseModel):
+     role: str = Field(..., description="Role of the message (user or assistant).")
+     content: str = Field(..., description="Message content.")
+ 
+ 
+ class MemoryCreate(BaseModel):
+     messages: List[Message] = Field(..., description="List of messages to store.")
+     user_id: Optional[str] = None
+@@ -586,20 +593,69 @@ def _filter_by_project_id(data: Dict[str, Any], project_id: Optional[str]) -> Di
+     """Post-filter memory results by metadata.project_id (Mem0 cannot filter nested metadata)."""
+     if not project_id:
+         return data
+     results = data.get("results") or []
+     filtered = [
+         r for r in results if isinstance(r, dict) and (r.get("metadata") or {}).get("project_id") == project_id
+     ]
+     return {**data, "results": filtered}
+ 
+ 
++def _load_project(project_id: str):
++    from sqlalchemy import select as _select
++    from models import Project
++
++    with SessionLocal() as session:
++        return session.scalar(_select(Project).where(Project.project_id == project_id))
++
++
++def _apply_project_defaults(memory_create, project) -> Dict[str, Any]:
++    """Project-scoped defaults: custom extraction prompt and expiration date.
++    Explicit per-request values always win."""
++    overrides: Dict[str, Any] = {}
++    if project is None:
++        return overrides
++    if not memory_create.prompt and project.custom_instructions:
++        overrides["prompt"] = project.custom_instructions
++    if memory_create.expiration_date is None and project.memory_expiration_date is not None:
++        overrides["expiration_date"] = project.memory_expiration_date.isoformat()
++    return overrides
++
++
++def _fire_webhooks(results: list) -> None:
++    """Deliver memory events to subscribed webhooks off-thread. Never raises:
++    webhook delivery must not turn an already-successful memory write into a
++    500 for the caller."""
++    try:
++        events = events_from_add_response(results)
++        if not events:
++            return
++        import threading
++
++        from db import SessionLocal as _SL
++        from models import Webhook as _Webhook
++        from sqlalchemy import select as _select
++
++        def _run() -> None:
++            try:
++                with _SL() as session:
++                    hooks = session.execute(_select(_Webhook)).scalars().all()
++                    for event in events:
++                        trigger_webhooks(hooks, event, {"results": results})
++            except Exception:
++                logging.exception("Webhook dispatch failed")
++
++        threading.Thread(target=_run, daemon=True).start()
++    except Exception:
++        logging.exception("Webhook dispatch failed")
++
++
+ @app.post("/memories", summary="Create memories")
+ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+     """Store new memories, scoped by user and (optionally) project."""
+     is_admin = _auth is None or _auth.role == "admin"
+     owner_user_id, owner_agent_id, owner_run_id = _scope_identifiers(
+         _auth, memory_create.user_id, memory_create.agent_id, memory_create.run_id
+     )
+     if not any([owner_user_id, owner_agent_id, owner_run_id]):
+         raise HTTPException(status_code=400, detail="At least one identifier (user_id, agent_id, run_id) is required.")
+ 
+@@ -613,28 +669,35 @@ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+         resolved = resolve_project_id(memory_create.git_remote)
+         if project_id and resolved and resolved != project_id:
+             raise HTTPException(
+                 status_code=400, detail="project_id does not match the project resolved from git_remote."
+             )
+         project_id = project_id or resolved
+         metadata["git_remote"] = memory_create.git_remote
+     if project_id:
+         metadata["project_id"] = project_id
+ 
++    overrides = _apply_project_defaults(memory_create, _load_project(project_id) if project_id else None)
++
+     params = {k: v for k, v in {
+         "user_id": owner_user_id,
+         "agent_id": owner_agent_id,
+         "run_id": owner_run_id,
+         "metadata": metadata,
++        "infer": True if memory_create.infer is None else memory_create.infer,
++        "memory_type": memory_create.memory_type,
++        "prompt": memory_create.prompt or overrides.get("prompt"),
++        "expiration_date": memory_create.expiration_date or overrides.get("expiration_date"),
+     }.items() if v is not None}
+     try:
+         response = get_memory_instance().add(messages=[m.model_dump() for m in memory_create.messages], **params)
++        _fire_webhooks(response.get("results") or [])
+         if response.get("results"):
+             telemetry.log_dashboard_nudge_once(DASHBOARD_URL)
+         return JSONResponse(content=response)
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ ALL_MEMORIES_LIMIT = 1000
+@@ -704,20 +767,120 @@ def get_all_memories(
+             params["top_k"] = top_k
+         params["show_expired"] = show_expired
+         data = get_memory_instance().get_all(**params)
+         return _filter_by_project_id(data, project_id)
+     except HTTPException:
+         raise
+     except Exception:
+         raise upstream_error()
+ 
+ 
++def delete_memories_by_project(
++    project_id: Optional[str] = Query(None),
++    _auth=Depends(verify_auth),
++):
++    """Danger-Zone: delete every memory whose metadata.project_id matches.
++
++    Only the first ALL_MEMORIES_LIMIT memories are scanned, so the response
++    reports `scanned`/`truncated`: `truncated` means matching memories may
++    still exist outside the scanned window and the caller should retry.
++
++    Routed via the DELETE /memories endpoint below (project_id query param);
++    kept as a plain function so legacy identifier-based deletion on the same
++    route remains reachable.
++    """
++    if _auth is not None and _auth.role != "admin":
++        raise HTTPException(status_code=403, detail="Admin role required.")
++    if not project_id:
++        raise HTTPException(status_code=400, detail="project_id is required.")
++    if _load_project(project_id) is None:
++        raise HTTPException(status_code=404, detail="Project not found.")
++    data = _list_all_memories(limit=ALL_MEMORIES_LIMIT)
++    rows = data.get("results", [])
++    ids = [r["id"] for r in rows if (r.get("metadata") or {}).get("project_id") == project_id]
++    deleted = 0
++    for memory_id in ids:
++        try:
++            get_memory_instance().delete(memory_id)
++            deleted += 1
++        except Exception:
++            logging.exception("Failed to delete memory %s", memory_id)
++    return {"deleted": deleted, "scanned": len(rows), "truncated": len(rows) >= ALL_MEMORIES_LIMIT}
++
++
++def _filter_memories_for_export(
++    rows: list,
++    project_id: Optional[str] = None,
++    user_id: Optional[str] = None,
++    start: Optional[str] = None,
++    end: Optional[str] = None,
++) -> list:
++    """Pure post-filter for JSONL export: project_id (metadata), user_id, and
++    inclusive created_at date range (YYYY-MM-DD strings, UTC)."""
++    def _ts(row: dict):
++        try:
++            ts = datetime.fromisoformat(str(row.get("created_at")).replace("Z", "+00:00"))
++        except (TypeError, ValueError):
++            return None
++        if ts.tzinfo is None:
++            ts = ts.replace(tzinfo=timezone.utc)
++        return ts
++
++    start_dt = datetime.fromisoformat(start).replace(tzinfo=timezone.utc) if start else None
++    end_dt = datetime.fromisoformat(end).replace(tzinfo=timezone.utc) if end else None
++    out = []
++    for row in rows:
++        if project_id and (row.get("metadata") or {}).get("project_id") != project_id:
++            continue
++        if user_id and row.get("user_id") != user_id:
++            continue
++        ts = _ts(row)
++        if start_dt and (ts is None or ts < start_dt):
++            continue
++        if end_dt and (ts is None or ts > end_dt):
++            continue
++        out.append(row)
++    return out
++
++
++@app.get("/exports/memories", summary="Export memories as JSONL (admin)")
++def export_memories(
++    project_id: Optional[str] = None,
++    user_id: Optional[str] = None,
++    start: Optional[str] = None,
++    end: Optional[str] = None,
++    format: str = "jsonl",
++    _auth=Depends(verify_auth),
++):
++    """Stream every memory as newline-delimited JSON (admin only)."""
++    if _auth is not None and _auth.role != "admin":
++        raise HTTPException(status_code=403, detail="Admin role required.")
++    if format != "jsonl":
++        raise HTTPException(status_code=400, detail="Only format=jsonl is supported.")
++    data = _list_all_memories(limit=ALL_MEMORIES_LIMIT)
++    try:
++        rows = _filter_memories_for_export(data.get("results", []), project_id, user_id, start, end)
++    except ValueError:
++        raise HTTPException(status_code=400, detail="invalid start/end date")
++
++    def _gen():
++        for row in rows:
++            yield (json.dumps(row, ensure_ascii=False, default=str) + "\n")
++
++    filename = f"memories-export-{int(time.time())}.jsonl"
++    return StreamingResponse(
++        _gen(),
++        media_type="application/x-ndjson",
++        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
++    )
++
++
+ @app.get("/memories/{memory_id}", summary="Get a memory")
+ def get_memory(memory_id: str, _auth=Depends(verify_auth)):
+     """Retrieve a specific memory by ID."""
+     try:
+         return get_memory_instance().get(memory_id)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.post("/search", summary="Search memories")
+@@ -772,56 +935,69 @@ def update_memory(memory_id: str, updated_memory: MemoryUpdate, _auth=Depends(ve
+     """Update an existing memory."""
+     try:
+         fields_set = getattr(updated_memory, "model_fields_set", getattr(updated_memory, "__fields_set__", set()))
+         params = {"memory_id": memory_id}
+         if "text" in fields_set:
+             params["data"] = updated_memory.text
+         if "metadata" in fields_set:
+             params["metadata"] = updated_memory.metadata
+         if "expiration_date" in fields_set:
+             params["expiration_date"] = updated_memory.expiration_date
+-        return get_memory_instance().update(**params)
++        result = get_memory_instance().update(**params)
++        _fire_webhooks([{"event": "UPDATE"}])
++        return result
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.get("/memories/{memory_id}/history", summary="Get memory history")
+ def memory_history(memory_id: str, _auth=Depends(verify_auth)):
+     """Retrieve memory history."""
+     try:
+         return get_memory_instance().history(memory_id=memory_id)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.delete("/memories/{memory_id}", summary="Delete a memory", response_model=MessageResponse)
+ def delete_memory(memory_id: str, _auth=Depends(verify_auth)):
+     """Delete a specific memory by ID."""
+     try:
+         get_memory_instance().delete(memory_id=memory_id)
++        _fire_webhooks([{"event": "DELETE"}])
+         return MessageResponse(message="Memory deleted successfully")
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+-@app.delete("/memories", summary="Delete all memories", response_model=MessageResponse)
++@app.delete("/memories", summary="Delete memories", response_model=None)
+ def delete_all_memories(
++    project_id: Optional[str] = Query(None),
+     user_id: Optional[str] = None,
+     run_id: Optional[str] = None,
+     agent_id: Optional[str] = None,
+-    _auth=Depends(require_admin),
++    _auth=Depends(verify_auth),
+ ):
+-    """Delete all memories for a given identifier. Requires admin role."""
++    """Delete memories for a given identifier or project. Requires admin role.
++
++    With project_id: Danger-Zone — deletes every memory whose metadata.project_id
++    matches (see delete_memories_by_project). Otherwise falls back to the legacy
++    identifier-based delete-all.
++    """
++    if project_id:
++        return delete_memories_by_project(project_id=project_id, _auth=_auth)
++    if _auth is not None and _auth.role != "admin":
++        raise HTTPException(status_code=403, detail="Admin role required.")
+     if not any([user_id, run_id, agent_id]):
+         raise HTTPException(status_code=400, detail="At least one identifier is required.")
+     try:
+         params = {
+             k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v
+         }
+         get_memory_instance().delete_all(**params)
+         return MessageResponse(message="All relevant memories deleted")
+     except Exception:
+         raise upstream_error()
+diff --git a/server/models.py b/server/models.py
+index b5a9f304..059acb58 100644
+--- a/server/models.py
++++ b/server/models.py
+@@ -1,14 +1,14 @@
+ import uuid
+-from datetime import datetime, timezone
++from datetime import date, datetime, timezone
+ 
+-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
++from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+ from sqlalchemy.orm import Mapped, mapped_column, relationship
+ 
+ from db import Base
+ 
+ 
+ def _utcnow() -> datetime:
+     return datetime.now(timezone.utc)
+ 
+ 
+ def _new_uuid() -> uuid.UUID:
+@@ -101,14 +101,27 @@ class Project(Base):
+     """
+ 
+     __tablename__ = "projects"
+ 
+     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_new_uuid)
+     project_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+     name: Mapped[str] = mapped_column(String(255))
+     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+     git_remotes: Mapped[list] = mapped_column(JSON, default=list)
+     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
++    custom_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
++    memory_expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+     updated_at: Mapped[datetime] = mapped_column(
+         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+     )
++
++
++class Webhook(Base):
++    __tablename__ = "webhooks"
++
++    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_new_uuid)
++    name: Mapped[str] = mapped_column(String(255))
++    url: Mapped[str] = mapped_column(Text)
++    events: Mapped[list] = mapped_column(JSON, default=list)
++    secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
++    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+diff --git a/server/routers/projects.py b/server/routers/projects.py
+index 6559c1d3..82747041 100644
+--- a/server/routers/projects.py
++++ b/server/routers/projects.py
+@@ -1,92 +1,122 @@
+ import uuid
++from datetime import date
+ 
+ from fastapi import APIRouter, Depends, HTTPException, Query
+ from pydantic import BaseModel
+ from sqlalchemy import or_, select
+ from sqlalchemy.orm import Session
+ 
+ from auth import require_admin
+ from db import get_db
+ from gitmatch import resolve_project_id
+ from models import Project
+ from schemas import MessageResponse
+ 
+ router = APIRouter(prefix="/projects", tags=["projects"])
+ 
++# Fields mapped to NOT NULL columns. Sending ``null`` (or blank) for these in a
++# PATCH-style update would raise an unhandled IntegrityError → HTTP 500, so they
++# are rejected with 422 before ``setattr`` runs.
++NON_NULLABLE_FIELDS = {"name"}
++
+ 
+ class ProjectCreate(BaseModel):
+     project_id: str
+     name: str
+     description: str | None = None
+     git_remotes: list[str] = []
++    custom_instructions: str | None = None
++    memory_expiration_date: str | None = None  # YYYY-MM-DD
+ 
+ 
+ class ProjectUpdate(BaseModel):
+     name: str | None = None
+     description: str | None = None
+     git_remotes: list[str] | None = None
++    custom_instructions: str | None = None
++    memory_expiration_date: str | None = None  # YYYY-MM-DD
+ 
+ 
+ class ProjectResponse(BaseModel):
+     id: str
+     project_id: str
+     name: str
+     description: str | None
+     git_remotes: list[str]
++    custom_instructions: str | None = None
++    memory_expiration_date: str | None = None
+     created_by: str
+     created_at: str
+     updated_at: str
+ 
+ 
+ class MatchRequest(BaseModel):
+     git_remote: str | list[str]
+ 
+ 
+ class MatchResponse(BaseModel):
+     project_id: str | None
+ 
+ 
++def _parse_expiration_date(value: str | date | None) -> date | None:
++    """Parse YYYY-MM-DD; ``None`` clears the value; ValueError → 400."""
++    if value is None:
++        return None
++    if isinstance(value, date):
++        return value
++    try:
++        return date.fromisoformat(str(value))
++    except ValueError:
++        raise HTTPException(status_code=400, detail="memory_expiration_date must be YYYY-MM-DD")
++
++
+ def _to_response(project: Project) -> ProjectResponse:
+     return ProjectResponse(
+         id=str(project.id),
+         project_id=project.project_id,
+         name=project.name,
+         description=project.description,
+         git_remotes=list(project.git_remotes or []),
++        custom_instructions=project.custom_instructions,
++        memory_expiration_date=project.memory_expiration_date.isoformat() if project.memory_expiration_date else None,
+         created_by=str(project.created_by),
+         created_at=project.created_at.isoformat() if project.created_at else "",
+         updated_at=project.updated_at.isoformat() if project.updated_at else "",
+     )
+ 
+ 
+ @router.get("", response_model=list[ProjectResponse])
+ def list_projects(q: str | None = None, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     stmt = select(Project).order_by(Project.name)
+     if q:
+         like = f"%{q}%"
+         stmt = stmt.where(or_(Project.project_id.ilike(like), Project.name.ilike(like)))
+     projects = db.execute(stmt).scalars().all()
+     return [_to_response(p) for p in projects]
+ 
+ 
+ @router.post("", response_model=ProjectResponse, status_code=201)
+ def create_project(body: ProjectCreate, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     if not body.project_id or not body.project_id.strip():
+         raise HTTPException(status_code=400, detail="project_id is required.")
++    if not body.name or not body.name.strip():
++        raise HTTPException(status_code=422, detail="name cannot be blank")
+     if db.scalar(select(Project).where(Project.project_id == body.project_id)):
+         raise HTTPException(status_code=409, detail="A project with this project_id already exists.")
+     project = Project(
+         project_id=body.project_id.strip(),
+         name=body.name,
+         description=body.description,
+         git_remotes=list(body.git_remotes or []),
++        custom_instructions=body.custom_instructions,
++        memory_expiration_date=_parse_expiration_date(body.memory_expiration_date),
+         created_by=_admin.id,
+     )
+     db.add(project)
+     db.commit()
+     db.refresh(project)
+     return _to_response(project)
+ 
+ 
+ @router.get("/match", response_model=MatchResponse)
+ def match_project(
+@@ -110,26 +140,34 @@ def get_project(project_id: str, _admin=Depends(require_admin), db: Session = De
+     return _to_response(project)
+ 
+ 
+ @router.put("/{project_id}", response_model=ProjectResponse)
+ def update_project(
+     project_id: str, body: ProjectUpdate, _admin=Depends(require_admin), db: Session = Depends(get_db)
+ ):
+     project = db.scalar(select(Project).where(Project.project_id == project_id))
+     if project is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+-    if body.name is not None:
+-        project.name = body.name
+-    if body.description is not None:
+-        project.description = body.description
+-    if body.git_remotes is not None:
+-        project.git_remotes = list(body.git_remotes)
++    for field, value in body.model_dump(exclude_unset=True).items():
++        if field in NON_NULLABLE_FIELDS:
++            if value is None:
++                raise HTTPException(status_code=422, detail=f"{field} cannot be null")
++            if not str(value).strip():
++                raise HTTPException(status_code=422, detail=f"{field} cannot be blank")
++        if field == "git_remotes" and value is None:
++            # Explicit ``null`` means "clear the remotes", not "write NULL" —
++            # the column is NOT NULL, so store an empty list instead.
++            value = []
++        if field == "memory_expiration_date":
++            setattr(project, field, _parse_expiration_date(value))
++        else:
++            setattr(project, field, value)
+     db.commit()
+     db.refresh(project)
+     return _to_response(project)
+ 
+ 
+ @router.delete("/{project_id}", response_model=MessageResponse)
+ def delete_project(project_id: str, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     project = db.scalar(select(Project).where(Project.project_id == project_id))
+     if project is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+diff --git a/server/routers/requests.py b/server/routers/requests.py
+index 3e226e30..28deff85 100644
+--- a/server/routers/requests.py
++++ b/server/routers/requests.py
+@@ -1,46 +1,70 @@
+ import uuid
+-from datetime import datetime
++from datetime import datetime, timedelta, timezone
+ 
+ from auth import require_admin
+ from db import get_db
+-from fastapi import APIRouter, Depends, Query
++from fastapi import APIRouter, Depends, HTTPException, Query
+ from models import RequestLog
+ from pydantic import BaseModel
+-from sqlalchemy import select
++from routers.stats import RANGE_CHOICES, RANGE_TO_HOURS
++from sqlalchemy import and_, func, select
+ from sqlalchemy.orm import Session
+ 
+ router = APIRouter(prefix="/requests", tags=["requests"])
+ 
+ 
+ class RequestLogItem(BaseModel):
+     id: uuid.UUID
+     method: str
+     path: str
+     status_code: int
+     latency_ms: float
+     auth_type: str
+     created_at: datetime
+ 
+     model_config = {"from_attributes": True}
+ 
+ 
+ API_KEY_AUTH_TYPES = ("api_key", "admin_api_key")
+ 
++# Action bucket -> (method, path) signature. Mirrors `routers.stats.request_action`
++# so the filter can be pushed down into SQL instead of scanning every row in Python.
++ACTION_METHOD_PATH = {
++    "add": ("POST", "/memories"),
++    "search": ("POST", "/search"),
++    "get_all": ("GET", "/memories"),
++}
++
+ 
+ @router.get("", response_model=list[RequestLogItem])
+ def list_requests(
+     _auth=Depends(require_admin),
+     db: Session = Depends(get_db),
+     limit: int = Query(default=50, ge=1, le=200),
++    action: str | None = Query(default=None),
++    range: str = Query(default="all"),
+ ):
+-    logs = (
+-        db.execute(
+-            select(RequestLog)
+-            .where(RequestLog.auth_type.in_(API_KEY_AUTH_TYPES))
+-            .order_by(RequestLog.created_at.desc())
+-            .limit(limit)
++    if range not in RANGE_CHOICES:
++        raise HTTPException(
++            status_code=400, detail=f"range must be one of {RANGE_CHOICES}"
+         )
++    stmt = select(RequestLog).where(RequestLog.auth_type.in_(API_KEY_AUTH_TYPES))
++    if range != "all":
++        since = datetime.now(timezone.utc) - timedelta(hours=RANGE_TO_HOURS[range])
++        stmt = stmt.where(RequestLog.created_at >= since)
++    if action:
++        signature = ACTION_METHOD_PATH.get(action)
++        if signature is None:
++            # Unknown action matches nothing; keep the pre-existing empty result
++            # rather than blowing up on a missing mapping key.
++            return []
++        method, path = signature
++        stmt = stmt.where(
++            and_(RequestLog.method == method, func.rtrim(RequestLog.path, "/") == path)
++        )
++    logs = (
++        db.execute(stmt.order_by(RequestLog.created_at.desc()).limit(limit))
+         .scalars()
+         .all()
+     )
+     return logs
+diff --git a/server/routers/stats.py b/server/routers/stats.py
+new file mode 100644
+index 00000000..593021f8
+--- /dev/null
++++ b/server/routers/stats.py
+@@ -0,0 +1,73 @@
++from datetime import datetime, timedelta, timezone
++
++from auth import require_admin
++from db import get_db
++from fastapi import APIRouter, Depends, HTTPException, Query
++from models import RequestLog
++from pydantic import BaseModel
++from sqlalchemy import select
++from sqlalchemy.orm import Session
++from server_state import get_memory_instance
++
++router = APIRouter(prefix="/stats", tags=["stats"])
++
++RANGE_CHOICES = ("24h", "7d", "30d", "90d", "all")
++RANGE_TO_HOURS = {"24h": 24, "7d": 168, "30d": 720, "90d": 2160}
++API_KEY_AUTH_TYPES = ("api_key", "admin_api_key")
++
++
++def request_action(method: str, path: str) -> str | None:
++    """Map a request-log row to a dashboard action bucket."""
++    p = (path or "").rstrip("/")
++    if method == "POST" and p == "/memories":
++        return "add"
++    if method == "POST" and p == "/search":
++        return "search"
++    if method == "GET" and p == "/memories":
++        return "get_all"
++    return None
++
++
++def _iter_memory_payloads(limit: int = 10_000) -> list[dict]:
++    results = get_memory_instance().vector_store.list(top_k=limit)
++    rows = results[0] if results and isinstance(results, list) and isinstance(results[0], list) else results or []
++    return [getattr(row, "payload", None) or {} for row in rows]
++
++
++class StatsResponse(BaseModel):
++    requests: dict
++    memories_total: int
++    entities: dict
++
++
++@router.get("", response_model=StatsResponse)
++def get_stats(
++    range: str = Query(default="7d"),
++    _admin=Depends(require_admin),
++    db: Session = Depends(get_db),
++):
++    if range not in RANGE_CHOICES:
++        raise HTTPException(status_code=400, detail=f"range must be one of {RANGE_CHOICES}")
++    stmt = select(RequestLog).where(RequestLog.auth_type.in_(API_KEY_AUTH_TYPES))
++    if range != "all":
++        since = datetime.now(timezone.utc) - timedelta(hours=RANGE_TO_HOURS[range])
++        stmt = stmt.where(RequestLog.created_at >= since)
++    logs = db.execute(stmt).scalars().all()
++    counts = {"add": 0, "search": 0, "get_all": 0}
++    for log in logs:
++        action = request_action(log.method, log.path)
++        if action:
++            counts[action] += 1
++
++    payloads = _iter_memory_payloads()
++    entities: dict[str, set] = {"users": set(), "agents": set(), "runs": set()}
++    for payload in payloads:
++        for field, key in (("user_id", "users"), ("agent_id", "agents"), ("run_id", "runs")):
++            if payload.get(field):
++                entities[key].add(str(payload[field]))
++
++    return StatsResponse(
++        requests={**counts, "total": sum(counts.values())},
++        memories_total=len(payloads),
++        entities={k: len(v) for k, v in entities.items()},
++    )
+diff --git a/server/routers/webhooks.py b/server/routers/webhooks.py
+new file mode 100644
+index 00000000..62714118
+--- /dev/null
++++ b/server/routers/webhooks.py
+@@ -0,0 +1,79 @@
++from urllib.parse import urlparse
++
++from fastapi import APIRouter, Depends, HTTPException
++from pydantic import BaseModel
++from sqlalchemy import select
++from sqlalchemy.orm import Session
++
++from auth import require_admin
++from db import get_db
++from models import Webhook
++
++router = APIRouter(prefix="/webhooks", tags=["webhooks"])
++
++ALLOWED_EVENTS = ("memory_added", "memory_updated", "memory_deleted")
++
++
++class WebhookCreate(BaseModel):
++    name: str
++    url: str
++    events: list[str]
++    secret: str | None = None
++
++
++class WebhookResponse(BaseModel):
++    id: str
++    name: str
++    url: str
++    events: list[str]
++    secret: str | None
++    created_at: str
++
++
++def _to_response(hook: Webhook) -> WebhookResponse:
++    return WebhookResponse(
++        id=str(hook.id), name=hook.name, url=hook.url,
++        events=list(hook.events or []), secret=hook.secret,
++        created_at=hook.created_at.isoformat() if hook.created_at else "",
++    )
++
++
++@router.get("", response_model=list[WebhookResponse])
++def list_webhooks(_admin=Depends(require_admin), db: Session = Depends(get_db)):
++    hooks = db.execute(select(Webhook).order_by(Webhook.created_at)).scalars().all()
++    return [_to_response(h) for h in hooks]
++
++
++def _validate_url(url: str) -> None:
++    """Reject non-http(s) or hostless URLs. Private-range blocking is out of
++    scope (endpoints are admin-gated); keep validation simple."""
++    parsed = urlparse(url)
++    if parsed.scheme not in ("http", "https") or not parsed.netloc:
++        raise HTTPException(status_code=400, detail="url must be a valid http(s) URL")
++
++
++@router.post("", response_model=WebhookResponse, status_code=201)
++def create_webhook(body: WebhookCreate, _admin=Depends(require_admin), db: Session = Depends(get_db)):
++    _validate_url(body.url)
++    bad = [e for e in body.events if e not in ALLOWED_EVENTS]
++    if bad:
++        raise HTTPException(status_code=400, detail=f"Unknown events: {bad}. Allowed: {ALLOWED_EVENTS}")
++    hook = Webhook(name=body.name, url=body.url, events=body.events, secret=body.secret)
++    db.add(hook)
++    db.commit()
++    db.refresh(hook)
++    return _to_response(hook)
++
++
++@router.delete("/{webhook_id}")
++def delete_webhook(webhook_id: str, _admin=Depends(require_admin), db: Session = Depends(get_db)):
++    import uuid as _uuid
++    try:
++        hook = db.get(Webhook, _uuid.UUID(webhook_id))
++    except (TypeError, ValueError):
++        hook = None
++    if hook is None:
++        raise HTTPException(status_code=404, detail="Webhook not found.")
++    db.delete(hook)
++    db.commit()
++    return {"message": "Webhook deleted."}
+diff --git a/server/tests/test_delete_project_memories.py b/server/tests/test_delete_project_memories.py
+new file mode 100644
+index 00000000..e780350f
+--- /dev/null
++++ b/server/tests/test_delete_project_memories.py
+@@ -0,0 +1,54 @@
++from types import SimpleNamespace
++
++import pytest
++from fastapi import HTTPException
++
++import main as m
++
++
++def test_requires_project_id():
++    with pytest.raises(HTTPException) as exc:
++        m.delete_memories_by_project(project_id=None, _auth=None)
++    assert exc.value.status_code == 400
++
++
++def test_rejects_non_admin():
++    user = SimpleNamespace(role="user")
++    with pytest.raises(HTTPException) as exc:
++        m.delete_memories_by_project(project_id="p", _auth=user)
++    assert exc.value.status_code == 403
++
++
++def test_404_when_project_missing(monkeypatch):
++    monkeypatch.setattr(m, "_load_project", lambda pid: None)
++    with pytest.raises(HTTPException) as exc:
++        m.delete_memories_by_project(project_id="ghost", _auth=None)
++    assert exc.value.status_code == 404
++
++
++def test_deletes_only_matching(monkeypatch):
++    monkeypatch.setattr(m, "_load_project", lambda pid: SimpleNamespace(project_id=pid))
++    monkeypatch.setattr(
++        m, "_list_all_memories",
++        lambda limit: {"results": [
++            {"id": "1", "metadata": {"project_id": "p"}},
++            {"id": "2", "metadata": {"project_id": "other"}},
++            {"id": "3", "metadata": {}},
++        ]},
++    )
++    deleted_ids = []
++    inst = SimpleNamespace(delete=lambda mid: deleted_ids.append(mid))
++    monkeypatch.setattr(m, "get_memory_instance", lambda: inst)
++    out = m.delete_memories_by_project(project_id="p", _auth=None)
++    assert out == {"deleted": 1, "scanned": 3, "truncated": False}
++    assert deleted_ids == ["1"]
++
++
++def test_reports_truncation(monkeypatch):
++    monkeypatch.setattr(m, "_load_project", lambda pid: SimpleNamespace(project_id=pid))
++    rows = [{"id": str(i), "metadata": {"project_id": "p"}} for i in range(m.ALL_MEMORIES_LIMIT)]
++    monkeypatch.setattr(m, "_list_all_memories", lambda limit: {"results": rows})
++    monkeypatch.setattr(m, "get_memory_instance", lambda: SimpleNamespace(delete=lambda mid: None))
++    out = m.delete_memories_by_project(project_id="p", _auth=None)
++    assert out["deleted"] == m.ALL_MEMORIES_LIMIT
++    assert out["truncated"] is True
+diff --git a/server/tests/test_exports.py b/server/tests/test_exports.py
+new file mode 100644
+index 00000000..fadf84b7
+--- /dev/null
++++ b/server/tests/test_exports.py
+@@ -0,0 +1,50 @@
++from types import SimpleNamespace
++
++import pytest
++from fastapi import HTTPException
++
++import main as m
++from main import _filter_memories_for_export
++
++
++def _row(id, project_id=None, user_id=None, created_at=None):
++    return {
++        "id": id,
++        "user_id": user_id,
++        "metadata": {"project_id": project_id} if project_id else {},
++        "created_at": created_at,
++    }
++
++
++ROWS = [
++    _row("1", project_id="p", user_id="u1", created_at="2026-09-01T00:00:00"),
++    _row("2", project_id="p", user_id="u2", created_at="2026-09-10T00:00:00"),
++    _row("3", user_id="u1", created_at="2026-09-05T00:00:00"),
++]
++
++
++def test_filter_by_project():
++    assert [r["id"] for r in _filter_memories_for_export(ROWS, project_id="p")] == ["1", "2"]
++
++
++def test_filter_by_user_and_date():
++    out = _filter_memories_for_export(ROWS, user_id="u1", start="2026-09-03", end="2026-09-06")
++    assert [r["id"] for r in out] == ["3"]
++
++
++def test_no_filters_returns_all():
++    assert len(_filter_memories_for_export(ROWS)) == 3
++
++
++def test_invalid_start_returns_400(monkeypatch):
++    monkeypatch.setattr(m, "_list_all_memories", lambda limit: {"results": ROWS})
++    with pytest.raises(HTTPException) as exc:
++        m.export_memories(start="not-a-date", _auth=None)
++    assert exc.value.status_code == 400
++
++
++def test_invalid_end_returns_400(monkeypatch):
++    monkeypatch.setattr(m, "_list_all_memories", lambda limit: {"results": ROWS})
++    with pytest.raises(HTTPException) as exc:
++        m.export_memories(end="2026/09/01", _auth=None)
++    assert exc.value.status_code == 400
+diff --git a/server/tests/test_project_defaults.py b/server/tests/test_project_defaults.py
+new file mode 100644
+index 00000000..5947f9e6
+--- /dev/null
++++ b/server/tests/test_project_defaults.py
+@@ -0,0 +1,162 @@
++from types import SimpleNamespace
++
++from main import _apply_project_defaults
++
++
++def _mc(prompt=None, expiration_date=None):
++    return SimpleNamespace(prompt=prompt, expiration_date=expiration_date)
++
++
++def _proj(instructions=None, expiration=None):
++    return SimpleNamespace(custom_instructions=instructions, memory_expiration_date=expiration)
++
++
++def test_no_project_no_overrides():
++    assert _apply_project_defaults(_mc(), None) == {}
++
++
++def test_project_defaults_applied():
++    p = _proj(instructions="Only store tech preferences", expiration=__import__("datetime").date(2027, 1, 1))
++    out = _apply_project_defaults(_mc(), p)
++    assert out["prompt"] == "Only store tech preferences"
++    assert out["expiration_date"] == "2027-01-01"
++
++
++def test_explicit_request_values_win():
++    p = _proj(instructions="proj", expiration=__import__("datetime").date(2027, 1, 1))
++    out = _apply_project_defaults(_mc(prompt="explicit", expiration_date="2030-05-05"), p)
++    assert out == {}
++
++
++def test_parse_expiration_date_none_is_none():
++    from routers.projects import _parse_expiration_date
++    assert _parse_expiration_date(None) is None
++
++
++def test_parse_expiration_date_bad_value_raises_400():
++    import pytest
++    from fastapi import HTTPException
++    from routers.projects import _parse_expiration_date
++    with pytest.raises(HTTPException) as exc:
++        _parse_expiration_date("not-a-date")
++    assert exc.value.status_code == 400
++
++
++def _fake_project():
++    now = __import__("datetime").datetime(2027, 1, 1, 12, 0, 0)
++    return SimpleNamespace(
++        id=__import__("uuid").uuid4(),
++        project_id="p",
++        name="n",
++        description="original description",
++        git_remotes=["https://x/y.git"],
++        custom_instructions="original instructions",
++        memory_expiration_date=__import__("datetime").date(2027, 1, 1),
++        created_by=__import__("uuid").uuid4(),
++        created_at=now,
++        updated_at=now,
++    )
++
++
++class _FakeDB:
++    """Minimal Session stand-in: only ``scalar``/``commit``/``refresh`` are used."""
++
++    def __init__(self, project=None):
++        self.project = project if project is not None else _fake_project()
++        self.committed = False
++
++    def scalar(self, *_a, **_k):
++        return self.project
++
++    def commit(self):
++        self.committed = True
++
++    def refresh(self, _p):
++        pass
++
++
++def test_update_project_rejects_null_name():
++    import pytest
++    from fastapi import HTTPException
++    import routers.projects as rp
++
++    db = _FakeDB()
++    with pytest.raises(HTTPException) as exc:
++        rp.update_project("p", rp.ProjectUpdate(name=None), _admin=None, db=db)
++    assert exc.value.status_code == 422
++    # Must be rejected before any write reaches the DB.
++    assert db.committed is False
++    assert db.project.name == "n"
++
++
++def test_update_project_rejects_blank_name():
++    import pytest
++    from fastapi import HTTPException
++    import routers.projects as rp
++
++    db = _FakeDB()
++    with pytest.raises(HTTPException) as exc:
++        rp.update_project("p", rp.ProjectUpdate(name="   "), _admin=None, db=db)
++    assert exc.value.status_code == 422
++    assert db.committed is False
++
++
++def test_update_project_allows_nullable_fields():
++    """Explicit ``null`` must CLEAR pre-populated fields (exclude_unset semantics).
++
++    The fake project starts with non-empty values on purpose: with ``None``
++    initial values the assertions below would hold even if the update loop were
++    removed entirely.
++    """
++    import routers.projects as rp
++
++    db = _FakeDB()
++    assert db.project.description == "original description"
++    assert db.project.custom_instructions == "original instructions"
++    assert db.project.memory_expiration_date is not None
++    rp.update_project(
++        "p",
++        rp.ProjectUpdate(
++            description=None,
++            custom_instructions=None,
++            memory_expiration_date=None,
++        ),
++        _admin=None,
++        db=db,
++    )
++    assert db.committed is True
++    assert db.project.description is None
++    assert db.project.custom_instructions is None
++    assert db.project.memory_expiration_date is None
++
++
++def test_update_project_null_git_remotes_clears_to_empty_list():
++    """``git_remotes`` is a NOT NULL column: explicit ``null`` clears to ``[]``."""
++    import routers.projects as rp
++
++    db = _FakeDB()
++    assert db.project.git_remotes == ["https://x/y.git"]
++    rp.update_project("p", rp.ProjectUpdate(git_remotes=None), _admin=None, db=db)
++    assert db.committed is True
++    assert db.project.git_remotes == []
++
++
++def test_update_project_still_accepts_valid_name():
++    import routers.projects as rp
++
++    db = _FakeDB()
++    rp.update_project("p", rp.ProjectUpdate(name="renamed"), _admin=None, db=db)
++    assert db.committed is True
++    assert db.project.name == "renamed"
++
++
++def test_update_project_leaves_omitted_fields_untouched():
++    """Fields absent from the payload must keep their pre-existing values."""
++    import routers.projects as rp
++
++    db = _FakeDB()
++    rp.update_project("p", rp.ProjectUpdate(name="renamed"), _admin=None, db=db)
++    assert db.project.description == "original description"
++    assert db.project.custom_instructions == "original instructions"
++    assert db.project.git_remotes == ["https://x/y.git"]
++    assert db.project.memory_expiration_date == __import__("datetime").date(2027, 1, 1)
+diff --git a/server/tests/test_stats.py b/server/tests/test_stats.py
+new file mode 100644
+index 00000000..9f885006
+--- /dev/null
++++ b/server/tests/test_stats.py
+@@ -0,0 +1,196 @@
++from datetime import datetime, timedelta, timezone
++
++from fastapi import HTTPException
++import pytest
++
++from routers import requests as requests_router
++from routers import stats as stats_router
++
++
++class _Log:
++    def __init__(self, method, path):
++        self.method = method
++        self.path = path
++
++
++class _Scalars:
++    def __init__(self, items):
++        self._items = items
++
++    def all(self):
++        return self._items
++
++
++class _Result:
++    def __init__(self, items):
++        self._items = items
++
++    def scalars(self):
++        return _Scalars(self._items)
++
++
++class _DB:
++    def __init__(self, logs):
++        self._logs = logs
++        self.statements = []
++
++    def execute(self, stmt, *_a, **_k):
++        self.statements.append(stmt)
++        return _Result(self._logs)
++
++
++class _Row:
++    def __init__(self, payload):
++        self.payload = payload
++
++
++class _VS:
++    def list(self, top_k):
++        return [[_Row({"user_id": "u1", "agent_id": "a1"}), _Row({"user_id": "u1"})]]
++
++
++class _Mem:
++    vector_store = _VS()
++
++
++def _sql(stmt):
++    """Compile with literals inlined so assertions see real predicates, not bind names."""
++    return str(stmt.compile(compile_kwargs={"literal_binds": True}))
++
++
++def _last_sql(db):
++    return _sql(db.statements[-1])
++
++
++def test_request_action_mapping():
++    assert stats_router.request_action("POST", "/memories") == "add"
++    assert stats_router.request_action("POST", "/search") == "search"
++    assert stats_router.request_action("GET", "/memories") == "get_all"
++    assert stats_router.request_action("GET", "/memories/123") is None
++    assert stats_router.request_action("POST", "/configure") is None
++
++
++def test_get_stats_counts_and_entities(monkeypatch):
++    logs = [
++        _Log("POST", "/memories"),
++        _Log("POST", "/search"),
++        _Log("GET", "/memories"),
++        _Log("GET", "/requests"),  # not counted
++    ]
++    monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
++    out = stats_router.get_stats(range="24h", _admin=None, db=_DB(logs))
++    assert out.requests == {"add": 1, "search": 1, "get_all": 1, "total": 3}
++    assert out.memories_total == 2
++    assert out.entities == {"users": 1, "agents": 1, "runs": 0}
++
++
++def test_get_stats_rejects_bad_range():
++    with pytest.raises(HTTPException) as exc:
++        stats_router.get_stats(range="1h", _admin=None, db=_DB([]))
++    assert exc.value.status_code == 400
++
++
++_REQUEST_LOGS = [
++    _Log("POST", "/memories"),  # add
++    _Log("POST", "/search"),  # search
++    _Log("GET", "/memories"),  # get_all
++]
++
++
++def test_list_requests_rejects_bad_range():
++    with pytest.raises(HTTPException) as exc:
++        requests_router.list_requests(
++            _auth=None, db=_DB(_REQUEST_LOGS), limit=50, action=None, range="1h"
++        )
++    assert exc.value.status_code == 400
++
++
++def test_list_requests_range_adds_time_window():
++    db = _DB(_REQUEST_LOGS)
++    requests_router.list_requests(
++        _auth=None, db=db, limit=50, action=None, range="24h"
++    )
++    sql = _last_sql(db)
++    assert "created_at >=" in sql
++
++
++def test_list_requests_range_all_has_no_time_window():
++    db = _DB(_REQUEST_LOGS)
++    requests_router.list_requests(
++        _auth=None, db=db, limit=50, action=None, range="all"
++    )
++    assert "created_at >=" not in _last_sql(db)
++
++
++def test_list_requests_range_window_matches_requested_hours():
++    before = datetime.now(timezone.utc)
++    db = _DB(_REQUEST_LOGS)
++    requests_router.list_requests(
++        _auth=None, db=db, limit=50, action=None, range="24h"
++    )
++    since = next(
++        value
++        for value in db.statements[-1].compile().params.values()
++        if isinstance(value, datetime)
++    )
++    # 24h range must cut at ~24h ago, not some other hour count.
++    assert timedelta(hours=23, minutes=59) < (before - since) <= timedelta(
++        hours=24, minutes=1
++    )
++
++
++def test_list_requests_action_pushed_into_sql():
++    db = _DB(_REQUEST_LOGS)
++    requests_router.list_requests(
++        _auth=None, db=db, limit=50, action="search", range="all"
++    )
++    sql = _last_sql(db)
++    assert "POST" in sql
++    assert "/search" in sql
++    assert "rtrim" in sql
++
++
++def test_list_requests_action_covers_every_bucket():
++    expected = {"add": ("/memories", "POST"), "search": ("/search", "POST"), "get_all": ("/memories", "GET")}
++    for action, (path, method) in expected.items():
++        db = _DB(_REQUEST_LOGS)
++        requests_router.list_requests(
++            _auth=None, db=db, limit=50, action=action, range="all"
++        )
++        sql = _last_sql(db)
++        assert method in sql
++        assert path in sql
++
++
++def test_list_requests_no_action_predicate_when_action_is_none():
++    db = _DB(_REQUEST_LOGS)
++    out = requests_router.list_requests(
++        _auth=None, db=db, limit=50, action=None, range="all"
++    )
++    assert len(out) == 3
++    assert "rtrim" not in _last_sql(db)
++
++
++def test_list_requests_unknown_action_returns_empty():
++    db = _DB(_REQUEST_LOGS)
++    out = requests_router.list_requests(
++        _auth=None, db=db, limit=50, action="nope", range="all"
++    )
++    assert out == []
++
++
++def test_list_requests_restores_order_and_limit():
++    db = _DB(_REQUEST_LOGS)
++    requests_router.list_requests(
++        _auth=None, db=db, limit=50, action=None, range="all"
++    )
++    sql = _last_sql(db)
++    assert "ORDER BY" in sql
++    assert "created_at DESC" in sql
++    assert "LIMIT 50" in sql
++
++
++def test_list_requests_limit_is_bound():
++    db = _DB(_REQUEST_LOGS)
++    requests_router.list_requests(_auth=None, db=db, limit=7, action=None, range="all")
++    assert "LIMIT 7" in _last_sql(db)
+diff --git a/server/tests/test_webhooks.py b/server/tests/test_webhooks.py
+new file mode 100644
+index 00000000..a138e0e8
+--- /dev/null
++++ b/server/tests/test_webhooks.py
+@@ -0,0 +1,62 @@
++from types import SimpleNamespace
++
++import pytest
++from fastapi import HTTPException
++
++from webhooks_client import events_from_add_response, trigger_webhooks
++
++
++def test_events_from_add_response():
++    results = [{"event": "ADD"}, {"event": "UPDATE"}, {"event": "NOOP"}]
++    assert events_from_add_response(results) == {"memory_added", "memory_updated"}
++    assert events_from_add_response([]) == set()
++
++
++def test_trigger_filters_by_subscription(monkeypatch):
++    calls = []
++
++    def fake_post(url, json=None, headers=None, timeout=None):
++        calls.append((url, json))
++
++    monkeypatch.setattr("webhooks_client.httpx.post", fake_post)
++    hooks = [
++        SimpleNamespace(name="all", url="http://x/1", events=["memory_added"], secret="s1"),
++        SimpleNamespace(name="other", url="http://x/2", events=["memory_deleted"], secret=None),
++    ]
++    trigger_webhooks(hooks, "memory_added", {"id": "1"})
++    assert [(u, j) for u, j in calls] == [("http://x/1", {"event": "memory_added", "data": {"id": "1"}})]
++
++
++def test_trigger_never_raises(monkeypatch):
++    def boom(*a, **k):
++        raise RuntimeError("down")
++
++    monkeypatch.setattr("webhooks_client.httpx.post", boom)
++    hook = SimpleNamespace(name="h", url="http://x", events=["memory_added"], secret=None)
++    trigger_webhooks([hook], "memory_added", {})  # must not raise
++
++
++def test_create_webhook_rejects_non_http_url():
++    from routers.webhooks import create_webhook, WebhookCreate
++    body = WebhookCreate(name="bad", url="ftp://example.com/x", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_create_webhook_rejects_missing_host():
++    from routers.webhooks import create_webhook, WebhookCreate
++    body = WebhookCreate(name="bad", url="http://", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_fire_webhooks_never_propagates(monkeypatch):
++    import main as m
++
++    def boom(results):
++        raise RuntimeError("dispatch exploded")
++
++    monkeypatch.setattr(m, "events_from_add_response", boom)
++    m._fire_webhooks([{"event": "ADD"}])  # must not raise
+diff --git a/server/webhooks_client.py b/server/webhooks_client.py
+new file mode 100644
+index 00000000..9ea60f3d
+--- /dev/null
++++ b/server/webhooks_client.py
+@@ -0,0 +1,28 @@
++import logging
++
++import httpx
++
++_EVENT_MAP = {"ADD": "memory_added", "UPDATE": "memory_updated", "DELETE": "memory_deleted"}
++
++
++def events_from_add_response(results: list) -> set[str]:
++    events = set()
++    for item in results or []:
++        mapped = _EVENT_MAP.get((item or {}).get("event"))
++        if mapped:
++            events.add(mapped)
++    return events
++
++
++def trigger_webhooks(hooks, event: str, payload: dict) -> None:
++    """Fire-and-forget delivery; never raises, never blocks the caller long."""
++    for hook in hooks or []:
++        if event not in (hook.events or []):
++            continue
++        headers = {"Content-Type": "application/json"}
++        if hook.secret:
++            headers["X-Webhook-Secret"] = hook.secret
++        try:
++            httpx.post(hook.url, json={"event": event, "data": payload}, headers=headers, timeout=5.0)
++        except Exception:  # noqa: BLE001
++            logging.warning("Webhook %s delivery failed for %s", getattr(hook, "name", "?"), event)

@@ -1,0 +1,1283 @@
+d66922fd fix(dashboard): pagination clamp, i18n selector, copy buttons, metadata JSON in playground
+f67709a6 fix(dashboard): useApiQuery deps option; single-source context key; write-back filter
+13f872a8 refactor(server): single-source action map/auth types, SQL count aggregation, unified scan limit
+da573fda fix(server): webhook secret masking, HMAC signature, SSRF guard, delivery observability
+ .../app/(root)/dashboard/components/main-nav.tsx   |  14 +-
+ .../src/app/(root)/dashboard/departments/page.tsx  |   6 +-
+ .../src/app/(root)/dashboard/get-started/page.tsx  |  35 ++-
+ .../src/app/(root)/dashboard/memories/page.tsx     |  44 ++--
+ .../src/app/(root)/dashboard/playground/page.tsx   |  46 +++-
+ .../src/app/(root)/dashboard/projects/page.tsx     |   6 +-
+ .../src/app/(root)/dashboard/requests/page.tsx     |  39 ++-
+ .../src/app/(root)/dashboard/users/page.tsx        |   6 +-
+ .../src/app/(root)/dashboard/webhooks/page.tsx     |  13 +-
+ server/dashboard/src/hooks/use-api-query.ts        |  18 +-
+ server/dashboard/src/i18n/en.ts                    |   1 +
+ server/dashboard/src/i18n/zh.ts                    |   1 +
+ server/dashboard/src/utils/api-endpoints.ts        |   4 +
+ server/main.py                                     |  67 ++++--
+ server/routers/requests.py                         |  18 +-
+ server/routers/stats.py                            |  68 ++++--
+ server/routers/webhooks.py                         |  89 ++++++-
+ server/server_state.py                             |   5 +
+ server/tests/test_delete_project_memories.py       |   6 +-
+ server/tests/test_exports.py                       |   6 +-
+ server/tests/test_stats.py                         | 109 ++++++++-
+ server/tests/test_webhooks.py                      | 268 ++++++++++++++++++++-
+ server/webhooks_client.py                          |  27 ++-
+ 23 files changed, 755 insertions(+), 141 deletions(-)
+diff --git a/server/main.py b/server/main.py
+index dcb342ae..5150df7c 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -1,15 +1,17 @@
+ import asyncio
+ import json
+ import logging
+ import os
+ import time
++from concurrent.futures import ThreadPoolExecutor
++
+ import openai as openai_sdk
+ from datetime import datetime, timedelta, timezone
+ from typing import Any, Dict, List, Optional
+ 
+ import telemetry
+ from auth import ADMIN_API_KEY, AUTH_DISABLED, JWT_SECRET, require_admin, verify_auth
+ from db import SessionLocal
+ from dotenv import load_dotenv
+ from errors import (
+     UpstreamError,
+@@ -31,20 +33,21 @@ from routers import departments as departments_router
+ from routers import entities as entities_router
+ from routers import projects as projects_router
+ from routers import requests as requests_router
+ from routers import stats as stats_router
+ from routers import users as users_router
+ from routers import webhooks as webhooks_router
+ from webhooks_client import events_from_add_response, trigger_webhooks
+ from gitmatch import resolve_project_id
+ from schemas import MessageResponse
+ from server_state import (
++    SCAN_LIMIT,
+     get_current_config,
+     get_memory_instance,
+     initialize_state,
+     set_session_factory,
+     update_config,
+ )
+ from slowapi import _rate_limit_exceeded_handler
+ from slowapi.errors import RateLimitExceeded
+ from sqlalchemy import func, select
+ 
+@@ -614,44 +617,56 @@ def _apply_project_defaults(memory_create, project) -> Dict[str, Any]:
+     overrides: Dict[str, Any] = {}
+     if project is None:
+         return overrides
+     if not memory_create.prompt and project.custom_instructions:
+         overrides["prompt"] = project.custom_instructions
+     if memory_create.expiration_date is None and project.memory_expiration_date is not None:
+         overrides["expiration_date"] = project.memory_expiration_date.isoformat()
+     return overrides
+ 
+ 
+-def _fire_webhooks(results: list) -> None:
+-    """Deliver memory events to subscribed webhooks off-thread. Never raises:
+-    webhook delivery must not turn an already-successful memory write into a
+-    500 for the caller."""
+-    try:
+-        events = events_from_add_response(results)
+-        if not events:
+-            return
+-        import threading
++# Fire-and-forget webhook delivery pool. Semantics: at process exit, in-flight
++# deliveries may be dropped (we deliberately do not wait for the pool to drain)
++# — acceptable for best-effort notifications, same trade-off as the previous
++# per-event daemon threads.
++_webhook_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="webhook")
+ 
++
++def _dispatch(events: list[str], payload: dict) -> None:
++    """Runs on the webhook executor thread. Never raises."""
++    try:
+         from db import SessionLocal as _SL
+         from models import Webhook as _Webhook
+         from sqlalchemy import select as _select
+ 
+-        def _run() -> None:
+-            try:
+-                with _SL() as session:
+-                    hooks = session.execute(_select(_Webhook)).scalars().all()
+-                    for event in events:
+-                        trigger_webhooks(hooks, event, {"results": results})
+-            except Exception:
+-                logging.exception("Webhook dispatch failed")
++        with _SL() as session:
++            hooks = session.execute(_select(_Webhook)).scalars().all()
++            for event in events:
++                trigger_webhooks(hooks, event, payload)
++    except Exception:
++        logging.exception("Webhook dispatch failed")
++
+ 
+-        threading.Thread(target=_run, daemon=True).start()
++def _fire_webhooks(results: list | None = None, *, events: list | set | None = None, payload: dict | None = None) -> None:
++    """Queue memory events for webhook delivery on the shared executor.
++
++    Never raises: webhook delivery must not turn an already-successful memory
++    write into a 500 for the caller.
++    """
++    try:
++        if events is None:
++            events = events_from_add_response(results or [])
++        if payload is None:
++            payload = {"results": list(results or [])}
++        if not events:
++            return
++        _webhook_executor.submit(_dispatch, list(events), payload)
+     except Exception:
+         logging.exception("Webhook dispatch failed")
+ 
+ 
+ @app.post("/memories", summary="Create memories")
+ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+     """Store new memories, scoped by user and (optionally) project."""
+     is_admin = _auth is None or _auth.role == "admin"
+     owner_user_id, owner_agent_id, owner_run_id = _scope_identifiers(
+         _auth, memory_create.user_id, memory_create.agent_id, memory_create.run_id
+@@ -773,45 +788,45 @@ def get_all_memories(
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ def delete_memories_by_project(
+     project_id: Optional[str] = Query(None),
+     _auth=Depends(verify_auth),
+ ):
+     """Danger-Zone: delete every memory whose metadata.project_id matches.
+ 
+-    Only the first ALL_MEMORIES_LIMIT memories are scanned, so the response
++    Only the first SCAN_LIMIT memories are scanned, so the response
+     reports `scanned`/`truncated`: `truncated` means matching memories may
+     still exist outside the scanned window and the caller should retry.
+ 
+     Routed via the DELETE /memories endpoint below (project_id query param);
+     kept as a plain function so legacy identifier-based deletion on the same
+     route remains reachable.
+     """
+     if _auth is not None and _auth.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin role required.")
+     if not project_id:
+         raise HTTPException(status_code=400, detail="project_id is required.")
+     if _load_project(project_id) is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+-    data = _list_all_memories(limit=ALL_MEMORIES_LIMIT)
++    data = _list_all_memories(limit=SCAN_LIMIT)
+     rows = data.get("results", [])
+     ids = [r["id"] for r in rows if (r.get("metadata") or {}).get("project_id") == project_id]
+     deleted = 0
+     for memory_id in ids:
+         try:
+             get_memory_instance().delete(memory_id)
+             deleted += 1
+         except Exception:
+             logging.exception("Failed to delete memory %s", memory_id)
+-    return {"deleted": deleted, "scanned": len(rows), "truncated": len(rows) >= ALL_MEMORIES_LIMIT}
++    return {"deleted": deleted, "scanned": len(rows), "truncated": len(rows) >= SCAN_LIMIT}
+ 
+ 
+ def _filter_memories_for_export(
+     rows: list,
+     project_id: Optional[str] = None,
+     user_id: Optional[str] = None,
+     start: Optional[str] = None,
+     end: Optional[str] = None,
+ ) -> list:
+     """Pure post-filter for JSONL export: project_id (metadata), user_id, and
+@@ -857,36 +872,36 @@ def export_memories(
+     start: Optional[str] = None,
+     end: Optional[str] = None,
+     format: str = "jsonl",
+     _auth=Depends(verify_auth),
+ ):
+     """Stream every memory as newline-delimited JSON (admin only)."""
+     if _auth is not None and _auth.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin role required.")
+     if format != "jsonl":
+         raise HTTPException(status_code=400, detail="Only format=jsonl is supported.")
+-    data = _list_all_memories(limit=ALL_MEMORIES_LIMIT)
++    data = _list_all_memories(limit=SCAN_LIMIT)
+     rows_all = data.get("results", [])
+     try:
+         rows = _filter_memories_for_export(rows_all, project_id, user_id, start, end)
+     except ValueError:
+         raise HTTPException(status_code=400, detail="invalid start/end date")
+ 
+     def _gen():
+         for row in rows:
+             yield (json.dumps(row, ensure_ascii=False, default=str) + "\n")
+ 
+     filename = f"memories-export-{int(time.time())}.jsonl"
+-    # Truncation visibility: only the first ALL_MEMORIES_LIMIT memories are
++    # Truncation visibility: only the first SCAN_LIMIT memories are
+     # scanned, so surface that fact (and the scan size) via response headers —
+     # same semantics as the Danger-Zone `truncated` flag.
+-    truncated = len(rows_all) >= ALL_MEMORIES_LIMIT
++    truncated = len(rows_all) >= SCAN_LIMIT
+     return StreamingResponse(
+         _gen(),
+         media_type="application/x-ndjson",
+         headers={
+             "Content-Disposition": f'attachment; filename="{filename}"',
+             "X-Truncated": "true" if truncated else "false",
+             "X-Total-Scanned": str(len(rows_all)),
+         },
+     )
+ 
+@@ -953,21 +968,21 @@ def update_memory(memory_id: str, updated_memory: MemoryUpdate, _auth=Depends(ve
+     try:
+         fields_set = getattr(updated_memory, "model_fields_set", getattr(updated_memory, "__fields_set__", set()))
+         params = {"memory_id": memory_id}
+         if "text" in fields_set:
+             params["data"] = updated_memory.text
+         if "metadata" in fields_set:
+             params["metadata"] = updated_memory.metadata
+         if "expiration_date" in fields_set:
+             params["expiration_date"] = updated_memory.expiration_date
+         result = get_memory_instance().update(**params)
+-        _fire_webhooks([{"event": "UPDATE"}])
++        _fire_webhooks(events=["memory_updated"], payload={"event": "memory_updated", "id": memory_id})
+         return result
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.get("/memories/{memory_id}/history", summary="Get memory history")
+ def memory_history(memory_id: str, _auth=Depends(verify_auth)):
+     """Retrieve memory history."""
+@@ -975,21 +990,21 @@ def memory_history(memory_id: str, _auth=Depends(verify_auth)):
+         return get_memory_instance().history(memory_id=memory_id)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.delete("/memories/{memory_id}", summary="Delete a memory", response_model=MessageResponse)
+ def delete_memory(memory_id: str, _auth=Depends(verify_auth)):
+     """Delete a specific memory by ID."""
+     try:
+         get_memory_instance().delete(memory_id=memory_id)
+-        _fire_webhooks([{"event": "DELETE"}])
++        _fire_webhooks(events=["memory_deleted"], payload={"event": "memory_deleted", "id": memory_id})
+         return MessageResponse(message="Memory deleted successfully")
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.delete("/memories", summary="Delete memories", response_model=None)
+ def delete_all_memories(
+     project_id: Optional[str] = Query(None),
+diff --git a/server/routers/requests.py b/server/routers/requests.py
+index 28deff85..d561ad0d 100644
+--- a/server/routers/requests.py
++++ b/server/routers/requests.py
+@@ -1,48 +1,42 @@
+ import uuid
+ from datetime import datetime, timedelta, timezone
+ 
+ from auth import require_admin
+ from db import get_db
+ from fastapi import APIRouter, Depends, HTTPException, Query
+ from models import RequestLog
+ from pydantic import BaseModel
+-from routers.stats import RANGE_CHOICES, RANGE_TO_HOURS
++from routers.stats import (
++    ACTION_METHOD_PATH,
++    API_KEY_AUTH_TYPES,
++    RANGE_CHOICES,
++    RANGE_TO_HOURS,
++)
+ from sqlalchemy import and_, func, select
+ from sqlalchemy.orm import Session
+ 
+ router = APIRouter(prefix="/requests", tags=["requests"])
+ 
+ 
+ class RequestLogItem(BaseModel):
+     id: uuid.UUID
+     method: str
+     path: str
+     status_code: int
+     latency_ms: float
+     auth_type: str
+     created_at: datetime
+ 
+     model_config = {"from_attributes": True}
+ 
+ 
+-API_KEY_AUTH_TYPES = ("api_key", "admin_api_key")
+-
+-# Action bucket -> (method, path) signature. Mirrors `routers.stats.request_action`
+-# so the filter can be pushed down into SQL instead of scanning every row in Python.
+-ACTION_METHOD_PATH = {
+-    "add": ("POST", "/memories"),
+-    "search": ("POST", "/search"),
+-    "get_all": ("GET", "/memories"),
+-}
+-
+-
+ @router.get("", response_model=list[RequestLogItem])
+ def list_requests(
+     _auth=Depends(require_admin),
+     db: Session = Depends(get_db),
+     limit: int = Query(default=50, ge=1, le=200),
+     action: str | None = Query(default=None),
+     range: str = Query(default="all"),
+ ):
+     if range not in RANGE_CHOICES:
+         raise HTTPException(
+diff --git a/server/routers/stats.py b/server/routers/stats.py
+index 593021f8..4f6224f6 100644
+--- a/server/routers/stats.py
++++ b/server/routers/stats.py
+@@ -1,70 +1,90 @@
+ from datetime import datetime, timedelta, timezone
+ 
+ from auth import require_admin
+ from db import get_db
+ from fastapi import APIRouter, Depends, HTTPException, Query
+ from models import RequestLog
+ from pydantic import BaseModel
+-from sqlalchemy import select
++from server_state import SCAN_LIMIT, get_memory_instance
++from sqlalchemy import and_, func, select
+ from sqlalchemy.orm import Session
+-from server_state import get_memory_instance
+ 
+ router = APIRouter(prefix="/stats", tags=["stats"])
+ 
+ RANGE_CHOICES = ("24h", "7d", "30d", "90d", "all")
+ RANGE_TO_HOURS = {"24h": 24, "7d": 168, "30d": 720, "90d": 2160}
+ API_KEY_AUTH_TYPES = ("api_key", "admin_api_key")
+ 
++# Single source of truth: action bucket -> (method, path) signature. Both the
++# /stats aggregation and the /requests action filter derive from this map, so
++# the two endpoints can never drift apart.
++ACTION_METHOD_PATH = {
++    "add": ("POST", "/memories"),
++    "search": ("POST", "/search"),
++    "get_all": ("GET", "/memories"),
++}
++_METHOD_PATH_TO_ACTION = {(m, p): a for a, (m, p) in ACTION_METHOD_PATH.items()}
++
+ 
+ def request_action(method: str, path: str) -> str | None:
+-    """Map a request-log row to a dashboard action bucket."""
+-    p = (path or "").rstrip("/")
+-    if method == "POST" and p == "/memories":
+-        return "add"
+-    if method == "POST" and p == "/search":
+-        return "search"
+-    if method == "GET" and p == "/memories":
+-        return "get_all"
+-    return None
+-
+-
+-def _iter_memory_payloads(limit: int = 10_000) -> list[dict]:
++    """Map a request-log row to a dashboard action bucket.
++
++    Retained as the in-Python mirror of ACTION_METHOD_PATH (derived from it)
++    for row-level classification semantics; the /stats aggregation itself is
++    pushed down into SQL via _action_count_stmt.
++    """
++    return _METHOD_PATH_TO_ACTION.get(((method or ""), (path or "").rstrip("/")))
++
++
++def _action_count_stmt(action: str, since: datetime | None):
++    method, path = ACTION_METHOD_PATH[action]
++    stmt = (
++        select(func.count())
++        .select_from(RequestLog)
++        .where(
++            RequestLog.auth_type.in_(API_KEY_AUTH_TYPES),
++            and_(RequestLog.method == method, func.rtrim(RequestLog.path, "/") == path),
++        )
++    )
++    if since is not None:
++        stmt = stmt.where(RequestLog.created_at >= since)
++    return stmt
++
++
++def _iter_memory_payloads(limit: int = SCAN_LIMIT) -> list[dict]:
+     results = get_memory_instance().vector_store.list(top_k=limit)
+     rows = results[0] if results and isinstance(results, list) and isinstance(results[0], list) else results or []
+     return [getattr(row, "payload", None) or {} for row in rows]
+ 
+ 
+ class StatsResponse(BaseModel):
+     requests: dict
+     memories_total: int
+     entities: dict
+ 
+ 
+ @router.get("", response_model=StatsResponse)
+ def get_stats(
+     range: str = Query(default="7d"),
+     _admin=Depends(require_admin),
+     db: Session = Depends(get_db),
+ ):
+     if range not in RANGE_CHOICES:
+         raise HTTPException(status_code=400, detail=f"range must be one of {RANGE_CHOICES}")
+-    stmt = select(RequestLog).where(RequestLog.auth_type.in_(API_KEY_AUTH_TYPES))
+-    if range != "all":
+-        since = datetime.now(timezone.utc) - timedelta(hours=RANGE_TO_HOURS[range])
+-        stmt = stmt.where(RequestLog.created_at >= since)
+-    logs = db.execute(stmt).scalars().all()
+-    counts = {"add": 0, "search": 0, "get_all": 0}
+-    for log in logs:
+-        action = request_action(log.method, log.path)
+-        if action:
+-            counts[action] += 1
++    # SQL aggregation: three count() queries (one per action predicate) instead
++    # of loading every request-log row into Python for range=all.
++    since = None if range == "all" else datetime.now(timezone.utc) - timedelta(hours=RANGE_TO_HOURS[range])
++    counts = {
++        action: int(db.execute(_action_count_stmt(action, since)).scalar() or 0)
++        for action in ACTION_METHOD_PATH
++    }
+ 
+     payloads = _iter_memory_payloads()
+     entities: dict[str, set] = {"users": set(), "agents": set(), "runs": set()}
+     for payload in payloads:
+         for field, key in (("user_id", "users"), ("agent_id", "agents"), ("run_id", "runs")):
+             if payload.get(field):
+                 entities[key].add(str(payload[field]))
+ 
+     return StatsResponse(
+         requests={**counts, "total": sum(counts.values())},
+diff --git a/server/routers/webhooks.py b/server/routers/webhooks.py
+index 62714118..7aed1a30 100644
+--- a/server/routers/webhooks.py
++++ b/server/routers/webhooks.py
+@@ -1,75 +1,142 @@
++import ipaddress
++import os
++import socket
+ from urllib.parse import urlparse
+ 
+ from fastapi import APIRouter, Depends, HTTPException
+ from pydantic import BaseModel
+ from sqlalchemy import select
+ from sqlalchemy.orm import Session
+ 
+ from auth import require_admin
+ from db import get_db
+ from models import Webhook
++from webhooks_client import ALLOWED_EVENTS
+ 
+ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+ 
+-ALLOWED_EVENTS = ("memory_added", "memory_updated", "memory_deleted")
++
++def _private_net_allowed() -> bool:
++    return os.environ.get("WEBHOOK_ALLOW_PRIVATE_NET", "").lower() in ("1", "true", "yes")
++
++
++def _mask_secret(secret: str | None) -> str | None:
++    """Show only enough to recognize a secret; never the full value."""
++    if not secret:
++        return None
++    if len(secret) <= 8:
++        return "***"
++    return f"{secret[:4]}***{secret[-4:]}"
+ 
+ 
+ class WebhookCreate(BaseModel):
+     name: str
+     url: str
+     events: list[str]
+     secret: str | None = None
+ 
+ 
+ class WebhookResponse(BaseModel):
+     id: str
+     name: str
+     url: str
+     events: list[str]
+-    secret: str | None
++    secret_masked: str | None
+     created_at: str
+ 
+ 
+-def _to_response(hook: Webhook) -> WebhookResponse:
+-    return WebhookResponse(
++class WebhookCreatedResponse(WebhookResponse):
++    # One-time plaintext secret: returned only on creation, never retrievable
++    # afterwards (same design as API keys). Subsequent reads only ever see
++    # `secret_masked`.
++    secret: str | None = None
++
++
++def _to_response(hook: Webhook, *, created: bool = False):
++    data = dict(
+         id=str(hook.id), name=hook.name, url=hook.url,
+-        events=list(hook.events or []), secret=hook.secret,
++        events=list(hook.events or []),
++        secret_masked=_mask_secret(hook.secret),
+         created_at=hook.created_at.isoformat() if hook.created_at else "",
+     )
++    if created:
++        return WebhookCreatedResponse(**data, secret=hook.secret)
++    return WebhookResponse(**data)
+ 
+ 
+ @router.get("", response_model=list[WebhookResponse])
+ def list_webhooks(_admin=Depends(require_admin), db: Session = Depends(get_db)):
+     hooks = db.execute(select(Webhook).order_by(Webhook.created_at)).scalars().all()
+     return [_to_response(h) for h in hooks]
+ 
+ 
++def _is_blocked_ip(ip_text: str) -> bool:
++    try:
++        addr = ipaddress.ip_address(ip_text)
++    except ValueError:
++        return False
++    return addr.is_private or addr.is_loopback or addr.is_link_local
++
++
+ def _validate_url(url: str) -> None:
+-    """Reject non-http(s) or hostless URLs. Private-range blocking is out of
+-    scope (endpoints are admin-gated); keep validation simple."""
++    """Reject non-http(s) or hostless URLs, and (by default) targets that
++    resolve into private/loopback/link-local networks (SSRF guard).
++
++    The endpoint is admin-gated, but a compromised admin token must not grant
++    access to the container network or cloud metadata services. Set
++    WEBHOOK_ALLOW_PRIVATE_NET=true to explicitly allow private targets
++    (local development / self-hosted integrations).
++    """
+     parsed = urlparse(url)
+     if parsed.scheme not in ("http", "https") or not parsed.netloc:
+         raise HTTPException(status_code=400, detail="url must be a valid http(s) URL")
+-
+-
+-@router.post("", response_model=WebhookResponse, status_code=201)
++    if _private_net_allowed():
++        return
++    hostname = parsed.hostname
++    if not hostname:
++        raise HTTPException(status_code=400, detail="url must be a valid http(s) URL")
++    try:
++        ipaddress.ip_address(hostname)
++        addresses = [hostname]  # literal IP: no DNS lookup needed
++    except ValueError:
++        try:
++            infos = socket.getaddrinfo(hostname, None)
++        except OSError:
++            raise HTTPException(status_code=400, detail=f"invalid host: cannot resolve '{hostname}'")
++        addresses = [info[4][0] for info in infos]
++        if not addresses:
++            raise HTTPException(status_code=400, detail=f"invalid host: cannot resolve '{hostname}'")
++    blocked = sorted({a for a in addresses if _is_blocked_ip(a)})
++    if blocked:
++        raise HTTPException(
++            status_code=400,
++            detail=(
++                "refusing private/loopback/link-local target "
++                f"({', '.join(blocked)}); set WEBHOOK_ALLOW_PRIVATE_NET=true to override"
++            ),
++        )
++
++
++@router.post("", response_model=WebhookCreatedResponse, status_code=201)
+ def create_webhook(body: WebhookCreate, _admin=Depends(require_admin), db: Session = Depends(get_db)):
++    if not body.events:
++        raise HTTPException(status_code=400, detail="at least one event is required")
+     _validate_url(body.url)
+     bad = [e for e in body.events if e not in ALLOWED_EVENTS]
+     if bad:
+         raise HTTPException(status_code=400, detail=f"Unknown events: {bad}. Allowed: {ALLOWED_EVENTS}")
+     hook = Webhook(name=body.name, url=body.url, events=body.events, secret=body.secret)
+     db.add(hook)
+     db.commit()
+     db.refresh(hook)
+-    return _to_response(hook)
++    return _to_response(hook, created=True)
+ 
+ 
+ @router.delete("/{webhook_id}")
+ def delete_webhook(webhook_id: str, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     import uuid as _uuid
+     try:
+         hook = db.get(Webhook, _uuid.UUID(webhook_id))
+     except (TypeError, ValueError):
+         hook = None
+     if hook is None:
+diff --git a/server/server_state.py b/server/server_state.py
+index a5b54902..a281b50c 100644
+--- a/server/server_state.py
++++ b/server/server_state.py
+@@ -1,18 +1,23 @@
+ import json
+ import logging
+ import threading
+ from copy import deepcopy
+ from typing import Any, Callable, Dict
+ 
+ from mem0 import Memory
+ 
++# Unified upper bound for full scans over the vector store (stats aggregation,
++# admin listing fallback, export and Danger-Zone delete). API `top_k` remains
++# bounded by ALL_MEMORIES_LIMIT in main.py.
++SCAN_LIMIT = 10_000
++
+ _state_lock = threading.RLock()
+ _current_config: Dict[str, Any] = {}
+ _memory_instance: Memory | None = None
+ _session_factory: Callable | None = None
+ 
+ 
+ def set_session_factory(factory: Callable) -> None:
+     global _session_factory
+     _session_factory = factory
+ 
+diff --git a/server/tests/test_delete_project_memories.py b/server/tests/test_delete_project_memories.py
+index e780350f..913df3f1 100644
+--- a/server/tests/test_delete_project_memories.py
++++ b/server/tests/test_delete_project_memories.py
+@@ -39,16 +39,18 @@ def test_deletes_only_matching(monkeypatch):
+     deleted_ids = []
+     inst = SimpleNamespace(delete=lambda mid: deleted_ids.append(mid))
+     monkeypatch.setattr(m, "get_memory_instance", lambda: inst)
+     out = m.delete_memories_by_project(project_id="p", _auth=None)
+     assert out == {"deleted": 1, "scanned": 3, "truncated": False}
+     assert deleted_ids == ["1"]
+ 
+ 
+ def test_reports_truncation(monkeypatch):
+     monkeypatch.setattr(m, "_load_project", lambda pid: SimpleNamespace(project_id=pid))
+-    rows = [{"id": str(i), "metadata": {"project_id": "p"}} for i in range(m.ALL_MEMORIES_LIMIT)]
++    # Threshold is SCAN_LIMIT; shrink it so the test stays fast.
++    monkeypatch.setattr(m, "SCAN_LIMIT", 10)
++    rows = [{"id": str(i), "metadata": {"project_id": "p"}} for i in range(m.SCAN_LIMIT)]
+     monkeypatch.setattr(m, "_list_all_memories", lambda limit: {"results": rows})
+     monkeypatch.setattr(m, "get_memory_instance", lambda: SimpleNamespace(delete=lambda mid: None))
+     out = m.delete_memories_by_project(project_id="p", _auth=None)
+-    assert out["deleted"] == m.ALL_MEMORIES_LIMIT
++    assert out["deleted"] == m.SCAN_LIMIT
+     assert out["truncated"] is True
+diff --git a/server/tests/test_exports.py b/server/tests/test_exports.py
+index 9debb003..9ddfbfc5 100644
+--- a/server/tests/test_exports.py
++++ b/server/tests/test_exports.py
+@@ -56,26 +56,28 @@ def test_filter_end_date_is_inclusive():
+         _row("a", user_id="u1", created_at="2026-09-05T00:00:00"),
+         _row("b", user_id="u1", created_at="2026-09-05T23:59:00"),
+         _row("c", user_id="u1", created_at="2026-09-06T12:00:00"),
+     ]
+     out = _filter_memories_for_export(rows, user_id="u1", end="2026-09-05")
+     assert [r["id"] for r in out] == ["a", "b"]
+ 
+ 
+ def test_filter_truncation_flag(monkeypatch):
+     # The /exports/memories route must surface scan truncation via headers,
+-    # matching the Danger-Zone `truncated` semantics.
++    # matching the Danger-Zone `truncated` semantics. Threshold is SCAN_LIMIT,
++    # shrunk here so the test stays fast.
+     from fastapi.testclient import TestClient
+ 
++    monkeypatch.setattr(m, "SCAN_LIMIT", 5)
+     big = [
+         _row(str(i), user_id="u1", created_at="2026-09-05T00:00:00")
+-        for i in range(m.ALL_MEMORIES_LIMIT + 1)
++        for i in range(m.SCAN_LIMIT + 1)
+     ]
+     monkeypatch.setattr(m, "_list_all_memories", lambda limit: {"results": big})
+ 
+     client = TestClient(m.app)
+     res = client.get("/exports/memories")
+     assert res.status_code == 200
+     assert res.headers["x-truncated"] == "true"
+     assert res.headers["x-total-scanned"] == str(len(big))
+ 
+     # Below the limit: no truncation.
+diff --git a/server/tests/test_stats.py b/server/tests/test_stats.py
+index 9f885006..e2d3a6fd 100644
+--- a/server/tests/test_stats.py
++++ b/server/tests/test_stats.py
+@@ -1,49 +1,95 @@
+ from datetime import datetime, timedelta, timezone
+ 
+ from fastapi import HTTPException
+ import pytest
++from sqlalchemy.sql.elements import BindParameter, BooleanClauseList
+ 
+ from routers import requests as requests_router
+ from routers import stats as stats_router
+ 
++_NOW = datetime.now(timezone.utc)
++
+ 
+ class _Log:
+-    def __init__(self, method, path):
++    def __init__(self, method, path, auth_type="api_key", created_at=None):
+         self.method = method
+         self.path = path
++        self.auth_type = auth_type
++        self.created_at = created_at if created_at is not None else _NOW
+ 
+ 
+ class _Scalars:
+     def __init__(self, items):
+         self._items = items
+ 
+     def all(self):
+         return self._items
+ 
+ 
+ class _Result:
+-    def __init__(self, items):
+-        self._items = items
++    def __init__(self, rows):
++        # scalar() is only used on count(*) statements; on row selects it is
++        # never called by production code.
++        self._rows = rows
+ 
+     def scalars(self):
+-        return _Scalars(self._items)
++        return _Scalars(self._rows)
++
++    def scalar(self):
++        return len(self._rows)
++
++
++def _flatten(clause):
++    if clause is None:
++        return []
++    if isinstance(clause, BooleanClauseList):
++        out = []
++        for child in clause.clauses:
++            out.extend(_flatten(child))
++        return out
++    return [clause]
++
++
++def _eval_pred(clause, log):
++    """Evaluate one leaf predicate against a fake log row.
++
++    Mirrors exactly the predicate shapes the routers emit. If a new predicate
++    shape appears, this raises — the test must be updated to model it.
++    """
++    left = str(clause.left)
++    right = clause.right.value if isinstance(clause.right, BindParameter) else clause.right
++    if "rtrim" in left:
++        return (log.path or "").rstrip("/") == right
++    if left.endswith(".method"):
++        return log.method == right
++    if left.endswith(".path"):
++        return (log.path or "").rstrip("/") == right
++    if left.endswith(".auth_type"):
++        return log.auth_type in tuple(right or ())
++    if left.endswith(".created_at"):
++        return log.created_at >= right
++    raise AssertionError(f"unhandled predicate in fake db: {left}")
+ 
+ 
+ class _DB:
+     def __init__(self, logs):
+         self._logs = logs
+         self.statements = []
+ 
+     def execute(self, stmt, *_a, **_k):
+         self.statements.append(stmt)
+-        return _Result(self._logs)
++        rows = [
++            log for log in self._logs
++            if all(_eval_pred(p, log) for p in _flatten(stmt.whereclause))
++        ]
++        return _Result(rows)
+ 
+ 
+ class _Row:
+     def __init__(self, payload):
+         self.payload = payload
+ 
+ 
+ class _VS:
+     def list(self, top_k):
+         return [[_Row({"user_id": "u1", "agent_id": "a1"}), _Row({"user_id": "u1"})]]
+@@ -63,34 +109,87 @@ def _last_sql(db):
+ 
+ 
+ def test_request_action_mapping():
+     assert stats_router.request_action("POST", "/memories") == "add"
+     assert stats_router.request_action("POST", "/search") == "search"
+     assert stats_router.request_action("GET", "/memories") == "get_all"
+     assert stats_router.request_action("GET", "/memories/123") is None
+     assert stats_router.request_action("POST", "/configure") is None
+ 
+ 
++def test_action_map_is_single_source():
++    # requests.py must import the map from stats.py — only one definition.
++    assert requests_router.ACTION_METHOD_PATH is stats_router.ACTION_METHOD_PATH
++    assert requests_router.API_KEY_AUTH_TYPES is stats_router.API_KEY_AUTH_TYPES
++
++
+ def test_get_stats_counts_and_entities(monkeypatch):
+     logs = [
+         _Log("POST", "/memories"),
+         _Log("POST", "/search"),
+         _Log("GET", "/memories"),
+         _Log("GET", "/requests"),  # not counted
+     ]
+     monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
+     out = stats_router.get_stats(range="24h", _admin=None, db=_DB(logs))
+     assert out.requests == {"add": 1, "search": 1, "get_all": 1, "total": 3}
+     assert out.memories_total == 2
+     assert out.entities == {"users": 1, "agents": 1, "runs": 0}
+ 
+ 
++def test_get_stats_counts_are_predicated(monkeypatch):
++    """Mutation guard: breaking any action predicate must flip these counts."""
++    logs = [
++        _Log("POST", "/search"),          # search only — must NOT count as add
++        _Log("POST", "/memories/123"),    # sub-path — must NOT count as add
++        _Log("GET", "/memories"),
++    ]
++    monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
++    out = stats_router.get_stats(range="all", _admin=None, db=_DB(logs))
++    assert out.requests == {"add": 0, "search": 1, "get_all": 1, "total": 2}
++
++
++def test_get_stats_only_counts_api_key_traffic(monkeypatch):
++    logs = [
++        _Log("POST", "/memories", auth_type="jwt"),       # excluded
++        _Log("POST", "/memories", auth_type="admin_api_key"),
++        _Log("POST", "/memories", auth_type="api_key"),
++    ]
++    monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
++    out = stats_router.get_stats(range="all", _admin=None, db=_DB(logs))
++    assert out.requests["add"] == 2
++    assert out.requests["total"] == 2
++
++
++def test_get_stats_range_filters_by_time_window(monkeypatch):
++    logs = [
++        _Log("POST", "/memories", created_at=_NOW),
++        _Log("POST", "/memories", created_at=_NOW - timedelta(days=400)),
++    ]
++    monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
++    out_all = stats_router.get_stats(range="all", _admin=None, db=_DB(logs))
++    assert out_all.requests["add"] == 2
++    out_24h = stats_router.get_stats(range="24h", _admin=None, db=_DB(logs))
++    assert out_24h.requests["add"] == 1
++
++
++def test_get_stats_uses_sql_count_per_action(monkeypatch):
++    monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
++    db = _DB([_Log("POST", "/memories")])
++    stats_router.get_stats(range="all", _admin=None, db=db)
++    # Three aggregate queries, one per action predicate.
++    assert len(db.statements) == 3
++    compiled = [_sql(s) for s in db.statements]
++    assert any("count" in c and "'/memories'" in c and "POST" in c for c in compiled)
++    assert any("count" in c and "'/search'" in c for c in compiled)
++
++
+ def test_get_stats_rejects_bad_range():
+     with pytest.raises(HTTPException) as exc:
+         stats_router.get_stats(range="1h", _admin=None, db=_DB([]))
+     assert exc.value.status_code == 400
+ 
+ 
+ _REQUEST_LOGS = [
+     _Log("POST", "/memories"),  # add
+     _Log("POST", "/search"),  # search
+     _Log("GET", "/memories"),  # get_all
+diff --git a/server/tests/test_webhooks.py b/server/tests/test_webhooks.py
+index a138e0e8..e1b5cb24 100644
+--- a/server/tests/test_webhooks.py
++++ b/server/tests/test_webhooks.py
+@@ -1,37 +1,95 @@
++import hashlib
++import hmac
++import json
++import logging
++import uuid as uuid_mod
++from datetime import datetime
+ from types import SimpleNamespace
+ 
+ import pytest
+ from fastapi import HTTPException
+ 
+-from webhooks_client import events_from_add_response, trigger_webhooks
++from webhooks_client import ALLOWED_EVENTS, events_from_add_response, trigger_webhooks
+ 
+ 
+ def test_events_from_add_response():
+     results = [{"event": "ADD"}, {"event": "UPDATE"}, {"event": "NOOP"}]
+     assert events_from_add_response(results) == {"memory_added", "memory_updated"}
+     assert events_from_add_response([]) == set()
+ 
+ 
++def test_allowed_events_derived_from_event_map():
++    assert set(ALLOWED_EVENTS) == {"memory_added", "memory_updated", "memory_deleted"}
++
++
+ def test_trigger_filters_by_subscription(monkeypatch):
+     calls = []
+ 
+-    def fake_post(url, json=None, headers=None, timeout=None):
+-        calls.append((url, json))
++    def fake_post(url, content=None, headers=None, timeout=None):
++        calls.append((url, content, headers))
+ 
+     monkeypatch.setattr("webhooks_client.httpx.post", fake_post)
+     hooks = [
+         SimpleNamespace(name="all", url="http://x/1", events=["memory_added"], secret="s1"),
+         SimpleNamespace(name="other", url="http://x/2", events=["memory_deleted"], secret=None),
+     ]
+     trigger_webhooks(hooks, "memory_added", {"id": "1"})
+-    assert [(u, j) for u, j in calls] == [("http://x/1", {"event": "memory_added", "data": {"id": "1"}})]
++    url, body, _headers = calls[0]
++    assert url == "http://x/1"
++    assert json.loads(body) == {"event": "memory_added", "data": {"id": "1"}}
++    assert len(calls) == 1  # the memory_deleted hook is not subscribed
++
++
++def test_trigger_signs_body_with_hmac(monkeypatch):
++    captured = {}
++
++    def fake_post(url, content=None, headers=None, timeout=None):
++        captured.update(url=url, body=content, headers=headers)
++
++    monkeypatch.setattr("webhooks_client.httpx.post", fake_post)
++    hook = SimpleNamespace(name="h", url="http://x", events=["memory_added"], secret="s3cr3t-key")
++    payload = {"id": "m1"}
++    trigger_webhooks([hook], "memory_added", payload)
++
++    body = captured["body"]
++    # The signature is computed over the exact raw body string that was sent.
++    expected = hmac.new(b"s3cr3t-key", body.encode(), hashlib.sha256).hexdigest()
++    assert captured["headers"]["X-Webhook-Signature"] == expected
++    # Legacy shared-secret header kept for backward compatibility.
++    assert captured["headers"]["X-Webhook-Secret"] == "s3cr3t-key"
++    assert json.loads(body) == {"event": "memory_added", "data": payload}
++
++
++def test_trigger_no_signature_header_without_secret(monkeypatch):
++    captured = {}
++
++    def fake_post(url, content=None, headers=None, timeout=None):
++        captured.update(headers=headers)
++
++    monkeypatch.setattr("webhooks_client.httpx.post", fake_post)
++    hook = SimpleNamespace(name="h", url="http://x", events=["memory_added"], secret=None)
++    trigger_webhooks([hook], "memory_added", {})
++    assert "X-Webhook-Signature" not in captured["headers"]
++    assert "X-Webhook-Secret" not in captured["headers"]
++
++
++def test_trigger_logs_non_2xx_delivery(monkeypatch, caplog):
++    resp = SimpleNamespace(status_code=500)
++    monkeypatch.setattr("webhooks_client.httpx.post", lambda *a, **k: resp)
++    hook = SimpleNamespace(name="flaky", url="http://x/hook", events=["memory_added"], secret=None)
++    with caplog.at_level(logging.WARNING, logger="webhooks_client"):
++        trigger_webhooks([hook], "memory_added", {})
++    assert any(
++        "delivered" in r.getMessage() and "500" in r.getMessage() and "http://x/hook" in r.getMessage()
++        for r in caplog.records
++    )
+ 
+ 
+ def test_trigger_never_raises(monkeypatch):
+     def boom(*a, **k):
+         raise RuntimeError("down")
+ 
+     monkeypatch.setattr("webhooks_client.httpx.post", boom)
+     hook = SimpleNamespace(name="h", url="http://x", events=["memory_added"], secret=None)
+     trigger_webhooks([hook], "memory_added", {})  # must not raise
+ 
+@@ -45,18 +103,220 @@ def test_create_webhook_rejects_non_http_url():
+ 
+ 
+ def test_create_webhook_rejects_missing_host():
+     from routers.webhooks import create_webhook, WebhookCreate
+     body = WebhookCreate(name="bad", url="http://", events=["memory_added"])
+     with pytest.raises(HTTPException) as exc:
+         create_webhook(body, _admin=None, db=object())
+     assert exc.value.status_code == 400
+ 
+ 
++def test_create_webhook_rejects_loopback_ip():
++    from routers.webhooks import create_webhook, WebhookCreate
++    body = WebhookCreate(name="bad", url="http://127.0.0.1/x", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++    assert "WEBHOOK_ALLOW_PRIVATE_NET" in exc.value.detail
++
++
++def test_create_webhook_rejects_metadata_service_ip():
++    from routers.webhooks import create_webhook, WebhookCreate
++    body = WebhookCreate(name="bad", url="http://169.254.169.254/", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_create_webhook_rejects_private_hostname_via_dns(monkeypatch):
++    from routers.webhooks import create_webhook, WebhookCreate
++    monkeypatch.setattr(
++        "socket.getaddrinfo",
++        lambda *a, **k: [(2, 1, 6, "", ("10.0.0.5", 0))],
++    )
++    body = WebhookCreate(name="bad", url="http://internal.example/hook", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_create_webhook_rejects_unresolvable_host(monkeypatch):
++    from routers.webhooks import create_webhook, WebhookCreate
++
++    def boom(*a, **k):
++        raise OSError("no dns")
++
++    monkeypatch.setattr("socket.getaddrinfo", boom)
++    body = WebhookCreate(name="bad", url="http://does-not-exist.example/hook", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_create_webhook_allows_public_hostname(monkeypatch):
++    from routers.webhooks import create_webhook, WebhookCreate
++    monkeypatch.setattr(
++        "socket.getaddrinfo",
++        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
++    )
++
++    class _DB:
++        def __init__(self):
++            self.added = None
++
++        def add(self, hook):
++            self.added = hook
++
++        def commit(self):
++            pass
++
++        def refresh(self, hook):
++            hook.created_at = datetime(2026, 1, 1)
++
++    db = _DB()
++    body = WebhookCreate(name="ok", url="http://example.com/hook", events=["memory_added"])
++    out = create_webhook(body, _admin=None, db=db)
++    assert out.secret_masked is None  # no secret configured
++    assert out.secret is None
++
++
++def test_create_webhook_allows_private_target_with_env_override(monkeypatch):
++    from routers.webhooks import create_webhook, WebhookCreate
++    monkeypatch.setenv("WEBHOOK_ALLOW_PRIVATE_NET", "true")
++
++    class _DB:
++        def add(self, hook):
++            pass
++
++        def commit(self):
++            pass
++
++        def refresh(self, hook):
++            hook.created_at = datetime(2026, 1, 1)
++
++    body = WebhookCreate(name="local", url="http://127.0.0.1:9000/hook", events=["memory_added"])
++    out = create_webhook(body, _admin=None, db=_DB())
++    assert out.url == "http://127.0.0.1:9000/hook"
++
++
++def test_create_webhook_requires_at_least_one_event(monkeypatch):
++    from routers.webhooks import create_webhook, WebhookCreate
++    monkeypatch.setenv("WEBHOOK_ALLOW_PRIVATE_NET", "true")
++    body = WebhookCreate(name="bad", url="http://127.0.0.1/x", events=[])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++    assert "at least one event" in exc.value.detail
++
++
++class _ListDB:
++    def __init__(self, hooks):
++        self._hooks = hooks
++
++    def execute(self, stmt):
++        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: self._hooks))
++
++
++def _hook(secret="abcd1234wxyz"):
++    return SimpleNamespace(
++        id=uuid_mod.uuid4(), name="n", url="http://example.com/hook",
++        events=["memory_added"], secret=secret, created_at=datetime(2026, 1, 1),
++    )
++
++
++def test_list_masks_secret():
++    from routers.webhooks import list_webhooks
++    out = list_webhooks(_admin=None, db=_ListDB([_hook()]))
++    assert out[0].secret_masked == "abcd***wxyz"
++    dumped = out[0].model_dump()
++    assert "secret" not in dumped  # plaintext never listed
++
++
++def test_mask_short_secret_fully_hidden():
++    from routers.webhooks import _mask_secret
++    assert _mask_secret("ab") == "***"
++    assert _mask_secret("12345678") == "***"
++    assert _mask_secret(None) is None
++    assert _mask_secret("") is None
++
++
++def test_create_response_returns_one_time_plaintext_secret():
++    from routers.webhooks import _to_response
++    hook = _hook(secret="abcd1234wxyz")
++    out = _to_response(hook, created=True)
++    assert out.secret == "abcd1234wxyz"  # one-time plaintext on creation
++    assert out.secret_masked == "abcd***wxyz"
++    listed = _to_response(hook)
++    assert not hasattr(listed, "secret") or listed.model_dump().get("secret") is None
++
++
+ def test_fire_webhooks_never_propagates(monkeypatch):
+     import main as m
+ 
+     def boom(results):
+         raise RuntimeError("dispatch exploded")
+ 
+     monkeypatch.setattr(m, "events_from_add_response", boom)
+     m._fire_webhooks([{"event": "ADD"}])  # must not raise
++
++
++class _CaptureExecutor:
++    def __init__(self):
++        self.submitted = []
++
++    def submit(self, fn, *args, **kwargs):
++        self.submitted.append((fn, args, kwargs))
++
++
++def test_fire_webhooks_add_payload_keeps_results(monkeypatch):
++    import main as m
++
++    executor = _CaptureExecutor()
++    monkeypatch.setattr(m, "_webhook_executor", executor)
++    m._fire_webhooks([{"event": "ADD", "id": "m2"}])
++    fn, args, _kwargs = executor.submitted[0]
++    assert fn is m._dispatch
++    assert args[0] == ["memory_added"]
++    assert args[1] == {"results": [{"event": "ADD", "id": "m2"}]}
++
++
++def test_fire_webhooks_update_delete_payload_includes_id(monkeypatch):
++    import main as m
++
++    executor = _CaptureExecutor()
++    monkeypatch.setattr(m, "_webhook_executor", executor)
++    m._fire_webhooks(events=["memory_updated"], payload={"event": "memory_updated", "id": "mem-1"})
++    m._fire_webhooks(events=["memory_deleted"], payload={"event": "memory_deleted", "id": "mem-2"})
++    (fn1, args1, _), (fn2, args2, _) = executor.submitted
++    assert fn1 is m._dispatch and fn2 is m._dispatch
++    assert args1 == (["memory_updated"], {"event": "memory_updated", "id": "mem-1"})
++    assert args2 == (["memory_deleted"], {"event": "memory_deleted", "id": "mem-2"})
++
++
++def test_update_memory_fires_webhook_with_id(monkeypatch):
++    import main as m
++
++    seen = []
++    monkeypatch.setattr(
++        m, "get_memory_instance",
++        lambda: SimpleNamespace(update=lambda **k: {"ok": True}),
++    )
++    monkeypatch.setattr(m, "_fire_webhooks", lambda *a, **k: seen.append((a, k)))
++    m.update_memory("mem-9", m.MemoryUpdate(text="x"), _auth=None)
++    (args, kwargs) = seen[0]
++    assert args == () and kwargs["events"] == ["memory_updated"]
++    assert kwargs["payload"] == {"event": "memory_updated", "id": "mem-9"}
++
++
++def test_delete_memory_fires_webhook_with_id(monkeypatch):
++    import main as m
++
++    seen = []
++    monkeypatch.setattr(
++        m, "get_memory_instance",
++        lambda: SimpleNamespace(delete=lambda memory_id=None: None),
++    )
++    monkeypatch.setattr(m, "_fire_webhooks", lambda *a, **k: seen.append((a, k)))
++    m.delete_memory("mem-8", _auth=None)
++    (_args, kwargs) = seen[0]
++    assert kwargs["events"] == ["memory_deleted"]
++    assert kwargs["payload"] == {"event": "memory_deleted", "id": "mem-8"}
+diff --git a/server/webhooks_client.py b/server/webhooks_client.py
+index 9ea60f3d..82a68bad 100644
+--- a/server/webhooks_client.py
++++ b/server/webhooks_client.py
+@@ -1,28 +1,53 @@
++import hashlib
++import hmac
++import json
+ import logging
+ 
+ import httpx
+ 
+ _EVENT_MAP = {"ADD": "memory_added", "UPDATE": "memory_updated", "DELETE": "memory_deleted"}
+ 
++# Single source of truth for the subscribable event whitelist
++# (also imported by routers/webhooks.py; keep in sync with the dashboard UI).
++ALLOWED_EVENTS = tuple(_EVENT_MAP.values())
++
+ 
+ def events_from_add_response(results: list) -> set[str]:
+     events = set()
+     for item in results or []:
+         mapped = _EVENT_MAP.get((item or {}).get("event"))
+         if mapped:
+             events.add(mapped)
+     return events
+ 
+ 
++def sign_body(secret: str, body: str) -> str:
++    """HMAC-SHA256 hex digest over the exact raw body string that is sent."""
++    return hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
++
++
+ def trigger_webhooks(hooks, event: str, payload: dict) -> None:
+     """Fire-and-forget delivery; never raises, never blocks the caller long."""
++    # Serialize once so the HMAC signature and the transmitted bytes match
++    # exactly (signing a re-serialized body would break receiver verification).
++    body = json.dumps({"event": event, "data": payload}, ensure_ascii=False, default=str)
+     for hook in hooks or []:
+         if event not in (hook.events or []):
+             continue
+         headers = {"Content-Type": "application/json"}
+         if hook.secret:
++            # Legacy shared-secret header (backward compatible) plus the
++            # standard HMAC-SHA256 signature over the raw body.
+             headers["X-Webhook-Secret"] = hook.secret
++            headers["X-Webhook-Signature"] = sign_body(hook.secret, body)
+         try:
+-            httpx.post(hook.url, json={"event": event, "data": payload}, headers=headers, timeout=5.0)
++            response = httpx.post(hook.url, content=body, headers=headers, timeout=5.0)
++            if response.status_code >= 300:
++                logging.warning(
++                    "Webhook %s delivered %s -> %s",
++                    getattr(hook, "name", "?"),
++                    hook.url,
++                    response.status_code,
++                )
+         except Exception:  # noqa: BLE001
+             logging.warning("Webhook %s delivery failed for %s", getattr(hook, "name", "?"), event)

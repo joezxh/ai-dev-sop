@@ -1,0 +1,121 @@
+b59f934f feat(dashboard): overview page backed by /stats
+ .../src/app/(root)/dashboard/overview/page.tsx     | 87 ++++++++++++++++++++++
+ server/dashboard/src/utils/api-endpoints.ts        |  4 +
+ 2 files changed, 91 insertions(+)
+diff --git a/server/dashboard/src/app/(root)/dashboard/overview/page.tsx b/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
+new file mode 100644
+index 00000000..509a2eb8
+--- /dev/null
++++ b/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
+@@ -0,0 +1,87 @@
++"use client";
++
++import React, { useEffect, useRef, useState } from "react";
++import Link from "next/link";
++import { Button } from "@/components/ui/button";
++import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
++import { TableSkeleton } from "@/components/shared/table-skeleton";
++import { api } from "@/utils/api";
++import { STATS_ENDPOINT } from "@/utils/api-endpoints";
++import { useApiQuery } from "@/hooks/use-api-query";
++
++const RANGES = ["24h", "7d", "30d", "90d", "all"] as const;
++
++type Stats = {
++  requests: { add: number; search: number; get_all: number; total: number };
++  memories_total: number;
++  entities: { users: number; agents: number; runs: number };
++};
++
++export default function OverviewPage() {
++  const [range, setRange] = useState<(typeof RANGES)[number]>("7d");
++  const { data: stats, isLoading, refetch } = useApiQuery<Stats | null>(
++    async () => {
++      const res = await api.get(STATS_ENDPOINT.BASE, { params: { range } });
++      return res.data ?? null;
++    },
++    { errorToast: "Failed to load stats", initialData: null },
++  );
++
++  // The fetcher closure reads `range`, but useApiQuery only runs on mount —
++  // re-run it whenever the selected range changes (skip the initial mount).
++  const isFirstLoad = useRef(true);
++  useEffect(() => {
++    if (isFirstLoad.current) {
++      isFirstLoad.current = false;
++      return;
++    }
++    void refetch();
++  }, [range, refetch]);
++
++  const cards = stats
++    ? [
++        { title: "Total Memories", value: stats.memories_total, href: "/dashboard/memories" },
++        { title: "Add Requests", value: stats.requests.add, href: "/dashboard/requests" },
++        { title: "Search Requests", value: stats.requests.search, href: "/dashboard/requests" },
++        { title: "Get All Requests", value: stats.requests.get_all, href: "/dashboard/requests" },
++        { title: "Users", value: stats.entities.users, href: "/dashboard/entities" },
++        { title: "Agents", value: stats.entities.agents, href: "/dashboard/entities" },
++      ]
++    : [];
++
++  return (
++    <div className="space-y-6">
++      <div className="flex items-center justify-between">
++        <h1 className="text-xl font-semibold font-fustat">Dashboard</h1>
++        <div className="flex gap-1">
++          {RANGES.map((r) => (
++            <Button
++              key={r}
++              size="sm"
++              variant={r === range ? "default" : "outline"}
++              onClick={() => setRange(r)}
++            >
++              {r}
++            </Button>
++          ))}
++        </div>
++      </div>
++      {isLoading ? (
++        <TableSkeleton rows={3} columns={3} />
++      ) : (
++        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
++          {cards.map((c) => (
++            <Link key={c.title} href={c.href}>
++              <Card className="border-memBorder-primary hover:bg-surface-default-secondary">
++                <CardHeader>
++                  <CardTitle className="text-xs text-onSurface-default-tertiary">{c.title}</CardTitle>
++                </CardHeader>
++                <CardContent className="text-2xl font-semibold">{c.value}</CardContent>
++              </Card>
++            </Link>
++          ))}
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/server/dashboard/src/utils/api-endpoints.ts b/server/dashboard/src/utils/api-endpoints.ts
+index d6b9fb52..a7abf5f9 100644
+--- a/server/dashboard/src/utils/api-endpoints.ts
++++ b/server/dashboard/src/utils/api-endpoints.ts
+@@ -37,15 +37,19 @@ export const DEPARTMENT_ENDPOINTS = {
+ export const PROJECT_ENDPOINTS = {
+   BASE: "/projects",
+   BY_ID: (id: string) => `/projects/${id}`,
+   MATCH: "/projects/match",
+ } as const;
+ 
+ export const REQUEST_ENDPOINTS = {
+   BASE: "/requests",
+ } as const;
+ 
++export const STATS_ENDPOINT = {
++  BASE: "/stats",
++} as const;
++
+ export const ENTITY_ENDPOINTS = {
+   BASE: "/entities",
+   BY_ID: (type: string, id: string) =>
+     `/entities/${type}/${encodeURIComponent(id)}`,
+ } as const;

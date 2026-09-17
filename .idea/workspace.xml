@@ -4,53 +4,9 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="c7904d69-263f-4631-b0af-73aa9721d5aa" name="Changes" comment="feat(docs): 添加文档站点配置和控制台API客户端&#10;&#10;- 更新.gitignore文件以允许GitHub工作流和VitePress配置&#10;- 添加AITools页面组件&#10;- 创建API客户端模块实现JWT认证和自动刷新功能&#10;- 配置VitePress站点支持多语言和搜索功能&#10;- 添加dayjs插件垫片解决浏览器兼容性问题&#10;- 集成GitHub Pages部署工作流实现自动化发布">
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/ai-skill-dict.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/copy-uniapp.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/copy-webapp.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/dev-template.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/normal.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/prod-design.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/requirement-prd.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs-site/sop/write-docs.md" afterDir="false" />
+    <list default="true" id="c7904d69-263f-4631-b0af-73aa9721d5aa" name="Changes" comment="docs(graph-engineering): 添加 Graph Engineering 从 0 到 1 完整教程文档&#10;&#10;- 详细介绍 Graph Engineering 概念及其与 Loop Engineering 区别&#10;- 阐述 Graph Engineering 三大核心组件：节点、边、状态&#10;- 提供写文章、写代码、做调研三个实用 Graph 模板&#10;- 分享从新手到进阶的学习路径和常见陷阱避免方法&#10;- 包含实际操作练习指导和最佳实践建议">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/.vitepress/config.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/.vitepress/config.mjs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Distill.vue" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/.vitepress/theme/console/pages/Distill.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/16-coding-skill/16-coding-skill.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/16-coding-skill/16-coding-skill.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/00-intro.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/00-intro.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/00-preface.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/00-preface.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/00-translator.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/00-translator.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/01-intro-agent.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/01-intro-agent.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/02-agent-hypotheses.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/02-agent-hypotheses.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch01-prompt-chaining.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch01-prompt-chaining.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch02-routing.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch02-routing.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch03-parallelization.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch03-parallelization.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch04-reflection.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch04-reflection.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch05-tool-use.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch05-tool-use.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch07-multi-agent.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch07-multi-agent.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch10-mcp.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch10-mcp.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch11-goal-setting.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch11-goal-setting.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch12-error-handling.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch12-error-handling.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch13-hitl.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch13-hitl.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch14-rag.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch14-rag.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch15-a2a.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch15-a2a.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch16-resource-awareness.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch16-resource-awareness.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch17-reasoning.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch17-reasoning.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch18-guardrails.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch18-guardrails.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch19-evaluation.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch19-evaluation.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch20-prioritization.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch20-prioritization.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch21-exploration.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/reference/agentic-design-patterns/ch21-exploration.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/codex-multi-agent-guide.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/cover.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/exists-scene.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img1-object-model.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img2-agent-types.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/frontend-fw.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img3-runtime-layers.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/frontend-upgrade.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img4-supervisor.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/fw-dev.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img5-handoff.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/requirement-prototype.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img6-cross-machine.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/scenes.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img7-cross-project.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/ui-design.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/reference/codex-multi-agent-guide.bak/images/img8-routing.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs-site/sop/exists-scene.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/exists-scene.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -230,10 +186,42 @@
       <map>
         <entry key="a50b3795-e795-4ff4-81d1-5471526d8f1e" value="TOOL_WINDOW" />
         <entry key="d19d6ff4-0001-45be-a7ca-18fc0b950768" value="TOOL_WINDOW" />
+        <entry key="3116bdfb-906e-46af-97d4-b6f517f4a3c1" value="TOOL_WINDOW" />
       </map>
     </option>
     <option name="TAB_STATES">
       <map>
+        <entry key="3116bdfb-906e-46af-97d4-b6f517f4a3c1">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                  <entry key="structure">
+                    <value>
+                      <list>
+                        <option value="dir:D:/projects/ai-dev-sop/docs-site/sop" />
+                        <option value="dir:D:/projects/ai-dev-sop/docs-site/reference" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
+            </State>
+          </value>
+        </entry>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
         <entry key="a50b3795-e795-4ff4-81d1-5471526d8f1e">
           <value>
             <State>
@@ -304,7 +292,9 @@
     <MESSAGE value="docs(codex): 添加 Codex 多 Agent 编排控制平面进阶指南&#10;&#10;- 详细介绍 Codex 对象模型，包括 Project、Task、Turn、Subagent 等核心概念&#10;- 阐述项目绑定、执行位置、Agent 拓扑等关键架构设计原理&#10;- 完整梳理多 Agent 编排的六种拓扑模式及适用场景&#10;- 详述子 Agent 类型定义、运行控制机制和时间触发功能&#10;- 提供可观察性与治理方案，包含事件流和 Hook 机制&#10;- 整理编排原语清单，涵盖 Task 内和跨 Task 控制原语&#10;- 介绍 App Server 协议层原语及实际调度用法&#10;- 给出编排控制环九个环节的标准流程和最佳实践&#10;- 包含八种典型拓扑模式的原语序列和应用场景说明" />
     <MESSAGE value="docs(agentic-design-patterns): 删除智能体设计模式文档的前言和介绍章节&#10;&#10;- 移除前言部分，包含智能体系统演变和画布概念介绍&#10;- 删除简介章节，涉及智能体系统特性和设计模式重要性说明&#10;- 移除译者序，包含在线阅读地址信息&#10;- 删除智能体特征介绍章节，涵盖五步循环和复杂度等级内容&#10;- 移除智能体未来假设章节，包含五大发展趋势预测&#10;- 删除AI编码技能插件包完整查询字典&#10;- 从.gitignore中移除docs-site/.vitepress/条目" />
     <MESSAGE value="feat(docs): 添加文档站点配置和控制台API客户端&#10;&#10;- 更新.gitignore文件以允许GitHub工作流和VitePress配置&#10;- 添加AITools页面组件&#10;- 创建API客户端模块实现JWT认证和自动刷新功能&#10;- 配置VitePress站点支持多语言和搜索功能&#10;- 添加dayjs插件垫片解决浏览器兼容性问题&#10;- 集成GitHub Pages部署工作流实现自动化发布" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat(docs): 添加文档站点配置和控制台API客户端&#10;&#10;- 更新.gitignore文件以允许GitHub工作流和VitePress配置&#10;- 添加AITools页面组件&#10;- 创建API客户端模块实现JWT认证和自动刷新功能&#10;- 配置VitePress站点支持多语言和搜索功能&#10;- 添加dayjs插件垫片解决浏览器兼容性问题&#10;- 集成GitHub Pages部署工作流实现自动化发布" />
+    <MESSAGE value="docs(agentic): 添加智能体设计模式文档&#10;&#10;- 新增简介章节，阐述智能体系统基本概念和特性&#10;- 添加前言部分，介绍智能体开发画布理念&#10;- 增加译者序，说明书籍翻译背景和在线阅读地址&#10;- 添加智能体特征详细介绍，包含五步循环工作原理&#10;- 新增智能体未来发展五大假设分析&#10;- 添加AI编码技能插件包完整查询字典文档&#10;- 包含Superpowers、GSD、OpenSpec等多个插件包详细指南&#10;- 提供16个Vibe Coding实战技巧分享内容" />
+    <MESSAGE value="docs(graph-engineering): 添加 Graph Engineering 从 0 到 1 完整教程文档&#10;&#10;- 详细介绍 Graph Engineering 概念及其与 Loop Engineering 区别&#10;- 阐述 Graph Engineering 三大核心组件：节点、边、状态&#10;- 提供写文章、写代码、做调研三个实用 Graph 模板&#10;- 分享从新手到进阶的学习路径和常见陷阱避免方法&#10;- 包含实际操作练习指导和最佳实践建议" />
+    <option name="LAST_COMMIT_MESSAGE" value="docs(graph-engineering): 添加 Graph Engineering 从 0 到 1 完整教程文档&#10;&#10;- 详细介绍 Graph Engineering 概念及其与 Loop Engineering 区别&#10;- 阐述 Graph Engineering 三大核心组件：节点、边、状态&#10;- 提供写文章、写代码、做调研三个实用 Graph 模板&#10;- 分享从新手到进阶的学习路径和常见陷阱避免方法&#10;- 包含实际操作练习指导和最佳实践建议" />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
   <component name="VgoProject">

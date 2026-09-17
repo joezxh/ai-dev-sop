@@ -121,8 +121,7 @@ export default withMermaidWithoutDayjs(defineConfig({
             items: [
               { text: '指南', link: '/guide/' },
               { text: 'SOP', link: '/sop/' },
-              { text: '参考', link: '/reference/' },
-              { text: '控制台', link: '/console/' }
+              { text: '参考', link: '/reference/' }
             ]
           },
           {
@@ -226,7 +225,7 @@ export default withMermaidWithoutDayjs(defineConfig({
                 { text: '准备工作', link: '/guide/ready' },
                 { text: '记忆tools字典', collapsible: true,
                   items: [
-                    { text: '安装', link: '/guide/ready.md#1-记忆体安装' },
+                    { text: '安装', link: '/guide/ready.md#1-记忆体安装-mem0' },
                     { text: '速查表', link: '/guide/mem-tools' },
                     { text: '项目理解', link: '/guide/SOP-M2-understanding' },
                     { text: '开发调试', link: '/guide/SOP-M3-development' },
@@ -284,8 +283,7 @@ export default withMermaidWithoutDayjs(defineConfig({
             items: [
               { text: 'Guide', link: '/en/guide/intro' },
               { text: 'SOP', link: '/en/sop/' },
-              { text: 'Reference', link: '/en/reference/' },
-              { text: 'Console', link: '/en/console/' }
+              { text: 'Reference', link: '/en/reference/' }
             ]
           },
           {
@@ -336,8 +334,7 @@ export default withMermaidWithoutDayjs(defineConfig({
             items: [
               { text: 'ガイド', link: '/ja/guide/intro' },
               { text: 'SOP', link: '/ja/sop/' },
-              { text: 'リファレンス', link: '/ja/reference/' },
-              { text: 'コンソール', link: '/ja/console/' }
+              { text: 'リファレンス', link: '/ja/reference/' }
             ]
           },
           {
@@ -503,20 +500,7 @@ export default withMermaidWithoutDayjs(defineConfig({
     optimizeDeps: {
       exclude: ['dayjs', 'element-plus']
     },
-    // Local dev proxy: forward console API calls to the cbmem-team backend.
-    // In production the vitepress `dist/` is served by gin under /console,
-    // so /api/console/* hits the same process and no proxy is needed.
-    server: {
-      proxy: {
-        '/api/console': {
-          target: 'http://127.0.0.1:8787',
-          changeOrigin: false,
-        },
-        '/api/auth': {
-          target: 'http://127.0.0.1:8787',
-          changeOrigin: false,
-        },
-      },
-    },
+    // Local dev proxy: console (cbmem-team backend) removed 2026-09.
+    // Memory is served by mem0 (deploy/mem0) — no site-side API proxy needed.
   }
 }))

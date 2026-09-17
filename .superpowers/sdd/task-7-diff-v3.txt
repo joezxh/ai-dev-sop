@@ -1,0 +1,85 @@
+diff --git a/server/dashboard/src/app/(root)/dashboard/overview/page.tsx b/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
+index faebec21..18eb8a10 100644
+--- a/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
+@@ -1,46 +1,45 @@
+ "use client";
+ 
+-import { useRef, useState } from "react";
++import { useEffect, useRef, useState } from "react";
+ import Link from "next/link";
+ import { Button } from "@/components/ui/button";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { api } from "@/utils/api";
+ import { STATS_ENDPOINT } from "@/utils/api-endpoints";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import type { Stats } from "@/types/api";
+ 
+ const RANGES = ["24h", "7d", "30d", "90d", "all"] as const;
+ 
+ export default function OverviewPage() {
+   const [range, setRange] = useState<(typeof RANGES)[number]>("7d");
+-  const { data: stats, isLoading, refetch } = useApiQuery<Stats | null>(
++  const { data: stats, isLoading, error, refetch } = useApiQuery<Stats | null>(
+     async () => {
+       const res = await api.get<Stats>(STATS_ENDPOINT.BASE, { params: { range } });
+       return res.data ?? null;
+     },
+     { errorToast: "Failed to load stats", initialData: null },
+   );
+ 
+   // useApiQuery only fetches on mount, but the fetcher closure reads `range`, so
+-  // re-run it whenever the selected range changes. This relies on two internal
+-  // contracts of useApiQuery: (1) `refetch` has a stable identity (useCallback on
+-  // [errorToast]), and (2) the fetcher is stored in a ref that is reassigned during
+-  // render, so the latest closure — and therefore the latest `range` — is used.
+-  // Comparing against the previous range (instead of an `isFirstLoad` flag) also
+-  // avoids firing a duplicate request on React StrictMode's double render.
++  // re-run it whenever the selected range changes.
+   const prevRange = useRef(range);
+-  if (prevRange.current !== range) {
++  useEffect(() => {
++    // Compare values rather than an "already mounted" flag: on StrictMode's double
++    // mount both runs see prevRange.current === range and bail out early, so no
++    // duplicate request is fired.
++    if (prevRange.current === range) return;
+     prevRange.current = range;
+     void refetch();
+-  }
++  }, [range, refetch]);
+ 
+   // `range` only filters the request counters; memories_total and entities are
+   // always all-time, so those cards are labelled accordingly.
+   const cards = [
+     { title: "Total Memories (All time)", value: stats?.memories_total ?? 0, href: "/dashboard/memories" },
+     { title: "Add Requests", value: stats?.requests?.add ?? 0, href: "/dashboard/requests" },
+     { title: "Search Requests", value: stats?.requests?.search ?? 0, href: "/dashboard/requests" },
+     { title: "Get All Requests", value: stats?.requests?.get_all ?? 0, href: "/dashboard/requests" },
+     { title: "Users (All time)", value: stats?.entities?.users ?? 0, href: "/dashboard/entities" },
+     { title: "Agents (All time)", value: stats?.entities?.agents ?? 0, href: "/dashboard/entities" },
+@@ -58,21 +57,23 @@ export default function OverviewPage() {
+               variant={r === range ? "default" : "outline"}
+               aria-pressed={r === range}
+               disabled={isLoading}
+               onClick={() => setRange(r)}
+             >
+               {r}
+             </Button>
+           ))}
+         </div>
+       </div>
+-      {isLoading ? (
++      {error ? (
++        <p className="text-sm text-destructive">Failed to load stats.</p>
++      ) : isLoading ? (
+         <TableSkeleton rows={2} columns={3} />
+       ) : (
+         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+           {cards.map((c) => (
+             <Link key={c.title} href={c.href}>
+               <Card className="border-memBorder-primary hover:bg-surface-default-secondary">
+                 <CardHeader>
+                   <CardTitle className="text-xs text-onSurface-default-tertiary">{c.title}</CardTitle>
+                 </CardHeader>
+                 <CardContent className="text-2xl font-semibold">{c.value.toLocaleString()}</CardContent>

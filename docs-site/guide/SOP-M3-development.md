@@ -1,5 +1,11 @@
 # SOP-M3: 开发调试指南
 
+> **版本**: v2.0
+> **适用阶段**: 开发流程 M3 - 开发调试
+> **目标读者**: 开发者
+> **变更说明**: 旧双轨调试工具（MemPalace / codebase-mem-mcp 的 trace_path、
+> detect_changes、search_graph 等）已移除。代码追踪使用 IDE 原生能力
+> （LSP 语义导航 / 文本搜索 / git），调试记忆使用 mem0 MCP。
 
 ---
 
@@ -9,18 +15,17 @@
 
 高效搜索和定位代码，追踪问题和调用链路，检测代码变更影响。
 
-### 1.2 双轨调试模式
+### 1.2 调试模式
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     双轨调试模式                                    │
+│              mem0 记忆 + IDE 原生代码追踪                          │
 ├───────────────────────────┬─────────────────────────────────────┤
-│   轨道 A: MemPalace       │     轨道 B: codebase-mem-mcp       │
-│   (调试记忆)              │     (代码追踪)                       │
+│   mem0 (调试记忆)          │     IDE 原生 (代码追踪)              │
 ├───────────────────────────┼─────────────────────────────────────┤
-│  ✓ 调试发现记录           │  ✓ 代码定位                          │
-│  ✓ 历史问题经验           │  ✓ 调用链追踪                        │
-│  ✓ 解决方案备忘           │  ✓ 变更影响分析                       │
+│  ✓ 调试发现记录           │  ✓ 代码定位（语义导航/文本搜索）      │
+│  ✓ 历史问题经验           │  ✓ 调用链追踪（LSP calls）           │
+│  ✓ 解决方案备忘           │  ✓ 变更影响分析（git diff + 引用查找）│
 └───────────────────────────┴─────────────────────────────────────┘
 ```
 
@@ -33,11 +38,12 @@
 **场景**: 快速找到需要修改的代码。
 
 ```bash
-# 1. 搜索相关代码
+# 1. 文本搜索相关代码
 search_code --query "payment.*callback" --scope "**/*.java"
 
-# 2. 获取代码片段
-get_code_snippet --file "src/main/java/PaymentCallback.java" --line_range "1-50"
+# 2. 定位符号并读取片段（LSP）
+workspaceSymbol(query="PaymentCallback", kinds=["class"])
+readSymbol(filePath="PaymentCallback.java", scope="PaymentCallback")
 ```
 
 **推荐问题**:
@@ -48,7 +54,7 @@ get_code_snippet --file "src/main/java/PaymentCallback.java" --line_range "1-50"
 AI 自动调用:
 1. search_code --query "payment.*callback" --scope "**/*.java"
    → 搜索支付回调相关代码
-2. trace_path --target "PaymentCallback" --depth 3
+2. incomingCalls(filePath="PaymentCallback.java", scope="onCallback")
    → 追踪回调处理链路
 
 结果: 精确定位到 PaymentCallback.java + 调用顺序
@@ -56,14 +62,14 @@ AI 自动调用:
 
 ### 2.2 调用链追踪
 
-**场景**: 理解代码执行路径。
+**场景**: 理解代码执行路径（LSP 调用层级）。
 
 ```bash
-# 追踪方法调用
-trace_path --target "OrderService.checkStatus" --depth 10
+# 追踪方法被谁调用（向上）
+incomingCalls(filePath="OrderService.java", scope="checkStatus")
 
-# 追踪入口到实现
-trace_path --target "UserController.getUser" --depth 5
+# 追踪方法调用了谁（向下）
+outgoingCalls(filePath="UserController.java", scope="getUser")
 ```
 
 **示例**:
@@ -72,7 +78,7 @@ trace_path --target "UserController.getUser" --depth 5
 问: "用户获取的完整调用链是什么？"
 
 AI 自动调用:
-trace_path --target "UserController.getUser" --depth 8
+outgoingCalls(filePath="UserController.java", scope="getUser")
 
 输出:
 UserController.getUser()
@@ -84,11 +90,11 @@ UserController.getUser()
 ### 2.3 代码片段获取
 
 ```bash
-# 获取指定文件的代码片段
-get_code_snippet --file "src/main/java/UserService.java" --line_range "50-100"
+# 读取符号定义（推荐，按符号粒度）
+readSymbol(filePath="src/main/java/UserService.java", scope="UserService.getUser")
 
-# 获取完整文件
-get_code_snippet --file "src/main/java/UserService.java"
+# 或直接读取文件行区间
+read_file(filePath="src/main/java/UserService.java", offset=50, limit=50)
 ```
 
 ---
@@ -97,17 +103,17 @@ get_code_snippet --file "src/main/java/UserService.java"
 
 ### 3.1 提交前分析
 
-**场景**: 提交代码前评估影响范围。
+**场景**: 提交代码前评估影响范围（git diff + LSP 引用查找组合）。
 
 ```bash
-# 分析 git diff
-detect_changes --git_diff "$(git diff HEAD~1)"
+# 1. 查看变更
+git diff HEAD~1 --stat
 
-# 完整示例
-git diff HEAD~1 | detect_changes --stdin
+# 2. 对每个变更符号做引用查找（findReferences）
+findReferences(filePath="UserService.java", scope="getUser")
 ```
 
-**输出示例**:
+**输出示例**（Agent 汇总）:
 
 ```json
 {
@@ -127,21 +133,21 @@ git diff HEAD~1 | detect_changes --stdin
 ### 3.2 文件影响分析
 
 ```bash
-# 分析特定文件的变更影响
-detect_changes --file "src/main/java/UserService.java"
+# 查找某类的所有使用方
+findReferences(filePath="src/main/java/UserService.java", scope="UserService")
 
-# 分析包的变更影响
-detect_changes --package "com.example.service"
+# 查找某接口的所有实现
+goToImplementation(filePath="UserService.java", scope="UserService")
 ```
 
 ### 3.3 依赖分析
 
 ```bash
-# 分析类依赖
-search_graph --label depends --name "UserService"
+# 分析 import 依赖
+search_code --query "^import com\.example\.service\." --scope "**/*.java"
 
-# 分析包依赖
-get_architecture --scope dependencies --module "user-service"
+# 分析包内聚（文件树 + 符号聚合）
+documentSymbol("src/main/java/com/example/user/")
 ```
 
 ---
@@ -151,21 +157,21 @@ get_architecture --scope dependencies --module "user-service"
 ### 4.1 调用链追踪定位
 
 ```bash
-# 追踪 NPE 发生位置
-trace_path --target "OrderService.checkStatus" --depth 10
+# 追踪 NPE 发生位置的调用链
+incomingCalls(filePath="OrderService.java", scope="checkStatus")
 
 # 追踪异常传播
-trace_path --target "handleException" --depth 8
+outgoingCalls(filePath="ExceptionHandler.java", scope="handleException")
 ```
 
 ### 4.2 搜索历史经验
 
 ```bash
-# 搜索类似问题的解决方案
-mempalace search "OrderService NPE 历史"
+# 搜索类似问题的解决方案（mem0）
+search_memories(query="OrderService NPE 历史", top_k=5)
 
 # 搜索性能问题
-mempalace search "N+1 查询 解决"
+search_memories(query="N+1 查询 解决", top_k=5)
 ```
 
 **示例**:
@@ -174,29 +180,28 @@ mempalace search "N+1 查询 解决"
 问: "这个 NPE 发生在 OrderService.checkStatus()，调用链是什么？"
 
 AI 自动调用:
-1. trace_path --target "OrderService.checkStatus" --depth 10
+1. incomingCalls(filePath="OrderService.java", scope="checkStatus")
    → 获取完整调用链
 
-2. mempalace_search "OrderService NPE 历史"
+2. search_memories "OrderService NPE 历史"
    → 查找团队记忆中的类似问题
 
 输出: 调用链 + 历史解决方案
 ```
 
-### 4.3 调试会话保存
+### 4.3 调试发现保存
 
 ```bash
-# 保存调试发现
-mempalace_add_drawer \
-  --wing "project-myapp" \
-  --room "debug" \
-  --hall "discoveries" \
-  --content "OrderService.checkStatus() N+1 查询问题:
-- 每次调用执行 5 次额外查询
-- 解决方案: 添加 @BatchSize 注解"
+# 保存调试发现（mem0，type=note）
+add_memory(
+  text="OrderService.checkStatus() N+1 查询问题: 每次调用执行 5 次额外查询。
+        解决方案: 添加 @BatchSize 注解",
+  api_key="<from config>", git_remote="<from config>",
+  project_id="ai-dev-sop",
+  metadata={"type":"note", "people":[], "created_at":"<ISO8601>"}
+)
 
-# 保存检查点
-mempalace_checkpoint --session_id "debug-session-001"
+# 会话留痕由 Agent 按 CODEBUDDY.md §2.1 每轮自动提交，无需手动 checkpoint
 ```
 
 ---
@@ -206,11 +211,11 @@ mempalace_checkpoint --session_id "debug-session-001"
 ### 5.1 调用耗时分析
 
 ```bash
-# 追踪慢查询
-trace_path --target "UserRepository.findAll" --depth 5
+# 定位慢查询调用链（LSP）
+incomingCalls(filePath="UserRepository.java", scope="findAll")
 
 # 分析循环调用
-trace_path --target "getOrders" --depth 10
+outgoingCalls(filePath="OrderService.java", scope="getOrders")
 ```
 
 ### 5.2 数据库查询分析
@@ -226,16 +231,11 @@ search_code --query "findBy|select.*from" --scope "**/*.java"
 ### 5.3 性能问题记录
 
 ```bash
-# 记录性能发现
-mempalace_add_drawer \
-  --wing "project-myapp" \
-  --room "performance" \
-  --hall "discoveries" \
-  --content "性能问题:
-- 位置: OrderService.listOrders()
-- 问题: N+1 查询
-- 影响: 100个订单 = 101次查询
-- 解决: 使用 @EntityGraph 或 JOIN FETCH"
+add_memory(
+  text="性能问题: 位置 OrderService.listOrders()；问题 N+1 查询；
+        影响 100 个订单 = 101 次查询；解决 使用 @EntityGraph 或 JOIN FETCH",
+  metadata={"type":"note", "people":[], "created_at":"<ISO8601>"}
+)
 ```
 
 ---
@@ -245,8 +245,8 @@ mempalace_add_drawer \
 ### 6.1 重构影响评估
 
 ```bash
-# 分析方法重命名影响
-detect_changes --git_diff "M src/UserService.java"
+# 分析方法重命名影响（引用查找）
+findReferences(filePath="UserService.java", scope="getUser")
 
 # 分析接口变更影响
 search_code --query "implements.*UserService" --scope "**/*.java"
@@ -256,20 +256,20 @@ search_code --query "implements.*UserService" --scope "**/*.java"
 
 ```bash
 # 分析类的使用方
-search_graph --label uses --name "UserService"
+findReferences(filePath="UserService.java", scope="UserService")
 
-# 分析包内聚度
-get_architecture --scope module --module "user-service"
+# 分析包结构
+documentSymbol("src/main/java/com/example/user/")
 ```
 
 ### 6.3 重构验证
 
 ```bash
 # 追踪重构后的调用
-trace_path --target "newMethodName" --depth 5
+incomingCalls(filePath="UserService.java", scope="newMethodName")
 
-# 验证原有功能
-detect_changes --verify "src/test/java/*Test.java"
+# 验证原有功能（回归测试）
+search_code --query "UserService" --scope "**/test/**/*.java"
 ```
 
 ---
@@ -283,15 +283,15 @@ detect_changes --verify "src/test/java/*Test.java"
 │                    调试流程                                    │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. trace_path 追踪调用链                                   │
+│  1. LSP 调用层级追踪调用链                                    │
 │     ↓                                                        │
 │  2. search_code 定位相关代码                                 │
 │     ↓                                                        │
-│  3. mempalace_search 历史经验                                │
+│  3. search_memories 查历史经验（mem0）                        │
 │     ↓                                                        │
 │  4. 分析问题根因                                            │
 │     ↓                                                        │
-│  5. mempalace_add_drawer 记录发现                          │
+│  5. add_memory 记录发现（mem0）                              │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -308,10 +308,10 @@ detect_changes --verify "src/test/java/*Test.java"
 
 ### 7.3 注意事项
 
-- **先追踪后搜索**: 使用 `trace_path` 理解调用链，再用 `search_code` 定位
-- **记录发现**: 调试发现及时写入 MemPalace，避免重复踩坑
-- **深度限制**: `trace_path` 有深度限制，过深会截断
-- **历史借鉴**: 搜索 MemPalace 看是否有人遇到过类似问题
+- **先追踪后搜索**: 先用 LSP 调用层级理解调用链，再用 `search_code` 定位
+- **记录发现**: 调试发现及时 `add_memory` 写入 mem0，避免重复踩坑
+- **深度限制**: LSP 调用层级默认返回有限页，过深时分段追踪
+- **历史借鉴**: 先 `search_memories` 看是否有人遇到过类似问题
 
 ---
 
@@ -328,14 +328,14 @@ detect_changes --verify "src/test/java/*Test.java"
 ### 8.2 调试验证
 
 ```bash
-# 调用链验证
-trace_path --target "UserService.getUser" --depth 5
+# 调用链验证（LSP）
+incomingCalls(filePath="UserService.java", scope="getUser")
 
 # 代码搜索验证
 search_code --query "class User" --scope "**/*.java"
 
 # 变更检测验证
-detect_changes --file "src/main/java/User.java"
+git diff HEAD~1 --stat
 ```
 
 ---
@@ -345,12 +345,12 @@ detect_changes --file "src/main/java/User.java"
 ### 9.1 调用链截断
 
 ```bash
-# 限制深度
-trace_path --target "UserService" --depth 5
+# LSP 引用有分页，翻页获取
+findReferences(..., offset=<nextOffset>)
 
 # 分段追踪
-trace_path --target "Controller" --depth 3
-trace_path --target "Service" --depth 3
+incomingCalls(..., scope="Controller.createOrder")
+incomingCalls(..., scope="Service.getById")
 ```
 
 ### 9.2 搜索结果不准确
@@ -365,15 +365,12 @@ search_code --query "getUser" --scope "**/*.java"
 
 ### 9.3 调试记录丢失
 
-```bash
-# 定期保存
-mempalace_checkpoint --session_id "debug-$(date +%Y%m%d)"
-
-# 记录重要发现
-mempalace_add_drawer --wing "debug-sessions" --room "session-001" \
-  --hall "discoveries" --content "..."
+```
+解决: 会话留痕由 Agent 按 CODEBUDDY.md §2.1 自动提交（每轮 Q/A 入库），
+     无需手动 checkpoint；重要发现用 add_memory(type=note) 显式持久化
 ```
 
 ---
-*上一步: [SOP-M2: 知识沉淀](./SOP-M2-understanding.md)*
+
+*文档更新: 2026-09-18*
 *下一步: [SOP-M4: 知识沉淀](./SOP-M4-knowledge.md)*

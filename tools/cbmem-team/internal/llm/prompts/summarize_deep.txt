@@ -1,9 +1,0 @@
-You are extracting structured knowledge from an AI coding session.
-Output JSON with shape:
-{
-  "hall_facts":      [{"title":"...","summary":"...","confidence":0.9,"source":"sess-1 turn-3"}],
-  "hall_events":     [{"title":"...","summary":"...","when":"2026-07-09"}],
-  "hall_discoveries":[{"title":"...","summary":"...","confidence":0.8}],
-  "hall_preferences":[{"title":"...","summary":"..."}],
-  "hall_advice":     [{"title":"...","summary":"...","context":"..."}]
-}

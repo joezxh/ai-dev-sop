@@ -56,238 +56,82 @@ AI开发原则： AI-First </span>
 
 
 ## 1. 记忆体安装  
+## 1. 记忆体安装（mem0）
 
-<span style="color: #d32f2f; font-size: 1em; font-weight: 700;">强烈建议安装记忆，这样不同的 AI Coding 工具的记忆可以共享，善用 MemPalace 的分项目分团队功能。</span>
+<span style="color: #d32f2f; font-size: 1em; font-weight: 700;">强烈建议安装记忆，这样不同的 AI Coding 工具的记忆可以共享，善用 mem0 的项目共享池与团队协作功能。</span>
 
-### 1.1 MemPalace 安装
+> **变更说明（2026-09）**：旧双轨记忆系统（MemPalace / codebase-mem-mcp / cbmem-team）已移除，
+> 统一替换为自托管 **mem0**（`deploy/mem0/`）。
 
-MemPalace 是本地优先的 AI 记忆体，提供 36 个 MCP 工具、实体知识图谱、verbatim 存储 + 语义检索（LongMemEval R@5 = 96.6%），零 API 调用。cbmem-team 通过它的 HTTP MCP 端点（`POST /mcp` + `tools/call mempalace_add_drawer`）实现团队共享记忆同步。
+mem0 提供向量记忆（PostgreSQL + pgvector）与图记忆（Neo4j），通过 MCP 协议
+（`http://127.0.0.1:8080/mcp`）接入 CodeBuddy / Qoder / Cursor 等全部 AI IDE，
+Dashboard（`http://localhost:3001`）负责管理与回放。
 
-#### 1.1.1 方式 A：Qoder Lite 提示词安装（推荐本地开发）
+### 1.1 一键安装（推荐）
 
-**环境要求**
-- Python 3.9+
-- 包管理器：`uv`（推荐）或 `pipx` 或 `pip`（在 venv 中）
-- 约 300 MB 磁盘空间（嵌入模型）
-
-**安装提示词**（直接粘贴给 Qoder / Cursor / Claude Code）
-```
-请帮我安装并配置 MemPalace，要求：
-1. 用 uv 安装：uv tool install mempalace
-   - 如果 uv 未安装，先执行：pip install uv 或 curl -LsSf https://astral.sh/uv/install.sh | sh
-2. 在当前项目目录初始化：mempalace init .
-3. 启动 HTTP MCP 服务端（供 cbmem-team 接入）：
-   mempalace serve --host 127.0.0.1 --port 8765
-4. 验证：curl http://127.0.0.1:8765/healthz 应返回 200
-5. 将以下 MCP 配置写入 .qoder/mcp.json（以及 .cursor/mcp.json 若同时使用 Cursor）：
-   {
-     "mcpServers": {
-       "mempalace": {
-         "command": "mempalace",
-         "args": ["mcp"]   // stdio 模式供 IDE 直连
-       }
-     }
-   }
-6. 最后运行 mempalace status 输出安装报告。
-```
-
-**配置说明**
-- `mempalace serve --host 0.0.0.0`：绑定非 loopback 时会自动生成 bearer token 并保存到 `~/.mempalace/server/`（0600 权限），cbmem-team 需用 `-mempalace-token` 传入同一 token
-- `--transport http`：由 `serve` 子命令隐式启用，无需显式传
-- 默认后端 ChromaDB 零配置；可选 `--backend milvus|qdrant|pgvector` 切换
-
-**验证安装**
 ```bash
-mempalace --version                # 应打印版本号
-mempalace status                   # 查看 palace 路径 / 后端 / drawer 数量
-curl http://127.0.0.1:8765/healthz # HTTP 探针
+# Linux/macOS
+./scripts/install-all.sh
+
+# Windows
+./scripts/install-all.ps1
 ```
 
-#### 1.1.2 方式 B：Docker 完整部署（推荐团队共享 / 服务器）
+### 1.2 手动部署
 
-**环境要求**
-- Docker 20.10+ 或 Docker Desktop
-- 至少 1 GB 可用内存（嵌入模型加载）
-
-**docker run 一键启动**
 ```bash
-# 构建（CPU 版，含 extract + spellcheck extras）
-docker build -t mempalace tools/mempalace
+cd deploy/mem0
+# 首次部署先准备 .env（POSTGRES_PASSWORD / NEO4J_PASSWORD / JWT_SECRET 等）
+docker compose up -d
 
-# 启动 HTTP MCP 服务端，持久化到命名卷
-docker run -d --name mempalace \
-  -p 8765:8765 \
-  -v mempalace-data:/data \
-  -e MEMPALACE_MCP_HTTP_TOKEN=change-me-in-prod \
-  mempalace serve --host 0.0.0.0 --port 8765
+# 验证
+curl -s http://localhost:8888/docs > /dev/null && echo "API OK"
+curl -s http://localhost:3001 > /dev/null && echo "Dashboard OK"
 ```
 
-**docker-compose.yml**（推荐，便于维护）
-```yaml
-version: "3.9"
-services:
-  mempalace:
-    build: ./tools/mempalace
-    image: mempalace:latest
-    container_name: mempalace
-    ports:
-      - "8765:8765"
-    volumes:
-      - mempalace-data:/data
-    environment:
-      # 非 loopback 绑定必须启用 token；cbmem-team 用同一 token 连接
-      MEMPALACE_MCP_HTTP_TOKEN: ${MEMPALACE_TOKEN:-change-me-in-prod}
-    command: serve --host 0.0.0.0 --port 8765
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
+### 1.3 API Key 与项目凭证
 
-volumes:
-  mempalace-data:
+```text
+1. Dashboard (http://localhost:3001) 登录 → Settings → API Keys → Create API Key
+2. 密钥仅创建时完整可见（格式 m0-...），立即保存
+3. CodeBuddy 用户写入项目级 .codebuddy/mem0.config.json（git-ignored）：
+   api_key / admin_user_id / project_id / git_remote / roster
+4. 其他 IDE 通过环境变量 MEM0_API_KEY 或 mcp.json headers 传入
 ```
 
-启动：`docker compose up -d`；停止：`docker compose down`（数据保留在 volume 中）。
+### 1.4 IDE 接入
 
-**GPU 加速嵌入**（可选）
-```bash
-docker build -f tools/mempalace/Dockerfile.gpu -t mempalace:gpu .
-docker run -d --gpus all -p 8765:8765 -v mempalace-data:/data mempalace:gpu serve --host 0.0.0.0 --port 8765
-```
-
-**验证安装**
-```bash
-curl http://127.0.0.1:8765/healthz                    # 200 = 服务正常
-docker exec mempalace mempalace status                # 查看 palace 状态
-docker logs mempalace 2>&1 | tail                     # 查看启动日志
-```
-
-**常见问题**
-| 现象 | 原因 | 解决 |
-|---|---|---|
-| `healthz` 返回 401 | 服务端要求 bearer token | 请求头加 `Authorization: Bearer $MEMPALACE_MCP_HTTP_TOKEN` |
-| 容器启动后立即退出 | `serve` 参数错误 | `docker logs mempalace` 查看报错；确认 command 是 `serve --host 0.0.0.0 --port 8765` |
-| 嵌入模型下载慢 | 首次启动需拉 ~300MB 模型 | 预先挂载缓存卷 `-v mempalace-cache:/root/.cache` |
-| cbmem-team 报 `-32602 unknown argument` | 传了 mempalace_add_drawer 不支持的参数 | 只传 `wing/room/content/source_file/added_by`，hall 映射到 `source_file` |
-
----
-
-### 1.2 codebase-mem-mcp 安装
-
-codebase-memory-mcp 是纯 C 实现的代码智能引擎：单静态二进制、158 种语言 tree-sitter AST + Hybrid LSP 语义解析、15 个 MCP 工具、零依赖。全索引 Linux 内核（28M LOC）仅需 3 分钟，查询 < 1ms。
-
-#### 方式 A：Qoder Lite 提示词安装（推荐本地开发）
-
-**环境要求**
-- 无（单二进制，零运行时依赖）
-- 支持 macOS / Linux / Windows（amd64 + arm64）
-
-**安装提示词**（直接粘贴给 Qoder / Cursor / Claude Code）
-```
-请帮我安装 codebase-memory-mcp：
-1. Linux/macOS 一行命令：
-   curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash
-   - 需要带图可视化 UI：在末尾加 --ui
-   - 自定义安装目录：加 --dir=/usr/local/bin
-2. Windows PowerShell：
-   Invoke-WebRequest -Uri https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.ps1 -OutFile install.ps1
-   Unblock-File .\install.ps1
-   .\install.ps1
-3. 安装脚本会自动：
-   - 下载对应平台的最新 release 二进制
-   - 写入 ~/.local/bin/codebase-memory-mcp（Linux/macOS）或 %LOCALAPPDATA%\Programs\codebase-memory-mcp\（Windows）
-   - 检测已安装的 AI IDE（Qoder/Cursor/Claude Code 等）并自动写入 MCP 配置
-4. 验证：codebase-memory-mcp --version
-5. 在当前项目说 "Index this project" 触发首次索引。
-```
-
-**配置说明**
-- 安装器自动在 `.qoder/mcp.json` 写入 stdio 配置，无需手动编辑
-- 手动配置示例：
-  ```json
-  {
-    "mcpServers": {
-      "codebase-memory-mcp": {
-        "command": "/home/you/.local/bin/codebase-memory-mcp",
-        "args": []
-      }
-    }
-  }
-  ```
-- 图可视化 UI（可选）：`codebase-memory-mcp --ui=true --port=9749`，访问 `http://localhost:9749`
-
-**验证安装**
-```bash
-codebase-memory-mcp --version       # 应打印版本号
-codebase-memory-mcp --help          # 查看所有可用 MCP 工具
-# 在 IDE 中说 "Index this project" 或 "list all functions in this repo"
-```
-
-#### 方式 B：Docker 完整部署（推荐 CI / 隔离环境）
-
-**环境要求**
-- Docker 20.10+
-- 项目源码需挂载进容器
-
-**docker run**
-```bash
-docker run -i --rm \
-  -v /path/to/project:/workspace \
-  -v cbm-data:/data \
-  ghcr.io/deusdata/codebase-memory-mcp:latest
-```
-注意 `-i` 标志是 MCP stdio 协议必需的。
-
-**docker-compose.yml**（作为 stdio MCP 服务）
-```yaml
-version: "3.9"
-services:
-  cbm:
-    image: ghcr.io/deusdata/codebase-memory-mcp:latest
-    stdin_open: true     # 等价 docker run -i，MCP stdio 必需
-    tty: false
-    volumes:
-      - ./my-project:/workspace:ro
-      - cbm-data:/data
-    working_dir: /workspace
-
-volumes:
-  cbm-data:
-```
-
-**Qoder / Cursor MCP 配置**（让 IDE 通过 docker 启动）
 ```json
 {
   "mcpServers": {
-    "codebase-memory-mcp": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "mempalace-data:/data",
-        "-v", "/path/to/project:/workspace",
-        "ghcr.io/deusdata/codebase-memory-mcp:latest"
-      ]
+    "mem0-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer m0-你的密钥" }
     }
   }
 }
 ```
 
-**验证安装**
+各 IDE 详细配置见 [ide-mcp-templates（仓库 docs/ide-config/）](https://github.com/joezxh/ai-dev-sop/blob/main/docs/ide-config/ide-mcp-templates.md)
+与 [mem0 AI 工具配置手册](https://github.com/joezxh/ai-dev-sop/blob/main/docs/quick-ref/mem0-ai-tools-config-guide.md)。
+
+### 1.5 验证安装
+
 ```bash
-docker run -i --rm ghcr.io/deusdata/codebase-memory-mcp:latest --version
-# 在 IDE 中测试："list all functions in this repo"
+curl http://127.0.0.1:8080/mcp        # MCP 探针
+docker compose -f deploy/mem0/docker-compose.yaml ps   # 全部 healthy
+# IDE 中：让 Agent "记住我偏好 TypeScript" 后再 "我的偏好是什么？" 能正确读回
 ```
 
-**常见问题**
+### 1.6 常见问题
+
 | 现象 | 原因 | 解决 |
 |---|---|---|
-| `exec format error` | 二进制架构与平台不匹配 | 确认下载的是 amd64 还是 arm64 版本；Apple Silicon Mac 用 arm64 |
-| Windows 报 "Mark-of-the-Web" 拦截 | 浏览器给下载文件加了安全标记 | `Unblock-File .\install.ps1` 后再执行 |
-| 索引大仓库时 OOM | 仓库过大（> 30M LOC）且容器内存受限 | 调高 `deploy.resources.limits.memory` 或使用宿主机安装版 |
-| IDE 看不到 MCP 工具 | 配置未写入或路径错误 | 重启 IDE；检查 `.qoder/mcp.json` 中 command 路径是否可执行 |
-
-[记忆工具使用指南 SOP-M2: 项目理解指南](./SOP-M2-understanding.md)
+| 连接拒绝 | mem0-api 未启动 | `docker compose up -d`；确认 pgvector/Neo4j 容器 healthy |
+| 401 | Key 无效/未传 | 重新创建 Key；检查 Bearer 头 |
+| 工具列表空 | 客户端未重启 | 重启 IDE；确认 URL 以 `/mcp` 结尾 |
+| 检索为空 | Key/Project 不匹配 | 统一 `.codebuddy/mem0.config.json` 中的作用域配置 |
 
 ## 2. Skill 安装
 
@@ -417,119 +261,79 @@ docker run -i --rm ghcr.io/deusdata/codebase-memory-mcp:latest --version
 **MCP 安装**  
   必须安装：  
   - playwright
-  - memplace MCP
-  - codebase-mem-mcp
+  - mem0 MCP（见 §4.4）
 
 ### 4.2 Cursor
 **MCP 安装**    
   必须安装：  
   - playwright  
-  - memplace MCP
-  - codebase-mem-mcp
+  - mem0 MCP（见 §4.4）
 
 ### 4.3 CodeBuddy
 **MCP 安装**  
   必须安装：
   - playwright
-  - memplace MCP
-  - codebase-mem-mcp
+  - mem0 MCP（见 §4.4）
 
-### 4.4 MCP配置脚本：
-使用以下json给各个AI Coding工具安装MCP  
+### 4.4 MCP 配置（mem0）
+
+**统一端点**: `http://127.0.0.1:8080/mcp`（自托管 mem0，先完成 §1 安装）
+
+**Cursor**（`~/.cursor/mcp.json`）:
 ```json
 {
   "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    },
-
-    "mempalace": {
-      "command": "mempalace",
-      "args": ["mcp"]
-    },
-    "mempalace-http": {
-      "url": "http://127.0.0.1:8765/mcp",
-      "_comment": "团队共享模式：服务端用 mempalace serve --host 0.0.0.0 启动时，需带 bearer token"
-    },
-    "mempalace-http-auth": {
-      "url": "http://YOUR_MEMPALACE_HOST:8765/mcp",
-      "headers": {
-        "Authorization": "Bearer <MEMPALACE_MCP_HTTP_TOKEN>"
-      }
-    },
-
-    "codebase-memory-mcp": {
-      "command": "codebase-memory-mcp",
-      "args": []
-    },
-    "codebase-memory-mcp-docker": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "cbm-data:/data",
-        "-v", "${workspaceFolder}:/workspace",
-        "ghcr.io/deusdata/codebase-memory-mcp:latest"
-      ]
-    },
-
-    "cbmem-team": {
-      "url": "http://localhost:8787/mcp?as=<YOUR_USER_ID>&project=<YOUR_PROJECT_PATH>",
-      "headers": {
-        "Authorization": "Bearer <JWT_TOKEN>"
-      }
+    "mem0": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer m0-你的密钥" }
     }
   }
 }
 ```
 
-**配置说明**
+**Qoder**（个人设置 → MCP 服务 → 配置文件）:
+```json
+{
+  "mcpServers": {
+    "mem0": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer m0-你的密钥" }
+    }
+  }
+}
+```
 
-| 服务 | 模式 | 必填字段 | 备注 |
+**CodeBuddy**（Settings → MCP → Add MCP）:
+```json
+{
+  "mcpServers": {
+    "mem0-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  }
+}
+```
+> CodeBuddy 下工具调用通过 `api_key` 参数鉴权（凭证读 `.codebuddy/mem0.config.json`）。
+
+**Codex**（`~/.codex/config.toml`）:
+```toml
+[mcp_servers.mem0]
+url = "http://127.0.0.1:8080/mcp"
+bearer_token_env_var = "MEM0_API_KEY"
+```
+
+**云端替代**: 将 URL 换为 `https://mcp.mem0.ai/mcp`（OAuth 或 Bearer Key）。
+
+**配置生成脚本**（仓库 `scripts/` 提供 `install-all.sh` / `install-all.ps1`，
+自动启动服务并生成 IDE 配置）。
+
+| Server | 传输 | 配置要点 | 用途 |
 |---|---|---|---|
-| `playwright` | stdio | command/args | 浏览器自动化，Qoder/Cursor 通用 |
-| `mempalace` | stdio | command=`mempalace` | 本地 CLI 直连，零配置，palace 在 `~/.mempalace/` |
-| `mempalace-http` | Streamable HTTP | url | 本机 loopback，无需 token |
-| `mempalace-http-auth` | Streamable HTTP + Bearer | url + headers | 服务端绑非 loopback 时必须带 token |
-| `codebase-memory-mcp` | stdio | command | 单二进制零依赖，推荐本地安装 |
-| `codebase-memory-mcp-docker` | stdio via docker | command=`docker` | 隔离环境或 CI 使用，`-i` 标志必需 |
-| `cbmem-team` | Streamable HTTP + JWT | url + headers | URL 中 `as` 是用户 ID，`project` 是工程路径 |
-
-**各 IDE 安装位置**
-
-| IDE | 配置文件路径 |
-|---|---|
-| Qoder | `<workspace>/.qoder/mcp.json` 或 `~/.qoder/mcp.json`（全局） |
-| Cursor | `<workspace>/.cursor/mcp.json` |
-| Claude Code | `claude mcp add <name> [args]`（命令行注册） |
-| CodeBuddy | `<workspace>/.codebuddy/mcp.json` |
-
-**获取 cbmem-team 的 JWT Token**
-
-```bash
-# 用 admin token 换取 JWT（默认 admin/admin123，admin token 默认 change-me-too）
-curl -X POST http://localhost:8787/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
-# 返回的 access_token 即 JWT，有效期 30 天，填入上方 <JWT_TOKEN>
-```
-
-**获取 MemPalace 的 bearer token**
-
-```bash
-# loopback 启动（无需 token）
-mempalace serve --host 127.0.0.1 --port 8765
-
-# 非 loopback 启动（自动生成 token 并保存到 ~/.mempalace/server/）
-mempalace serve --host 0.0.0.0 --port 8765
-# 查看自动生成的 token：
-cat ~/.mempalace/server/token
-
-# 或显式指定 token：
-MEMPALACE_MCP_HTTP_TOKEN=my-secret mempalace serve --host 0.0.0.0 --port 8765
-```
-
-
+| `mem0-local` | Streamable HTTP | url | 自托管记忆，本机部署 |
+| `mem0`（云端） | Streamable HTTP + Bearer | url + headers | Mem0 Cloud，零部署 |
 ## 5. 全文理解工程：  
 
 每个工程开始前，做一下全文理解工程，没有配置Mem记忆，则使用skill理解，后续调用。  
@@ -551,75 +355,24 @@ MEMPALACE_MCP_HTTP_TOKEN=my-secret mempalace serve --host 0.0.0.0 --port 8765
 | STRUCTURE.md    | 结构   |
 | TESTING.md      | 测试   |
 
-### 5.2 codebase-mem-mcp方式  
+### 5.2 mem0 记忆检索方式
 
-如果已经部署并配置 codebase-mem-mcp，使用其 tools 理解全文并生成架构图：  
+配合 mem0 长期记忆做全文理解（先记忆后代码）：
 
-**前置条件**
-- `codebase-memory-mcp` 已安装并注册到 IDE 的 MCP 配置（见 [1.2 节](#12-codebase-mem-mcp-安装)）
-- 推荐启用自动索引，避免每次会话手动触发：
-  ```bash
-  codebase-memory-mcp config set auto_index true
-  codebase-memory-mcp config set auto_watch true
-  ```
+```text
+1. 会话首轮 Agent 自动拉取项目共享池（CODEBUDDY.md 约定）：
+   get_memories(api_key=..., project_id="ai-dev-sop")
 
-**提示词：codebase-mem-mcp 方式**
+2. 按主题精准检索：
+   search_memories(query="架构 技术栈", top_k=5)
+   search_memories(query="ADR 决策", top_k=5)
+
+3. 历史经验借鉴：
+   search_memories(query="<问题关键词> 历史解决方案")
+
+4. 代码结构分析使用 IDE 原生能力（LSP 语义导航 / 文本搜索），
+   与 mem0 团队记忆互补（详见 SOP-M2 项目理解）。
 ```
-请基于 codebase-memory-mcp 的 MCP 工具，对当前工程做全文理解并输出架构图，按以下步骤执行：
-
-1. 触发索引（首次或代码有变更时）：
-   - 调用 index_repository 工具对当前工程做全量索引
-   - 等待返回 nodes/edges 数量，确认索引完成
-
-2. 获取全局架构概览：
-   - 调用 get_architecture 工具
-   - 它会一次性返回：语言分布、包结构、入口点、HTTP 路由、热点模块、
-     边界层、分层结构、Louvain 社区检测结果
-
-3. 探索关键调用链：
-   - 对核心入口函数调用 trace_path(direction="inbound"/"outbound", depth=5)
-   - 用 search_graph 按正则查找所有 Handler/Service/Repository 类节点
-   - 用 Cypher 风格查询跨模块依赖，例如：
-     MATCH (a)-[:CALLS]->(b) WHERE a.layer <> b.layer RETURN a, b
-
-4. 生成 Mermaid 架构图，至少包含三张：
-   - 模块/分层图（graph TB，展示 packages 与调用方向）
-   - 核心调用链图（从 main/入口 controller 到关键 service）
-   - 跨服务 HTTP/事件流图（如有微服务或消息队列）
-
-5. 将以下内容写入 @docs/scene/graph-cbm.md 覆盖该文件：
-   - 工程一句话定位
-   - 技术栈与语言分布（来自 get_architecture）
-   - 三张 Mermaid 图
-   - 关键入口点清单（函数名 + 文件路径）
-   - 热点/边界模块说明
-   - 你发现的 3-5 条架构洞察（来自社区检测 + 调用链分析）
-
-注意：所有图使用 Mermaid 语法，不要加 style/classDef/fill 等视觉定制，
-保持节点与关系清晰即可。
-```
-
-**可选：启动 3D 图可视化 UI**
-
-如果需要交互式浏览知识图谱（而非静态 Mermaid），使用 UI 变体：
-```bash
-# 安装 UI 变体（如果尚未安装）
-curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash -s -- --ui
-
-# 启动后访问 http://localhost:9749
-codebase-memory-mcp --ui=true --port=9749
-```
-UI 支持 3D 旋转、节点筛选、跨模块高亮，适合团队评审时实时演示架构。
-
-**产出物对照**
-
-| 方式 | 产出位置 | 内容形态 |
-|---|---|---|
-| Skill（/gsd-map-codebase） | `.planning/codecase/*.md` | 7 份结构化 markdown |
-| codebase-mem-mcp | `docs/scene/graph-cbm.md` | Mermaid 图 + 入口清单 + 架构洞察 |
-| UI 变体 | `http://localhost:9749` | 交互式 3D 知识图谱 |
-
-两种方式可以互补：Skill 产出适合归档与文档评审，codebase-mem-mcp 产出适合快速可视化与持续查询（后续任何代码问题都能直接 query 知识图谱，无需重新读源码）。
 
 ## 6.标准操作顺序：  
 - 1.编写提示词：  
@@ -629,4 +382,4 @@ UI 支持 3D 旋转、节点筛选、跨模块高亮，适合团队评审时实�
 - 3.选择skill：  
    根据任务选择skill，无脑选着brainstorm [superpower]  
 - 4.执行任务：  
-   将优化的提示词，复制到你想执行的ai code工具里执行开发任务【codebase-mem-mcp 的全文理解已配置最佳，节省token】。  
+   将优化的提示词，复制到你想执行的ai code工具里执行开发任务【mem0 记忆已自动加载，节省token】。  

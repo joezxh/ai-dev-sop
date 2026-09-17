@@ -1,0 +1,416 @@
+diff --git a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+index a6263d5d..bb0dc365 100644
+--- a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+@@ -37,20 +37,21 @@ export default function ProjectsPage() {
+   const [dialogOpen, setDialogOpen] = useState(false);
+   const [editing, setEditing] = useState<Project | null>(null);
+   const [projectId, setProjectId] = useState("");
+   const [name, setName] = useState("");
+   const [description, setDescription] = useState("");
+   const [gitRemotes, setGitRemotes] = useState("");
+   const [customInstructions, setCustomInstructions] = useState("");
+   const [expirationDate, setExpirationDate] = useState("");
+   const [toDelete, setToDelete] = useState<Project | null>(null);
+   const [toPurge, setToPurge] = useState<Project | null>(null);
++  const [purging, setPurging] = useState(false);
+ 
+   const [matchInput, setMatchInput] = useState("");
+   const [matchResult, setMatchResult] = useState<string | null>(null);
+ 
+   async function load(search: string = q) {
+     setLoading(true);
+     try {
+       const res = await api.get(PROJECT_ENDPOINTS.BASE, {
+         params: search.trim() ? { q: search.trim() } : undefined,
+       });
+@@ -73,21 +74,23 @@ export default function ProjectsPage() {
+     if (!projectId.trim()) {
+       setError("project_id is required");
+       return;
+     }
+     try {
+       const body = {
+         project_id: projectId.trim(),
+         name,
+         description: description || null,
+         git_remotes: gitRemotes.split("\n").map((s) => s.trim()).filter(Boolean),
+-        custom_instructions: customInstructions.trim() || null,
++        // PUT /projects assigns every field that is explicitly sent, so `null`
++        // clears a previously stored value.
++        custom_instructions: customInstructions || null,
+         memory_expiration_date: expirationDate || null,
+       };
+       if (editing) {
+         await api.put(PROJECT_ENDPOINTS.BY_ID(editing.project_id), body);
+       } else {
+         await api.post(PROJECT_ENDPOINTS.BASE, body);
+       }
+       setDialogOpen(false);
+       await load();
+     } catch (e: any) {
+@@ -123,30 +126,40 @@ export default function ProjectsPage() {
+       await api.delete(PROJECT_ENDPOINTS.BY_ID(toDelete.project_id));
+       setToDelete(null);
+       await load();
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Delete failed");
+       setToDelete(null);
+     }
+   }
+ 
+   async function deleteAllMemories() {
+-    if (!toPurge) return;
++    if (!toPurge || purging) return;
++    setPurging(true);
+     try {
+       const res = await api.delete(
+         `${MEMORY_ENDPOINTS.BASE}?project_id=${encodeURIComponent(toPurge.project_id)}`
+       );
+-      toast({ title: `Deleted ${res.data?.deleted ?? 0} memories`, variant: "success" });
++      const deleted = res.data?.deleted ?? 0;
++      if (res.data?.truncated) {
++        toast({
++          title: `已删除 ${deleted} 条，但仅扫描前 ${res.data?.scanned ?? 0} 条，可能未删完，请重试`,
++          variant: "warning",
++        });
++      } else {
++        toast({ title: `Deleted ${deleted} memories`, variant: "success" });
++      }
+       setError(null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Delete failed");
+     } finally {
++      setPurging(false);
+       setToPurge(null);
+     }
+   }
+ 
+   async function testMatch() {
+     setMatchResult(null);
+     try {
+       const res = await api.post(PROJECT_ENDPOINTS.MATCH, {
+         git_remote: matchInput.split("\n").map((s) => s.trim()).filter(Boolean),
+       });
+@@ -381,14 +394,15 @@ export default function ProjectsPage() {
+       />
+ 
+       <DeleteConfirmationModal
+         isOpen={!!toPurge}
+         onClose={() => setToPurge(null)}
+         onConfirm={deleteAllMemories}
+         title="Delete all memories"
+         description="Every memory stored under this project_id will be permanently deleted. The project itself and its git remotes are kept. This cannot be undone."
+         itemName={toPurge?.project_id ?? ""}
+         confirmButtonText="Delete All Memories"
++        loading={purging}
+       />
+     </div>
+   );
+ }
+diff --git a/server/dashboard/src/components/ui/delete-confirmation-modal.tsx b/server/dashboard/src/components/ui/delete-confirmation-modal.tsx
+index 65e7c2ba..d16762fe 100644
+--- a/server/dashboard/src/components/ui/delete-confirmation-modal.tsx
++++ b/server/dashboard/src/components/ui/delete-confirmation-modal.tsx
+@@ -9,39 +9,42 @@ import {
+ } from "@/components/ui/dialog";
+ 
+ interface DeleteConfirmationModalProps {
+   isOpen: boolean;
+   onClose: () => void;
+   onConfirm: () => void;
+   title: string;
+   description: string;
+   itemName: string;
+   confirmButtonText?: string;
++  loading?: boolean;
+ }
+ 
+ const DeleteConfirmationModal = ({
+   isOpen,
+   onClose,
+   onConfirm,
+   title,
+   description,
+   itemName,
+   confirmButtonText = "Delete",
++  loading = false,
+ }: DeleteConfirmationModalProps) => {
+   const [confirmationText, setConfirmationText] = useState("");
+ 
+   const handleClose = () => {
+     setConfirmationText("");
+     onClose();
+   };
+ 
+   const handleConfirm = () => {
++    if (loading) return;
+     onConfirm();
+     setConfirmationText("");
+   };
+ 
+   const isDeleteEnabled = confirmationText === itemName;
+ 
+   return (
+     <Dialog open={isOpen} onOpenChange={handleClose}>
+       <DialogContent>
+         <DialogTitle>{title}</DialogTitle>
+@@ -61,21 +64,21 @@ const DeleteConfirmationModal = ({
+           />
+         </div>
+ 
+         <div className="flex justify-end gap-2 mt-6">
+           <Button onClick={handleClose} variant="outline">
+             Cancel
+           </Button>
+           <Button
+             onClick={handleConfirm}
+             variant="destructive"
+-            disabled={!isDeleteEnabled}
++            disabled={!isDeleteEnabled || loading}
+           >
+-            {confirmButtonText}
++            {loading ? "Deleting…" : confirmButtonText}
+           </Button>
+         </div>
+       </DialogContent>
+     </Dialog>
+   );
+ };
+ 
+ export default DeleteConfirmationModal;
+diff --git a/server/dashboard/src/components/ui/use-toast.ts b/server/dashboard/src/components/ui/use-toast.ts
+index db05e09d..536c88d5 100644
+--- a/server/dashboard/src/components/ui/use-toast.ts
++++ b/server/dashboard/src/components/ui/use-toast.ts
+@@ -1,18 +1,18 @@
+ "use client";
+ 
+ // Shadcn recommends Sonner for toasts. This module wraps Sonner so existing
+ // toast({ title, description, variant }) calls work and render via <Toaster /> from @/components/ui/sonner.
+ import * as React from "react";
+ import { toast as sonnerToast } from "sonner";
+ 
+-export type ToastVariant = "default" | "destructive" | "success";
++export type ToastVariant = "default" | "destructive" | "success" | "warning";
+ 
+ export type ToastOptions = {
+   title?: React.ReactNode;
+   description?: React.ReactNode;
+   variant?: ToastVariant;
+ };
+ 
+ function toast(options: ToastOptions) {
+   const { title, description, variant = "default" } = options;
+   const message =
+@@ -23,20 +23,22 @@ function toast(options: ToastOptions) {
+         : "Notification";
+   const opts =
+     title != null && description != null
+       ? { description: String(description) }
+       : {};
+ 
+   if (variant === "destructive") {
+     sonnerToast.error(message, opts);
+   } else if (variant === "success") {
+     sonnerToast.success(message, opts);
++  } else if (variant === "warning") {
++    sonnerToast.warning(message, opts);
+   } else {
+     sonnerToast(message, opts);
+   }
+ 
+   return {
+     id: "",
+     dismiss: () => {},
+     update: () => {},
+   };
+ }
+diff --git a/server/main.py b/server/main.py
+index 5ec29089..4335a932 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -773,44 +773,45 @@ def get_all_memories(
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ def delete_memories_by_project(
+     project_id: Optional[str] = Query(None),
+     _auth=Depends(verify_auth),
+ ):
+     """Danger-Zone: delete every memory whose metadata.project_id matches.
+ 
++    Only the first ALL_MEMORIES_LIMIT memories are scanned, so the response
++    reports `scanned`/`truncated`: `truncated` means matching memories may
++    still exist outside the scanned window and the caller should retry.
++
+     Routed via the DELETE /memories endpoint below (project_id query param);
+     kept as a plain function so legacy identifier-based deletion on the same
+     route remains reachable.
+     """
+     if _auth is not None and _auth.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin role required.")
+     if not project_id:
+         raise HTTPException(status_code=400, detail="project_id is required.")
+     if _load_project(project_id) is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+     data = _list_all_memories(limit=ALL_MEMORIES_LIMIT)
+-    ids = [
+-        r["id"]
+-        for r in data.get("results", [])
+-        if (r.get("metadata") or {}).get("project_id") == project_id
+-    ]
++    rows = data.get("results", [])
++    ids = [r["id"] for r in rows if (r.get("metadata") or {}).get("project_id") == project_id]
+     deleted = 0
+     for memory_id in ids:
+         try:
+             get_memory_instance().delete(memory_id)
+             deleted += 1
+         except Exception:
+             logging.exception("Failed to delete memory %s", memory_id)
+-    return {"deleted": deleted}
++    return {"deleted": deleted, "scanned": len(rows), "truncated": len(rows) >= ALL_MEMORIES_LIMIT}
+ 
+ 
+ def _filter_memories_for_export(
+     rows: list,
+     project_id: Optional[str] = None,
+     user_id: Optional[str] = None,
+     start: Optional[str] = None,
+     end: Optional[str] = None,
+ ) -> list:
+     """Pure post-filter for JSONL export: project_id (metadata), user_id, and
+diff --git a/server/routers/projects.py b/server/routers/projects.py
+index d57ea4ac..d84fa706 100644
+--- a/server/routers/projects.py
++++ b/server/routers/projects.py
+@@ -46,28 +46,30 @@ class ProjectResponse(BaseModel):
+ 
+ 
+ class MatchRequest(BaseModel):
+     git_remote: str | list[str]
+ 
+ 
+ class MatchResponse(BaseModel):
+     project_id: str | None
+ 
+ 
+-def _parse_expiration_date(value: str | None) -> date | None:
+-    """Parse YYYY-MM-DD; ValueError → 400."""
++def _parse_expiration_date(value: str | date | None) -> date | None:
++    """Parse YYYY-MM-DD; ``None`` clears the value; ValueError → 400."""
+     if value is None:
+         return None
++    if isinstance(value, date):
++        return value
+     try:
+-        return date.fromisoformat(value)
++        return date.fromisoformat(str(value))
+     except ValueError:
+-        raise HTTPException(status_code=400, detail="memory_expiration_date must be in YYYY-MM-DD format.")
++        raise HTTPException(status_code=400, detail="memory_expiration_date must be YYYY-MM-DD")
+ 
+ 
+ def _to_response(project: Project) -> ProjectResponse:
+     return ProjectResponse(
+         id=str(project.id),
+         project_id=project.project_id,
+         name=project.name,
+         description=project.description,
+         git_remotes=list(project.git_remotes or []),
+         custom_instructions=project.custom_instructions,
+@@ -131,30 +133,25 @@ def get_project(project_id: str, _admin=Depends(require_admin), db: Session = De
+     return _to_response(project)
+ 
+ 
+ @router.put("/{project_id}", response_model=ProjectResponse)
+ def update_project(
+     project_id: str, body: ProjectUpdate, _admin=Depends(require_admin), db: Session = Depends(get_db)
+ ):
+     project = db.scalar(select(Project).where(Project.project_id == project_id))
+     if project is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+-    if body.name is not None:
+-        project.name = body.name
+-    if body.description is not None:
+-        project.description = body.description
+-    if body.git_remotes is not None:
+-        project.git_remotes = list(body.git_remotes)
+-    if body.custom_instructions is not None:
+-        project.custom_instructions = body.custom_instructions
+-    if body.memory_expiration_date is not None:
+-        project.memory_expiration_date = _parse_expiration_date(body.memory_expiration_date)
++    for field, value in body.model_dump(exclude_unset=True).items():
++        if field == "memory_expiration_date":
++            setattr(project, field, _parse_expiration_date(value))
++        else:
++            setattr(project, field, value)
+     db.commit()
+     db.refresh(project)
+     return _to_response(project)
+ 
+ 
+ @router.delete("/{project_id}", response_model=MessageResponse)
+ def delete_project(project_id: str, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     project = db.scalar(select(Project).where(Project.project_id == project_id))
+     if project is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+diff --git a/server/tests/test_delete_project_memories.py b/server/tests/test_delete_project_memories.py
+index 2f1fa7c6..e780350f 100644
+--- a/server/tests/test_delete_project_memories.py
++++ b/server/tests/test_delete_project_memories.py
+@@ -33,12 +33,22 @@ def test_deletes_only_matching(monkeypatch):
+         lambda limit: {"results": [
+             {"id": "1", "metadata": {"project_id": "p"}},
+             {"id": "2", "metadata": {"project_id": "other"}},
+             {"id": "3", "metadata": {}},
+         ]},
+     )
+     deleted_ids = []
+     inst = SimpleNamespace(delete=lambda mid: deleted_ids.append(mid))
+     monkeypatch.setattr(m, "get_memory_instance", lambda: inst)
+     out = m.delete_memories_by_project(project_id="p", _auth=None)
+-    assert out == {"deleted": 1}
++    assert out == {"deleted": 1, "scanned": 3, "truncated": False}
+     assert deleted_ids == ["1"]
++
++
++def test_reports_truncation(monkeypatch):
++    monkeypatch.setattr(m, "_load_project", lambda pid: SimpleNamespace(project_id=pid))
++    rows = [{"id": str(i), "metadata": {"project_id": "p"}} for i in range(m.ALL_MEMORIES_LIMIT)]
++    monkeypatch.setattr(m, "_list_all_memories", lambda limit: {"results": rows})
++    monkeypatch.setattr(m, "get_memory_instance", lambda: SimpleNamespace(delete=lambda mid: None))
++    out = m.delete_memories_by_project(project_id="p", _auth=None)
++    assert out["deleted"] == m.ALL_MEMORIES_LIMIT
++    assert out["truncated"] is True
+diff --git a/server/tests/test_project_defaults.py b/server/tests/test_project_defaults.py
+index a29b7f6d..0375c23c 100644
+--- a/server/tests/test_project_defaults.py
++++ b/server/tests/test_project_defaults.py
+@@ -19,10 +19,24 @@ def test_project_defaults_applied():
+     p = _proj(instructions="Only store tech preferences", expiration=__import__("datetime").date(2027, 1, 1))
+     out = _apply_project_defaults(_mc(), p)
+     assert out["prompt"] == "Only store tech preferences"
+     assert out["expiration_date"] == "2027-01-01"
+ 
+ 
+ def test_explicit_request_values_win():
+     p = _proj(instructions="proj", expiration=__import__("datetime").date(2027, 1, 1))
+     out = _apply_project_defaults(_mc(prompt="explicit", expiration_date="2030-05-05"), p)
+     assert out == {}
++
++
++def test_parse_expiration_date_none_is_none():
++    from routers.projects import _parse_expiration_date
++    assert _parse_expiration_date(None) is None
++
++
++def test_parse_expiration_date_bad_value_raises_400():
++    import pytest
++    from fastapi import HTTPException
++    from routers.projects import _parse_expiration_date
++    with pytest.raises(HTTPException) as exc:
++        _parse_expiration_date("not-a-date")
++    assert exc.value.status_code == 400

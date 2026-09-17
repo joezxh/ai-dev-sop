@@ -1,30 +1,20 @@
 ---
-layout: console
 title: 控制台
 ---
 
-# 双轨记忆控制台
+# 控制台（已下线）
 
-这是一个客户端 SPA，请在浏览器中：
+> **已废弃（2026-09）**：旧双轨记忆控制台（cbmem-team Console）随旧记忆系统一并移除。
 
-1. 输入用户名和密码登录（首次登录后需修改密码）
-2. 登录后侧边栏会自动切换到主视图
-3. 浏览器地址 URL hash 路由：
-   - `#/teams` — 团队管理
-   - `#/projects` — 项目管理
-   - `#/modules` — 模块树
-   - `#/memories` — 记忆库
-   - `#/ai-tools` — AI 工具
-   - `#/sessions` — 会话记录
-   - `#/summarize` — 会话归纳
-   - `#/distill` — 会话蒸馏
-   - `#/status` — 运行状态
-   - `#/logs` — 日志查看
+记忆管理功能由 **mem0 Dashboard** 提供：
 
-> 控制台调用 cbmem-team 的 `/api/console/v2/*` 和 `/api/auth/*` 接口；
-> 通过 JWT Bearer Token 进行认证；
-> 所有数据写入 SQLite/MySQL。
+- 地址：`http://localhost:3001`（自托管，见仓库 `deploy/mem0/`）
+- 功能：记忆浏览/检索、会话留痕回放（按 `session_id` 分组）、实体管理、
+  API Keys、Webhooks、Memory Exports、组织成员与权限、用量计费
 
-## 文档站
+接入与使用说明见：
 
-回到文档浏览：[首页](/) | [SOP](/sop/) | [指南](/guide/intro)
+- [记忆工具速查](/guide/mem-tools)
+- 仓库 `docs/quick-ref/mem0-ai-tools-config-guide.md`
+
+回到文档浏览：[首页](/) | [SOP](/sop/) | [指南](/guide/)

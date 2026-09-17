@@ -1,0 +1,886 @@
+diff --git a/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx b/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
+index 2ca59c97..fe9298a5 100644
+--- a/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
+@@ -28,27 +28,25 @@ import {
+   SidebarMenu,
+   SidebarMenuButton,
+   SidebarMenuItem,
+   SidebarRail,
+   SidebarGroupLabel,
+ } from "@/components/ui/sidebar";
+ import { usePathname } from "next/navigation";
+ import { cn } from "@/lib/utils";
+ import { useTranslation } from "@/i18n";
+ import { api } from "@/utils/api";
+-import { PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
++import { PROJECT_CONTEXT_KEY, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import { useAuth } from "@/hooks/use-auth";
+ import { Project } from "@/types/api";
+ 
+-const PROJECT_CONTEXT_KEY = "mem0-project-context";
+-
+ const NAV_KEYS: Record<string, string> = {
+   "Get Started": "nav.getStarted",
+   Playground: "nav.playground",
+   Dashboard: "nav.dashboardOverview",
+   Requests: "nav.requests",
+   Memories: "nav.memories",
+   Entities: "nav.entities",
+   Webhooks: "nav.webhooks",
+   "API Keys": "nav.apiKeys",
+   Configuration: "nav.configuration",
+@@ -77,26 +75,32 @@ export function MainNav({
+     // avoid SSR/hydration mismatches.
+     try {
+       setProjectContext(localStorage.getItem(PROJECT_CONTEXT_KEY) ?? "");
+     } catch {
+       // ignore
+     }
+   }, []);
+ 
+   // GET /projects is admin-only; skip the query for non-admins to avoid a
+   // 403 + error toast on every page (same pattern as the playground page).
++  // Also skip while the sidebar is collapsed: the selector is hidden then, so
++  // there is nothing to populate — expanding the sidebar re-triggers the fetch.
+   const { data: projects = [] } = useApiQuery<Project[]>(
+     async () => {
+       const res = await api.get(PROJECT_ENDPOINTS.BASE);
+       return res.data ?? [];
+     },
+-    { enabled: isAdmin, errorToast: "Failed to load projects", initialData: [] },
++    {
++      enabled: isAdmin && !isSidebarCollapsed,
++      errorToast: "Failed to load projects",
++      initialData: [],
++    },
+   );
+ 
+   return (
+     <Sidebar
+       collapsible={isSidebarCollapsed ? "icon" : undefined}
+       className={cn(className, "border-r-0 w-full mb-0 bg-transparent")}
+       {...props}
+     >
+       <SidebarContent>
+         <SidebarGroup>
+@@ -340,21 +344,21 @@ export function MainNav({
+                 const value = e.target.value;
+                 setProjectContext(value);
+                 try {
+                   localStorage.setItem(PROJECT_CONTEXT_KEY, value);
+                 } catch {
+                   // ignore
+                 }
+                 window.location.href = "/dashboard/memories";
+               }}
+             >
+-              <option value="">All projects</option>
++              <option value="">{t("tenant.allProjects")}</option>
+               {projects.map((p) => (
+                 <option key={p.id} value={p.project_id}>
+                   {p.project_id}
+                 </option>
+               ))}
+             </select>
+           </div>
+         )}
+       </SidebarContent>
+       <SidebarRail />
+diff --git a/server/dashboard/src/app/(root)/dashboard/departments/page.tsx b/server/dashboard/src/app/(root)/dashboard/departments/page.tsx
+index f9f4cc75..5bdc2308 100644
+--- a/server/dashboard/src/app/(root)/dashboard/departments/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/departments/page.tsx
+@@ -38,21 +38,25 @@ export default function DepartmentsPage() {
+   const [name, setName] = useState("");
+   const [description, setDescription] = useState("");
+   const [toDelete, setToDelete] = useState<Department | null>(null);
+ 
+   async function load(search: string = q) {
+     setLoading(true);
+     try {
+       const res = await api.get(DEPARTMENT_ENDPOINTS.BASE, {
+         params: search.trim() ? { q: search.trim() } : undefined,
+       });
+-      setItems(res.data ?? []);
++      const next = res.data ?? [];
++      setItems(next);
++      // Clamp so a delete (or shrinking search result) can't leave `page`
++      // pointing past the last page of data.
++      setPage((p) => Math.min(p, Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)));
+       setError(null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Failed to load departments");
+     } finally {
+       setLoading(false);
+     }
+   }
+ 
+   useEffect(() => {
+     load();
+diff --git a/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx b/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx
+index 2a960f28..5ea90368 100644
+--- a/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx
+@@ -1,15 +1,17 @@
+ "use client";
+ 
+ import { useState } from "react";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import Link from "next/link";
++import { Check, Copy } from "lucide-react";
++import { CopyToClipboard } from "react-copy-to-clipboard";
+ 
+ // MCP 服务：mem0/server/mcp_server.py —— FastMCP("mem0-local")，streamable-http，
+ // 监听 MEM0_MCP_PORT（默认 8080），挂载路径 /mcp。
+ const MCP_JSON = `{
+   "mcpServers": {
+     "mem0-local": {
+       "url": "http://<your-server>:8080/mcp"
+     }
+   }
+ }`;
+@@ -71,22 +73,28 @@ curl -X POST http://<your-server>:8888/search \\
+   -d '{"query":"主题偏好","git_remote":"git@github.com:org/repo.git"}'`;
+ 
+ const TABS = [
+   { id: "mcp", label: "MCP（CodeBuddy / Qoder）", code: MCP_JSON },
+   { id: "python", label: "Python", code: PYTHON },
+   { id: "curl", label: "cURL", code: CURL },
+ ] as const;
+ 
+ export default function GetStartedPage() {
+   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("mcp");
++  const [copied, setCopied] = useState(false);
+   const active = TABS.find((t) => t.id === tab)!;
+ 
++  const handleCopy = () => {
++    setCopied(true);
++    setTimeout(() => setCopied(false), 2000);
++  };
++
+   return (
+     <div className="space-y-6">
+       <h1 className="text-xl font-semibold font-fustat">Get Started</h1>
+ 
+       <Card className="border-memBorder-primary">
+         <CardHeader>
+           <CardTitle className="text-sm">Step 1 · 创建 API Key</CardTitle>
+         </CardHeader>
+         <CardContent className="text-sm">
+           在{" "}
+@@ -111,23 +119,44 @@ export default function GetStartedPage() {
+                 className={`px-3 py-1.5 text-sm rounded border ${
+                   t.id === tab
+                     ? "bg-surface-default-brand text-onSurface-default-primary border-memBorder-primary"
+                     : "border-memBorder-primary hover:bg-surface-default-secondary"
+                 }`}
+               >
+                 {t.label}
+               </button>
+             ))}
+           </div>
+-          <pre className="text-xs bg-surface-default-secondary p-3 rounded font-mono overflow-x-auto max-h-96">
+-            {active.code}
+-          </pre>
++          <div className="relative">
++            <CopyToClipboard text={active.code} onCopy={handleCopy}>
++              <button
++                type="button"
++                aria-label={copied ? "Copied" : "Copy code"}
++                className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 text-xs rounded border border-memBorder-primary bg-surface-default-secondary hover:bg-surface-default-tertiary"
++              >
++                {copied ? (
++                  <>
++                    <Check className="size-3" />
++                    已复制
++                  </>
++                ) : (
++                  <>
++                    <Copy className="size-3" />
++                    复制
++                  </>
++                )}
++              </button>
++            </CopyToClipboard>
++            <pre className="text-xs bg-surface-default-secondary p-3 rounded font-mono overflow-x-auto max-h-96">
++              {active.code}
++            </pre>
++          </div>
+           <p className="text-xs text-onSurface-default-secondary">
+             把 <code className="font-mono">&lt;your-server&gt;</code> 换成部署 mem0 的主机地址（MCP 默认
+             8080 / REST 默认 8888），<code className="font-mono">YOUR_API_KEY</code> 换成 Step 1
+             创建的密钥，<code className="font-mono">git_remote</code> 换成你本地工程的 remote 地址。
+           </p>
+           {tab === "curl" && (
+             <p className="text-xs text-onSurface-default-tertiary">
+               Windows 注意：示例使用 POSIX 单引号。cmd.exe 需改用双引号并把 JSON 内的双引号转义为 \&quot; ；
+               PowerShell 5.1 的 curl 是 Invoke-WebRequest 的别名，请用 curl.exe 或改走 Git Bash / WSL。
+             </p>
+diff --git a/server/dashboard/src/app/(root)/dashboard/memories/page.tsx b/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
+index b903781a..b43138b0 100644
+--- a/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
+@@ -14,30 +14,32 @@ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
+ import {
+   Sheet,
+   SheetContent,
+   SheetHeader,
+   SheetTitle,
+   SheetDescription,
+ } from "@/components/ui/sheet";
+ import { toast } from "@/components/ui/use-toast";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { api } from "@/utils/api";
+-import { MEMORY_ENDPOINTS, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
++import {
++  MEMORY_ENDPOINTS,
++  PROJECT_CONTEXT_KEY,
++  PROJECT_ENDPOINTS,
++} from "@/utils/api-endpoints";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import { Memory, Project } from "@/types/api";
+ 
+ const PAGE_SIZE = 20;
+ // Keep in sync with ALL_MEMORIES_LIMIT in server/main.py.
+ const MEMORY_FETCH_LIMIT = 1000;
+ 
+-const PROJECT_CONTEXT_KEY = "mem0-project-context";
+-
+ export default function MemoriesPage() {
+   const [userId, setUserId] = useState("");
+   const [projectId, setProjectId] = useState("");
+   const [projectContextLoaded, setProjectContextLoaded] = useState(false);
+   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+   const [memoryToDelete, setMemoryToDelete] = useState<Memory | null>(null);
+   const [page, setPage] = useState(0);
+   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+ 
+   useEffect(() => {
+@@ -75,28 +77,35 @@ export default function MemoriesPage() {
+         ...m,
+         project_id: m.project_id ?? m.metadata?.project_id,
+       }));
+     },
+     {
+       errorToast: "Failed to load memories",
+       initialData: [],
+       // Wait for the project context to be restored from localStorage so the
+       // first fetch is already pre-filtered instead of using the default "".
+       enabled: projectContextLoaded,
++      // Re-run with the latest fetcher whenever a filter changes — replaces
++      // the old "setState then manually refetch()" pattern that read stale
++      // closures (the fetcher captured the previous userId/projectId).
++      deps: [userId, projectId, projectContextLoaded],
+     },
+   );
+   const isLoading = memoriesLoading || !projectContextLoaded;
+ 
+   const totalPages = Math.ceil(memories.length / PAGE_SIZE);
++  // Clamp so filter changes that shrink the list can't leave `page` out of
++  // range (deps-based refetch no longer resets the page on every keystroke).
++  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+   const paginatedMemories = memories.slice(
+-    page * PAGE_SIZE,
+-    (page + 1) * PAGE_SIZE,
++    safePage * PAGE_SIZE,
++    (safePage + 1) * PAGE_SIZE,
+   );
+ 
+   const handleDelete = async () => {
+     if (!memoryToDelete) return;
+     try {
+       await api.delete(MEMORY_ENDPOINTS.BY_ID(memoryToDelete.id));
+       toast({ title: "Memory deleted", variant: "success" });
+       if (selectedMemory?.id === memoryToDelete.id) setSelectedMemory(null);
+       setMemoryToDelete(null);
+       void refetch();
+@@ -137,34 +146,35 @@ export default function MemoriesPage() {
+ 
+   return (
+     <div className="space-y-4">
+       <h1 className="text-xl font-semibold font-fustat">Memories</h1>
+ 
+       <div className="flex gap-3">
+         <Input
+           placeholder="Filter by User ID (optional)"
+           value={userId}
+           onChange={(e) => setUserId(e.target.value)}
+-          onKeyDown={(e) => {
+-            if (e.key === "Enter") {
+-              setPage(0);
+-              refetch();
+-            }
+-          }}
+           className="w-64"
+         />
+         <select
+           value={projectId}
+           onChange={(e) => {
+-            setProjectId(e.target.value);
++            const value = e.target.value;
++            setProjectId(value);
+             setPage(0);
+-            refetch();
++            // Mirror the sidebar selector: persist the filter so the next
++            // page load (and the sidebar itself) starts pre-filtered.
++            try {
++              localStorage.setItem(PROJECT_CONTEXT_KEY, value);
++            } catch {
++              // ignore
++            }
+           }}
+           className="border border-memBorder-primary rounded-md px-3 py-2 text-sm bg-transparent"
+         >
+           <option value="">All projects</option>
+           {projects.map((p) => (
+             <option key={p.id} value={p.project_id}>
+               {p.project_id}
+             </option>
+           ))}
+         </select>
+@@ -203,37 +213,37 @@ export default function MemoriesPage() {
+               getRowClassName={(row) =>
+                 selectedMemory?.id === row.id
+                   ? "bg-surface-default-tertiary"
+                   : undefined
+               }
+             />
+           </Card>
+           {totalPages > 1 && (
+             <div className="flex items-center justify-between text-sm text-onSurface-default-tertiary">
+               <span>
+-                {page * PAGE_SIZE + 1}–
+-                {Math.min((page + 1) * PAGE_SIZE, memories.length)} of{" "}
++                {safePage * PAGE_SIZE + 1}–
++                {Math.min((safePage + 1) * PAGE_SIZE, memories.length)} of{" "}
+                 {memories.length}
+               </span>
+               <div className="flex gap-2">
+                 <Button
+                   variant="outline"
+                   size="sm"
+-                  disabled={page === 0}
++                  disabled={safePage === 0}
+                   onClick={() => setPage((p) => p - 1)}
+                 >
+                   Previous
+                 </Button>
+                 <Button
+                   variant="outline"
+                   size="sm"
+-                  disabled={page >= totalPages - 1}
++                  disabled={safePage >= totalPages - 1}
+                   onClick={() => setPage((p) => p + 1)}
+                 >
+                   Next
+                 </Button>
+               </div>
+             </div>
+           )}
+         </>
+       )}
+ 
+diff --git a/server/dashboard/src/app/(root)/dashboard/playground/page.tsx b/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
+index 314821df..3ebf3325 100644
+--- a/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
+@@ -24,43 +24,63 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
+ export default function PlaygroundPage() {
+   // 非 admin 传入他人 user_id（沙盒 id 即“他人”）会被后端 403，这里做角色收敛。
+   const { isAdmin } = useAuth();
+   const [mode, setMode] = useState<"add" | "search">("add");
+   const [messages, setMessages] = useState<Msg[]>([
+     { role: "user", content: "" },
+   ]);
+   const [query, setQuery] = useState("");
+   const [infer, setInfer] = useState(true);
+   const [instructions, setInstructions] = useState("");
++  const [metadataJson, setMetadataJson] = useState("");
+   const [output, setOutput] = useState("");
+   const [running, setRunning] = useState(false);
+   // 整个会话共用一个沙盒 user_id：add 写入后 search 才能命中同一批数据。
+   const [sandboxUserId, setSandboxUserId] = useState<string>(newId);
+ 
++  // Parse the optional Metadata JSON eagerly: a valid JSON object is merged
++  // into the add request's `metadata`; anything else blocks Run and shows the
++  // parse error. Invalid input is never sent.
++  let parsedMetadata: Record<string, unknown> | null = null;
++  let metadataError = "";
++  if (metadataJson.trim()) {
++    try {
++      const value = JSON.parse(metadataJson);
++      if (value && typeof value === "object" && !Array.isArray(value)) {
++        parsedMetadata = value as Record<string, unknown>;
++      } else {
++        metadataError = "Metadata JSON 必须是一个对象（例如 {\"key\": \"value\"}）";
++      }
++    } catch {
++      metadataError = "Metadata JSON 解析失败：不是合法的 JSON";
++    }
++  }
++
+   const addBody = {
+     messages: messages.filter((m) => m.content.trim()),
+     infer,
+     user_id: sandboxUserId,
+     ...(instructions.trim() ? { prompt: instructions.trim() } : {}),
++    ...(parsedMetadata ? { metadata: parsedMetadata } : {}),
+   };
+   const searchBody = { query, user_id: sandboxUserId };
+ 
+   const codeSnippet =
+     mode === "add"
+       ? `curl -X POST ${API_BASE_URL}${MEMORY_ENDPOINTS.BASE} -H "X-API-Key: <你的 API Key>" -d ${shq(JSON.stringify(addBody))}`
+       : `curl -X POST ${API_BASE_URL}${SEARCH_ENDPOINTS.BASE} -H "X-API-Key: <你的 API Key>" -d ${shq(JSON.stringify(searchBody))}`;
+ 
+   const hasInput =
+     mode === "add"
+       ? messages.some((m) => m.content.trim())
+       : query.trim().length > 0;
+-  const canRun = hasInput && isAdmin;
++  const canRun = hasInput && isAdmin && !metadataError;
+ 
+   function switchMode(next: "add" | "search") {
+     setMode(next);
+     setOutput("");
+   }
+ 
+   function resetSandbox() {
+     setSandboxUserId(newId());
+     setOutput("");
+     setQuery("");
+@@ -208,20 +228,44 @@ export default function PlaygroundPage() {
+                 Custom Instructions（试运行）
+               </Label>
+               <Textarea
+                 id="custom-instructions"
+                 value={instructions}
+                 onChange={(e) => setInstructions(e.target.value)}
+                 rows={2}
+                 placeholder="例如：只存储技术偏好，忽略闲聊"
+               />
+             </div>
++
++            <div className="space-y-1">
++              <Label htmlFor="metadata-json" className="text-xs">
++                Metadata JSON（可选）
++              </Label>
++              <Textarea
++                id="metadata-json"
++                className="font-mono text-xs"
++                value={metadataJson}
++                onChange={(e) => setMetadataJson(e.target.value)}
++                rows={2}
++                placeholder='{"source": "playground", "topic": "demo"}'
++              />
++              {metadataError ? (
++                <p className="text-xs text-onSurface-danger-primary">
++                  {metadataError}
++                </p>
++              ) : (
++                <p className="text-xs text-onSurface-default-tertiary">
++                  合法的 JSON 对象会并入请求的 <code>metadata</code> 字段（非法
++                  JSON 时 Run 按钮禁用）。
++                </p>
++              )}
++            </div>
+           </CardContent>
+         </Card>
+       ) : (
+         <Card className="border-memBorder-primary">
+           <CardHeader>
+             <CardTitle className="text-sm">检索</CardTitle>
+           </CardHeader>
+           <CardContent className="space-y-3">
+             <Input
+               value={query}
+diff --git a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+index f297955f..e2b4adbe 100644
+--- a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+@@ -48,21 +48,25 @@ export default function ProjectsPage() {
+ 
+   const [matchInput, setMatchInput] = useState("");
+   const [matchResult, setMatchResult] = useState<string | null>(null);
+ 
+   async function load(search: string = q) {
+     setLoading(true);
+     try {
+       const res = await api.get(PROJECT_ENDPOINTS.BASE, {
+         params: search.trim() ? { q: search.trim() } : undefined,
+       });
+-      setItems(res.data ?? []);
++      const next = res.data ?? [];
++      setItems(next);
++      // Clamp so a delete (or shrinking search result) can't leave `page`
++      // pointing past the last page of data.
++      setPage((p) => Math.min(p, Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)));
+       setError(null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Failed to load projects");
+     } finally {
+       setLoading(false);
+     }
+   }
+ 
+   useEffect(() => {
+     load();
+diff --git a/server/dashboard/src/app/(root)/dashboard/requests/page.tsx b/server/dashboard/src/app/(root)/dashboard/requests/page.tsx
+index 34e7b29b..1b764468 100644
+--- a/server/dashboard/src/app/(root)/dashboard/requests/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/requests/page.tsx
+@@ -1,13 +1,13 @@
+ "use client";
+ 
+-import { useEffect, useRef, useState } from "react";
++import { useState } from "react";
+ import { format, formatDistanceToNow } from "date-fns";
+ import { RefreshCw } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { Card, CardContent } from "@/components/ui/card";
+ import { Badge } from "@/components/ui/badge";
+ import { DataTable } from "@/components/shared/data-table";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import { api } from "@/utils/api";
+ import { REQUEST_ENDPOINTS } from "@/utils/api-endpoints";
+@@ -113,38 +113,32 @@ export default function RequestsPage() {
+     async () => {
+       const params: Record<string, unknown> = { limit: REQUEST_LOG_LIMIT };
+       if (action) params.action = action;
+       if (range !== "all") params.range = range;
+       const res = await api.get<ApiRequestLog[]>(REQUEST_ENDPOINTS.BASE, {
+         params,
+       });
+       setLastUpdated(new Date().toISOString());
+       return (res.data ?? []).map(normalizeLog);
+     },
+-    { errorToast: "Failed to load request logs", initialData: [] },
++    {
++      errorToast: "Failed to load request logs",
++      initialData: [],
++      // Re-run with the latest fetcher whenever a filter changes — replaces
++      // the old effect-based workaround for the stale-closure refetch bug.
++      deps: [action, range],
++    },
+   );
+ 
+-  // The fetcher is read through a ref inside useApiQuery, so calling refetch()
+-  // from the select's onChange handler would still use the previous filter.
+-  // Refetching from an effect guarantees the new action/range is applied.
+-  const appliedFilters = useRef({ action, range });
+-  useEffect(() => {
+-    if (
+-      appliedFilters.current.action === action &&
+-      appliedFilters.current.range === range
+-    ) {
+-      return;
+-    }
+-    appliedFilters.current = { action, range };
+-    setPage(0);
+-    void refetch();
+-  }, [action, range, refetch]);
++  // Clamp so filter changes that shrink the result set can't leave `page`
++  // out of range (the old effect reset the page; deps-based refetch doesn't).
++  const safePage = Math.min(page, Math.max(0, Math.ceil(logs.length / PAGE_SIZE) - 1));
+ 
+   const totalRequests = logs.length;
+   const successfulRequests = logs.filter((log) => log.statusCode < 400).length;
+   const successRate =
+     totalRequests > 0
+       ? Math.round((successfulRequests / totalRequests) * 100)
+       : 0;
+   const averageLatency =
+     totalRequests > 0
+       ? Math.round(
+@@ -297,44 +291,45 @@ export default function RequestsPage() {
+       ) : logs.length === 0 ? (
+         <EmptyState
+           title="No request logs yet"
+           description="Requests will appear here once your instance receives traffic."
+           image="requests"
+         />
+       ) : (
+         <>
+           <Card className="border-memBorder-primary overflow-hidden">
+             <DataTable
+-              data={logs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)}
++              data={logs.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)}
+               columns={columns}
+               getRowKey={(row) => row.id}
+             />
+           </Card>
+           {logs.length > PAGE_SIZE && (
+             <div className="flex items-center justify-between text-sm text-onSurface-default-tertiary">
+               <span>
+-                {page * PAGE_SIZE + 1}–
+-                {Math.min((page + 1) * PAGE_SIZE, logs.length)} of {logs.length}
++                {safePage * PAGE_SIZE + 1}–
++                {Math.min((safePage + 1) * PAGE_SIZE, logs.length)} of{" "}
++                {logs.length}
+               </span>
+               <div className="flex gap-2">
+                 <Button
+                   variant="outline"
+                   size="sm"
+-                  disabled={page === 0}
++                  disabled={safePage === 0}
+                   onClick={() => setPage((p) => p - 1)}
+                 >
+                   Previous
+                 </Button>
+                 <Button
+                   variant="outline"
+                   size="sm"
+-                  disabled={(page + 1) * PAGE_SIZE >= logs.length}
++                  disabled={(safePage + 1) * PAGE_SIZE >= logs.length}
+                   onClick={() => setPage((p) => p + 1)}
+                 >
+                   Next
+                 </Button>
+               </div>
+             </div>
+           )}
+         </>
+       )}
+     </div>
+diff --git a/server/dashboard/src/app/(root)/dashboard/users/page.tsx b/server/dashboard/src/app/(root)/dashboard/users/page.tsx
+index d81f4ea8..8ccadffa 100644
+--- a/server/dashboard/src/app/(root)/dashboard/users/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/users/page.tsx
+@@ -38,21 +38,25 @@ export default function UsersPage() {
+   const [password, setPassword] = useState("");
+   const [role, setRole] = useState("user");
+   const [toDelete, setToDelete] = useState<DashboardUser | null>(null);
+ 
+   async function load(search: string = q) {
+     setLoading(true);
+     try {
+       const res = await api.get(USER_ENDPOINTS.BASE, {
+         params: search.trim() ? { q: search.trim() } : undefined,
+       });
+-      setItems(res.data ?? []);
++      const next = res.data ?? [];
++      setItems(next);
++      // Clamp so a delete (or shrinking search result) can't leave `page`
++      // pointing past the last page of data.
++      setPage((p) => Math.min(p, Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)));
+       setError(null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Failed to load users");
+     } finally {
+       setLoading(false);
+     }
+   }
+ 
+   useEffect(() => {
+     load();
+diff --git a/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx b/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx
+index eb2999af..6bee90b0 100644
+--- a/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx
+@@ -16,20 +16,22 @@ import {
+ } from "@/components/ui/dialog";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import { api } from "@/utils/api";
+ import { WEBHOOK_ENDPOINTS } from "@/utils/api-endpoints";
+ import { Webhook } from "@/types/api";
+ 
+ const PAGE_SIZE = 10;
+ 
++// NOTE: 与 server/webhooks_client.py 的 ALLOWED_EVENTS 保持同步
++// (无法跨语言共享单源，新增/删除事件时两处需同时修改)。
+ const WEBHOOK_EVENTS = [
+   { value: "memory_added", label: "Memory added" },
+   { value: "memory_updated", label: "Memory updated" },
+   { value: "memory_deleted", label: "Memory deleted" },
+ ] as const;
+ 
+ function formatEvents(events: string[]): string {
+   return (
+     events
+       .map((e) => WEBHOOK_EVENTS.find((w) => w.value === e)?.label ?? e)
+@@ -51,21 +53,24 @@ export default function WebhooksPage() {
+   const [events, setEvents] = useState<string[]>([]);
+   const [formError, setFormError] = useState<string | null>(null);
+   const [saving, setSaving] = useState(false);
+ 
+   const [toDelete, setToDelete] = useState<Webhook | null>(null);
+ 
+   async function load() {
+     setLoading(true);
+     try {
+       const res = await api.get(WEBHOOK_ENDPOINTS.BASE);
+-      setItems(res.data ?? []);
++      const next = res.data ?? [];
++      setItems(next);
++      // Clamp so a delete can't leave `page` pointing past the last page.
++      setPage((p) => Math.min(p, Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)));
+       setError(null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Failed to load webhooks");
+     } finally {
+       setLoading(false);
+     }
+   }
+ 
+   useEffect(() => {
+     load();
+@@ -84,20 +89,26 @@ export default function WebhooksPage() {
+     setSecret("");
+     setEvents([]);
+     setFormError(null);
+     setDialogOpen(true);
+   }
+ 
+   async function save(e: React.FormEvent) {
+     e.preventDefault();
+     setFormError(null);
+ 
++    // Client-side guard: HTML `required` alone lets whitespace-only names
++    // through; catch it before the request so the server never sees it.
++    if (!name.trim()) {
++      setFormError("Enter a webhook name.");
++      return;
++    }
+     if (events.length === 0) {
+       setFormError("Select at least one event to subscribe to.");
+       return;
+     }
+     let parsed: URL;
+     try {
+       parsed = new URL(url.trim());
+     } catch {
+       setFormError("Enter a valid URL.");
+       return;
+diff --git a/server/dashboard/src/hooks/use-api-query.ts b/server/dashboard/src/hooks/use-api-query.ts
+index f83008f6..0b2936cb 100644
+--- a/server/dashboard/src/hooks/use-api-query.ts
++++ b/server/dashboard/src/hooks/use-api-query.ts
+@@ -1,32 +1,42 @@
+ import { useCallback, useEffect, useRef, useState } from "react";
+ import { toast } from "@/components/ui/use-toast";
+ import { getErrorMessage } from "@/lib/error-message";
+ 
+ interface UseApiQueryOptions<T> {
+   enabled?: boolean;
+   errorToast?: string;
+   initialData?: T;
++  /**
++   * Optional reactive dependencies. When any value in this array changes, the
++   * query is re-run with the LATEST fetcher closure (read through the ref).
++   * Use this for filter inputs (e.g. projectId/userId) instead of the old
++   * "setState then manually call refetch()" pattern — a synchronous refetch()
++   * right after setState still reads the PREVIOUS render's fetcher and sends
++   * stale filter params. Passing a deps array replaces the need for that
++   * workaround effect entirely. Omit it to keep the mount-only behavior.
++   */
++  deps?: unknown[];
+ }
+ 
+ interface UseApiQueryResult<T> {
+   data: T | undefined;
+   isLoading: boolean;
+   error: string;
+   refetch: () => Promise<void>;
+ }
+ 
+ export function useApiQuery<T>(
+   fetcher: () => Promise<T>,
+   options: UseApiQueryOptions<T> = {},
+ ): UseApiQueryResult<T> {
+-  const { enabled = true, errorToast, initialData } = options;
++  const { enabled = true, errorToast, initialData, deps } = options;
+ 
+   const [data, setData] = useState<T | undefined>(initialData);
+   const [isLoading, setIsLoading] = useState(enabled);
+   const [error, setError] = useState("");
+ 
+   const fetcherRef = useRef(fetcher);
+   fetcherRef.current = fetcher;
+ 
+   const run = useCallback(async () => {
+     setIsLoading(true);
+@@ -41,16 +51,20 @@ export function useApiQuery<T>(
+           title: errorToast,
+           description: message,
+           variant: "destructive",
+         });
+       }
+     } finally {
+       setIsLoading(false);
+     }
+   }, [errorToast]);
+ 
++  // Serialize deps to a stable string so the effect only re-runs when a value
++  // actually changes (identity-stable across re-renders, unlike a spread array).
++  const depsKey = deps ? JSON.stringify(deps) : null;
++
+   useEffect(() => {
+     if (enabled) void run();
+-  }, [enabled, run]);
++  }, [enabled, run, depsKey]);
+ 
+   return { data, isLoading, error, refetch: run };
+ }
+diff --git a/server/dashboard/src/i18n/en.ts b/server/dashboard/src/i18n/en.ts
+index 92c4cfa4..3a100691 100644
+--- a/server/dashboard/src/i18n/en.ts
++++ b/server/dashboard/src/i18n/en.ts
+@@ -76,14 +76,15 @@ export const en = {
+     gitRemotes: "Git Remotes",
+     gitRemotesHint: "One URL per line (git remote -v). Used to auto-match a project from a repo.",
+     members: "Members",
+     memberCount: "Members",
+     testMatch: "Test git remote match",
+     matchResult: "Resolved project ID",
+     noMatch: "No matching project",
+     noProject: "None",
+     createdAt: "Created",
+     userScoped: "Owner",
++    allProjects: "All projects",
+   },
+ };
+ 
+ export type Dict = typeof en;
+diff --git a/server/dashboard/src/i18n/zh.ts b/server/dashboard/src/i18n/zh.ts
+index ab1699f9..0e34ca61 100644
+--- a/server/dashboard/src/i18n/zh.ts
++++ b/server/dashboard/src/i18n/zh.ts
+@@ -68,12 +68,13 @@ export const zh: Dict = {
+     gitRemotes: "Git 远程地址",
+     gitRemotesHint: "每行一个地址（git remote -v 返回）。用于按仓库自动匹配项目。",
+     members: "成员",
+     memberCount: "成员数",
+     testMatch: "测试 Git 地址匹配",
+     matchResult: "解析出的项目 ID",
+     noMatch: "无匹配项目",
+     noProject: "无",
+     createdAt: "创建时间",
+     userScoped: "归属用户",
++    allProjects: "全部项目",
+   },
+ };
+diff --git a/server/dashboard/src/utils/api-endpoints.ts b/server/dashboard/src/utils/api-endpoints.ts
+index 2ef9a0aa..fd2f2a28 100644
+--- a/server/dashboard/src/utils/api-endpoints.ts
++++ b/server/dashboard/src/utils/api-endpoints.ts
+@@ -59,10 +59,14 @@ export const WEBHOOK_ENDPOINTS = {
+ 
+ export const EXPORT_ENDPOINTS = {
+   MEMORIES: "/exports/memories",
+ } as const;
+ 
+ export const ENTITY_ENDPOINTS = {
+   BASE: "/entities",
+   BY_ID: (type: string, id: string) =>
+     `/entities/${type}/${encodeURIComponent(id)}`,
+ } as const;
++
++// localStorage key for the cross-page project filter context
++// (sidebar selector + memories page write/read the same value).
++export const PROJECT_CONTEXT_KEY = "mem0-project-context";

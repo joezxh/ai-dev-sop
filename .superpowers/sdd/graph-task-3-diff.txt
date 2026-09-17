@@ -1,0 +1,389 @@
+e8e2cc34 feat(server): graph build scheduling, /search relations fusion, delete links
+ server/main.py                         | 91 +++++++++++++++++++++++++++++++++-
+ server/routers/entities.py             | 16 ++++++
+ server/tests/test_graph_integration.py | 69 ++++++++++++++++++++++++++
+ 3 files changed, 174 insertions(+), 2 deletions(-)
+diff --git a/server/main.py b/server/main.py
+index 73d6675d..61e5e0d5 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -36,20 +36,21 @@ from routers import projects as projects_router
+ from routers import requests as requests_router
+ from routers import stats as stats_router
+ from routers import users as users_router
+ from routers import webhooks as webhooks_router
+ from webhooks_client import events_from_add_response, trigger_webhooks
+ from gitmatch import resolve_project_id
+ from schemas import MessageResponse
+ from server_state import (
+     SCAN_LIMIT,
+     get_current_config,
++    get_graph_memory,
+     get_memory_instance,
+     initialize_state,
+     set_session_factory,
+     update_config,
+ )
+ from slowapi import _rate_limit_exceeded_handler
+ from slowapi.errors import RateLimitExceeded
+ from sqlalchemy import func, select
+ 
+ from mem0.exceptions import ValidationError as Mem0ValidationError
+@@ -271,20 +272,23 @@ class SearchRequest(BaseModel):
+     agent_id: Optional[str] = Field(None, description="Deprecated: pass inside `filters` instead.", deprecated=True)
+     filters: Optional[Dict[str, Any]] = None
+     project_id: Optional[str] = Field(None, description="Restrict results to a project (applied post-search).")
+     git_remote: Optional[str | List[str]] = Field(
+         None, description="Git remote URL(s); resolved to a project_id server-side for project-scope reads."
+     )
+     top_k: Optional[int] = Field(None, description="Maximum number of results to return.")
+     threshold: Optional[float] = Field(None, description="Minimum similarity score for results.")
+     explain: Optional[bool] = Field(None, description="Include score details for each search result.")
+     show_expired: Optional[bool] = Field(None, description="Include expired memories.")
++    include_graph: Optional[bool] = Field(
++        True, description="Attach entity-relation `relations` from the graph memory layer to the response."
++    )
+ 
+ 
+ class GenerateInstructionsRequest(BaseModel):
+     use_case: str = Field(..., description="Description of what the user will use Mem0 for.")
+ 
+ 
+ def _client_error(exc: Exception) -> HTTPException:
+     """Map core validation / not-found errors to 4xx so clients can tell a bad
+     request from an upstream outage. 'not found' is a 404, everything else a 400."""
+     detail = str(exc)
+@@ -659,20 +663,61 @@ def _fire_webhooks(results: list | None = None, *, events: list | set | None = N
+             events = events_from_add_response(results or [])
+         if payload is None:
+             payload = {"results": list(results or [])}
+         if not events:
+             return
+         _webhook_executor.submit(_dispatch, list(events), payload)
+     except Exception:
+         logging.exception("Webhook dispatch failed")
+ 
+ 
++# Fire-and-forget graph build/dispatch pool. Semantics match the webhook
++# executor: at process exit, in-flight graph writes may be dropped (we do not
++# wait for the pool to drain) — acceptable for a best-effort derived layer.
++# Note: the graph singleton itself lives in server_state.get_graph_memory and
++# is rebuilt when the provider config changes (update_config drops it); the
++# embedder/llm are bound once per singleton, which is fine for this round.
++_graph_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="graph")
++
++
++def _schedule_graph_build(text: str, filters: dict) -> None:
++    """Queue graph entity/relation extraction. Never raises: a graph build
++    failure must not turn an already-successful memory write into a 500."""
++    try:
++        graph = get_graph_memory()
++        if not graph.enabled:
++            return
++        _graph_executor.submit(graph.add, text, filters)
++    except Exception:  # noqa: BLE001 — scheduling must never break the write path
++        logging.exception("graph build scheduling failed")
++
++
++def _fuse_graph_relations(data: dict, query: str, filters: dict, include_graph: bool) -> dict:
++    """Attach `relations` (entity-relation triples) to a search response.
++
++    Fusion is best-effort and must never break search: any failure yields an
++    empty relations list with the vector results untouched.
++    """
++    if not include_graph:
++        return data
++    try:
++        graph = get_graph_memory()
++        if graph.enabled:
++            data["relations"] = graph.search(query, filters, limit=5)
++        else:
++            data["relations"] = []
++    except Exception:  # noqa: BLE001 — fusion must never break search
++        logging.exception("graph fusion failed")
++        data["relations"] = []
++    return data
++
++
+ @app.post("/memories", summary="Create memories")
+ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+     """Store new memories, scoped by user and (optionally) project."""
+     is_admin = _auth is None or _auth.role == "admin"
+     owner_user_id, owner_agent_id, owner_run_id = _scope_identifiers(
+         _auth, memory_create.user_id, memory_create.agent_id, memory_create.run_id
+     )
+     if not any([owner_user_id, owner_agent_id, owner_run_id]):
+         raise HTTPException(status_code=400, detail="At least one identifier (user_id, agent_id, run_id) is required.")
+ 
+@@ -688,32 +733,38 @@ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+             raise HTTPException(
+                 status_code=400, detail="project_id does not match the project resolved from git_remote."
+             )
+         project_id = project_id or resolved
+         metadata["git_remote"] = memory_create.git_remote
+     if project_id:
+         metadata["project_id"] = project_id
+ 
+     overrides = _apply_project_defaults(memory_create, _load_project(project_id) if project_id else None)
+ 
++    # Capture graph-build inputs before the mem0 call (owner identity + project dimension).
++    graph_text = " ".join(m.content for m in memory_create.messages)
++    graph_filters = {"user_id": owner_user_id, "project_id": project_id or None}
++
+     params = {k: v for k, v in {
+         "user_id": owner_user_id,
+         "agent_id": owner_agent_id,
+         "run_id": owner_run_id,
+         "metadata": metadata,
+         "infer": True if memory_create.infer is None else memory_create.infer,
+         "memory_type": memory_create.memory_type,
+         "prompt": memory_create.prompt or overrides.get("prompt"),
+         "expiration_date": memory_create.expiration_date or overrides.get("expiration_date"),
+     }.items() if v is not None}
+     try:
+         response = get_memory_instance().add(messages=[m.model_dump() for m in memory_create.messages], **params)
++        if graph_text.strip():
++            _schedule_graph_build(graph_text, graph_filters)
+         _fire_webhooks(response.get("results") or [])
+         if response.get("results"):
+             telemetry.log_dashboard_nudge_once(DASHBOARD_URL)
+         return JSONResponse(content=response)
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+@@ -814,20 +865,27 @@ def delete_memories_by_project(
+     data = _list_all_memories(limit=SCAN_LIMIT)
+     rows = data.get("results", [])
+     ids = [r["id"] for r in rows if (r.get("metadata") or {}).get("project_id") == project_id]
+     deleted = 0
+     for memory_id in ids:
+         try:
+             get_memory_instance().delete(memory_id)
+             deleted += 1
+         except Exception:
+             logging.exception("Failed to delete memory %s", memory_id)
++    if deleted:
++        try:
++            _graph_executor.submit(
++                get_graph_memory().hard_delete, {"project_id": project_id, "scope": "project"}
++            )
++        except Exception:  # noqa: BLE001 — graph cleanup must not fail the purge
++            logging.exception("graph hard-delete scheduling failed")
+     return {"deleted": deleted, "scanned": len(rows), "truncated": len(rows) >= SCAN_LIMIT}
+ 
+ 
+ def _filter_memories_for_export(
+     rows: list,
+     project_id: Optional[str] = None,
+     user_id: Optional[str] = None,
+     start: Optional[str] = None,
+     end: Optional[str] = None,
+ ) -> list:
+@@ -938,31 +996,47 @@ def search_memories(search_req: SearchRequest, _auth=Depends(verify_auth)):
+         project_scope = search_req.project_id or resolve_project_id(search_req.git_remote)
+         params = {}
+         if search_req.top_k is not None:
+             params["top_k"] = search_req.top_k
+         if search_req.threshold is not None:
+             params["threshold"] = search_req.threshold
+         if search_req.explain is not None:
+             params["explain"] = search_req.explain
+         if search_req.show_expired is not None:
+             params["show_expired"] = search_req.show_expired
++        # Graph fusion filters: project scope hits the shared project pool;
++        # personal scope uses the tenant-pinned user_id (admins keep their
++        # explicit filter). Unscoped admin searches leave user_id absent —
++        # GraphMemory.search refuses unscoped reads and returns [].
+         if project_scope:
++            graph_filters = {"project_id": project_scope, "scope": "project"}
+             data = get_memory_instance().search(query=search_req.query, filters={}, **params)
+-            return _filter_by_project_id(data, project_scope)
++            return _fuse_graph_relations(
++                _filter_by_project_id(data, project_scope),
++                query=search_req.query,
++                filters=graph_filters,
++                include_graph=search_req.include_graph is not False,
++            )
+         # Tenant isolation: normal users are pinned to their own user_id.
+         scoped_user, _, _ = _scope_identifiers(
+             _auth, filters.get("user_id"), filters.get("agent_id"), filters.get("run_id")
+         )
+         if scoped_user is not None:
+             filters["user_id"] = scoped_user
++        graph_filters = {"user_id": filters.get("user_id"), "scope": "user"}
+         data = get_memory_instance().search(query=search_req.query, filters=filters, **params)
+-        return _filter_by_project_id(data, search_req.project_id)
++        return _fuse_graph_relations(
++            _filter_by_project_id(data, search_req.project_id),
++            query=search_req.query,
++            filters=graph_filters,
++            include_graph=search_req.include_graph is not False,
++        )
+     except ValueError as e:
+         raise HTTPException(status_code=400, detail=str(e))
+     except HTTPException:
+         raise
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.put("/memories/{memory_id}", summary="Update a memory")
+ def update_memory(memory_id: str, updated_memory: MemoryUpdate, _auth=Depends(verify_auth)):
+@@ -990,23 +1064,36 @@ def memory_history(memory_id: str, _auth=Depends(verify_auth)):
+     """Retrieve memory history."""
+     try:
+         return get_memory_instance().history(memory_id=memory_id)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.delete("/memories/{memory_id}", summary="Delete a memory", response_model=MessageResponse)
+ def delete_memory(memory_id: str, _auth=Depends(verify_auth)):
+     """Delete a specific memory by ID."""
++    # Best-effort lookup BEFORE deletion so the graph layer can invalidate
++    # the relations extracted from this memory's text. May fail silently.
++    try:
++        row = get_memory_instance().get(memory_id)
++    except Exception:  # noqa: BLE001 — graph cleanup lookup is best-effort
++        row = None
+     try:
+         get_memory_instance().delete(memory_id=memory_id)
+         _fire_webhooks(events=["memory_deleted"], payload={"event": "memory_deleted", "id": memory_id})
++        try:
++            memory_text = row.get("memory") if isinstance(row, dict) else getattr(row, "memory", None)
++            owner = row.get("user_id") if isinstance(row, dict) else getattr(row, "user_id", None)
++            if memory_text and owner:
++                _graph_executor.submit(get_graph_memory().soft_delete_for_text, memory_text, {"user_id": owner})
++        except Exception:  # noqa: BLE001 — graph cleanup must not fail the delete
++            logging.exception("graph soft-delete scheduling failed")
+         return MessageResponse(message="Memory deleted successfully")
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.delete("/memories", summary="Delete memories", response_model=None)
+ def delete_all_memories(
+     project_id: Optional[str] = Query(None),
+diff --git a/server/routers/entities.py b/server/routers/entities.py
+index 621b67d4..13881f90 100644
+--- a/server/routers/entities.py
++++ b/server/routers/entities.py
+@@ -1,10 +1,11 @@
++import logging
+ from collections import defaultdict
+ from datetime import datetime
+ from typing import Any, Literal, Optional
+ 
+ from auth import require_admin, verify_auth
+ from errors import upstream_error
+ from fastapi import APIRouter, Depends
+ from pydantic import BaseModel
+ from schemas import MessageResponse
+ from server_state import get_memory_instance
+@@ -66,11 +67,26 @@ def list_entities(_auth=Depends(verify_auth)):
+         for (entity_type, entity_id), data in sorted(buckets.items(), key=lambda item: (item[0][0], item[0][1]))
+     ]
+ 
+ 
+ @router.delete("/{entity_type}/{entity_id}", response_model=MessageResponse)
+ def delete_entity(entity_type: EntityType, entity_id: str, _auth=Depends(require_admin)):
+     try:
+         get_memory_instance().delete_all(**{TYPE_TO_FIELD[entity_type]: entity_id})
+     except Exception:
+         raise upstream_error()
++    if entity_type == "user":
++        # The graph layer only keys nodes by user_id/project_id — agent/run
++        # entities have no graph representation. Lazy import: this router is
++        # imported by main.py at module scope, so importing main here would
++        # be circular.
++        try:
++            from main import _graph_executor
++
++            from server_state import get_graph_memory
++
++            _graph_executor.submit(
++                get_graph_memory().hard_delete, {"user_id": entity_id, "scope": "user"}
++            )
++        except Exception:  # noqa: BLE001 — graph cleanup must not fail the delete
++            logging.exception("graph hard-delete scheduling failed")
+     return MessageResponse(message="Entity deleted")
+diff --git a/server/tests/test_graph_integration.py b/server/tests/test_graph_integration.py
+new file mode 100644
+index 00000000..582dfd04
+--- /dev/null
++++ b/server/tests/test_graph_integration.py
+@@ -0,0 +1,69 @@
++"""Task 3 wiring tests: graph build scheduling, /search relations fusion,
++delete links. The graph singleton itself lives in server_state (DCL); main.py
++resolves it via `from server_state import get_graph_memory`, so the fusion and
++scheduling helpers are testable by patching m.get_graph_memory."""
++
++from types import SimpleNamespace
++
++import main as m
++import server_state
++
++
++def test_get_graph_memory_is_lazy_singleton(monkeypatch):
++    """server_state.get_graph_memory builds the GraphMemory singleton once."""
++    import graph_memory as gm
++
++    calls = {"n": 0}
++
++    class FakeGM:
++        def __init__(self, embedder=None, llm=None):
++            calls["n"] += 1
++
++    monkeypatch.setattr(gm, "GraphMemory", FakeGM)
++    monkeypatch.setattr(server_state, "_graph_memory", None)  # reset singleton
++    a = server_state.get_graph_memory()
++    b = server_state.get_graph_memory()
++    assert a is b and calls["n"] == 1
++
++
++def test_search_fusion_adds_relations(monkeypatch):
++    inst = SimpleNamespace(search=lambda query, filters, **kw: {"results": [{"id": "1", "memory": "m"}]})
++    monkeypatch.setattr(m, "get_memory_instance", lambda: inst)
++    graph = SimpleNamespace(enabled=True, search=lambda q, f, limit=5: [
++        {"source": "a", "relationship": "R", "destination": "b"}])
++    monkeypatch.setattr(m, "get_graph_memory", lambda: graph)
++    data = {"results": [{"id": "1", "memory": "m"}]}
++    out = m._fuse_graph_relations(data, query="alice", filters={"user_id": "u1", "scope": "user"}, include_graph=True)
++    assert out["relations"][0]["source"] == "a"
++
++
++def test_search_fusion_disabled_returns_empty_relations(monkeypatch):
++    graph = SimpleNamespace(enabled=False)
++    monkeypatch.setattr(m, "get_graph_memory", lambda: graph)
++    data = {"results": []}
++    out = m._fuse_graph_relations(data, query="q", filters={"user_id": "u1", "scope": "user"}, include_graph=True)
++    assert out["relations"] == []
++
++
++def test_search_fusion_include_graph_false(monkeypatch):
++    data = {"results": []}
++    out = m._fuse_graph_relations(data, query="q", filters={"user_id": "u1"}, include_graph=False)
++    assert "relations" not in out or out.get("relations") is None
++
++
++def test_schedule_graph_build_skips_when_disabled(monkeypatch):
++    graph = SimpleNamespace(enabled=False)
++    monkeypatch.setattr(m, "get_graph_memory", lambda: graph)
++    submitted = []
++    monkeypatch.setattr(m, "_graph_executor", SimpleNamespace(submit=lambda fn, *a: submitted.append((fn, a))))
++    m._schedule_graph_build("text", {"user_id": "u1"})
++    assert submitted == []
++
++
++def test_schedule_graph_build_submits_when_enabled(monkeypatch):
++    graph = SimpleNamespace(enabled=True, add=lambda *a, **k: None)
++    monkeypatch.setattr(m, "get_graph_memory", lambda: graph)
++    submitted = []
++    monkeypatch.setattr(m, "_graph_executor", SimpleNamespace(submit=lambda fn, *a: submitted.append((fn, a))))
++    m._schedule_graph_build("alice works on payments", {"user_id": "u1", "project_id": None})
++    assert len(submitted) == 1

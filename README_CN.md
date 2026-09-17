@@ -2,7 +2,7 @@
 
 **AI 开发 SOP 与 Skills**
 
-一套完整的 AI 辅助开发标准操作流程（SOP）知识库，包含开发工作流、技能工具、自动化测试和双轨记忆框架。
+一套完整的 AI 辅助开发标准操作流程（SOP）知识库，包含开发工作流、技能工具、自动化测试和 mem0 长期记忆系统。
 
 ## 概述
 
@@ -12,7 +12,7 @@
 
 - **七大阶段流水线**：安装 → 理解 → 提示词生成 → 场景选择 → 测试自动化 → 文档自动化 → 运营需求自动化
 - **Skills 技能集群**：superpower、gstack、get-shit-done、OpenSpec 等 AI 开发技能
-- **双轨记忆框架**：MemPalace（语义记忆）× codebase-mem-mcp（代码结构记忆）
+- **mem0 长期记忆**：自托管 mem0（向量 + 图记忆），MCP 接入全部 AI IDE
 - **场景化 Pipeline**：脚手架、一句话需求、升级迁移、复制、Web/App 克隆
 - **QA 自动化**：`/qa-dev` 技能支持端到端浏览器自动化测试
 - **多 IDE 支持**：Cursor、Qoder、CodeBuddy、Claude Code
@@ -46,7 +46,7 @@
 | §2 | 提示词生成 - 测试提示词、开发提示词、场景模板 |
 | §3 | 测试与开发 - 端到端执行、批量处理 |
 | §4 | 场景 SOP - 脚手架、一句话需求、升级、复制 Pipeline |
-| §5 | 双轨记忆 - MemPalace × codebase-mem-mcp 框架 |
+| §5 | 长期记忆 - mem0 记忆系统（存储/检索/团队共享） |
 | §6 | 文档编写 - 产品研究、市场调研模板 |
 
 ### 2. Skills（`skills/`）
@@ -54,9 +54,10 @@
 - **qa-dev**: 测试+开发自动化技能，支持 `/qa-dev` 命令
 - 支持批量执行、无人值守模式、回归测试
 
-### 3. 工具（`tools/`）
+### 3. 记忆服务（`deploy/mem0/`）
 
-- **cbmem-team**: codebase-memory-mcp 的 HTTP 多用户封装，用于团队协作
+- **mem0**: 自托管长期记忆服务（API :8888 / MCP :8080 / Dashboard :3001），
+  基于 PostgreSQL(pgvector) + Neo4j，通过 MCP 接入 CodeBuddy / Qoder / Cursor 等全部 AI IDE
 
 ### 4. 示例项目（`example/`）
 
@@ -85,29 +86,42 @@
 | `copy-app-pipeline.md` | 复制移动 App（uniapp） |
 | `java-upgrade-pipeline.md` | 技术栈迁移升级 |
 
-## 双轨记忆框架
+## mem0 长期记忆系统
 
-结合自然语言记忆与代码结构记忆：
+通过 MCP 协议为所有 AI 开发工具提供长期记忆：
 
-| 轨道 | 技术 | 用途 |
-|------|------|------|
-| **轨道 A** | MemPalace | 团队语义记忆、决策、客户原话 |
-| **轨道 B** | codebase-mem-mcp | 代码结构、架构图谱、调用链 |
+| 能力 | 说明 |
+|------|------|
+| 长期记忆 | 对话/事实/决策/偏好，向量检索（pgvector） |
+| 图记忆 | 实体关系图谱（Neo4j），`GRAPH_ENABLED=true` |
+| 团队共享 | `git_remote` → `project_id` 项目共享池，跨用户读取 |
+| 会话留痕 | 每轮 Q/A 原文入库，按 `session_id` 分组回放 |
 
 ### 部署
 
 ```bash
-# 轨道 A：MemPalace（Docker）
-docker run -d --name mempalace \
-  -p 8080:8080 \
-  -v ~/.mempalace:/data \
-  -e MP_VECTOR_BACKEND=chromadb \
-  mempalace/mempalace:0.8.3
+# 一键安装（服务 + IDE 配置）
+./scripts/install-all.sh          # Linux/macOS
+./scripts/install-all.ps1         # Windows
 
-# 轨道 B：codebase-memory-mcp
-npm install -g codebase-memory-mcp
-codebase-memory-mcp install
+# 或手动启动
+cd deploy/mem0 && docker compose up -d
 ```
+
+### IDE 接入
+
+```json
+{
+  "mcpServers": {
+    "mem0-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  }
+}
+```
+
+完整配置见 [docs/quick-ref/mem0-ai-tools-config-guide.md](docs/quick-ref/mem0-ai-tools-config-guide.md)。
 
 ## 快速开始
 
@@ -137,7 +151,7 @@ rm -rf temp-design
 }
 ```
 
-**Cursor:** 安装 `playwright` 和 `memplace` MCP 服务器。
+**Cursor:** 安装 `mem0` MCP 服务器（配置见 [docs/ide-config/ide-mcp-templates.md](docs/ide-config/ide-mcp-templates.md)）。
 
 ### 3. 映射代码库
 
@@ -198,8 +212,7 @@ ai-dev-sop/
 │   │   ├── java-upgrade-pipeline.md
 │   │   ├── docs-pipeline.md
 │   │   ├── qa-dev-sop.md
-│   │   ├── mempalace-codebase-mem-framework.md
-│   │   └── benchmark/       # 评测数据集
+│   │   └── benchmark/       # 评测数据集（历史，已随旧记忆系统归档）
 │   │       ├── DS-Decision.md
 │   │       ├── DS-CallPath.md
 │   │       ├── DS-Cross.md
@@ -208,27 +221,17 @@ ai-dev-sop/
 │   │       └── DS-DeadCode.md
 │   └── scene/
 ├── skills/
-│   └── qa-dev/
-├── tools/
-│   └── cbmem-team/       # codebase-memory-mcp 团队封装
-│       ├── cmd/
-│       │   ├── cbmem-team/
-│       │   └── cbmem-mint-token/
-│       └── internal/
-│           ├── pool/
-│           ├── mcp/
-│           ├── auth/
-│           └── store/
-└── example/
-    └── ai-coding-boot/
+│   ├── qa-dev/
+│   └── mem0-longterm-memory/   # mem0 记忆技能
+└── deploy/
+    └── mem0/               # 自托管 mem0（API/MCP/Dashboard）
 ```
 
 ## 资源链接
 
-- [MemPalace GitHub](https://github.com/MemPalace/mempalace)
-- [MemPalace 官方文档](https://mempalaceofficial.com/)
-- [codebase-memory-mcp GitHub](https://github.com/DeusData/codebase-memory-mcp)
-- [codebase-memory-mcp npm](https://www.npmjs.com/package/codebase-memory-mcp)
+- [mem0 官方文档](https://docs.mem0.ai/)
+- [mem0 MCP 接入指南](https://docs.mem0.ai/platform/mem0-mcp)
+- [Mem0 Cloud Dashboard](https://app.mem0.ai/)
 
 ## 许可证
 

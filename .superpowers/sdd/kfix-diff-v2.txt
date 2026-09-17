@@ -1,0 +1,145 @@
+diff --git a/server/dashboard/src/app/(root)/dashboard/playground/page.tsx b/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
+index 3ebf3325..a6ee2a78 100644
+--- a/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
+@@ -66,31 +66,35 @@ export default function PlaygroundPage() {
+ 
+   const codeSnippet =
+     mode === "add"
+       ? `curl -X POST ${API_BASE_URL}${MEMORY_ENDPOINTS.BASE} -H "X-API-Key: <你的 API Key>" -d ${shq(JSON.stringify(addBody))}`
+       : `curl -X POST ${API_BASE_URL}${SEARCH_ENDPOINTS.BASE} -H "X-API-Key: <你的 API Key>" -d ${shq(JSON.stringify(searchBody))}`;
+ 
+   const hasInput =
+     mode === "add"
+       ? messages.some((m) => m.content.trim())
+       : query.trim().length > 0;
+-  const canRun = hasInput && isAdmin && !metadataError;
++  // Metadata JSON 只参与 add 请求，因此只在 add 模式下约束 Run：
++  // Search 模式不受残留的非法 metadata 影响（错误提示也只渲染在 add 卡片内）。
++  const canRun =
++    hasInput && isAdmin && (mode === "add" ? !metadataError : true);
+ 
+   function switchMode(next: "add" | "search") {
+     setMode(next);
+     setOutput("");
+   }
+ 
+   function resetSandbox() {
+     setSandboxUserId(newId());
+     setOutput("");
+     setQuery("");
++    setMetadataJson("");
+   }
+ 
+   async function run() {
+     if (!canRun) return;
+     setRunning(true);
+     try {
+       if (mode === "add") {
+         const res = await api.post(MEMORY_ENDPOINTS.BASE, addBody);
+         setOutput(JSON.stringify(res.data, null, 2));
+       } else {
+diff --git a/server/dashboard/src/hooks/use-api-query.ts b/server/dashboard/src/hooks/use-api-query.ts
+index 0b2936cb..8bc9dea5 100644
+--- a/server/dashboard/src/hooks/use-api-query.ts
++++ b/server/dashboard/src/hooks/use-api-query.ts
+@@ -31,37 +31,53 @@ export function useApiQuery<T>(
+ ): UseApiQueryResult<T> {
+   const { enabled = true, errorToast, initialData, deps } = options;
+ 
+   const [data, setData] = useState<T | undefined>(initialData);
+   const [isLoading, setIsLoading] = useState(enabled);
+   const [error, setError] = useState("");
+ 
+   const fetcherRef = useRef(fetcher);
+   fetcherRef.current = fetcher;
+ 
++  // Monotonic request counter: every run() gets a sequence id, and state
++  // updates only apply if that id is still the latest. Without this, a slow
++  // response from a stale filter (e.g. deps changing keystroke-by-stroke on
++  // the memories page) can resolve AFTER a newer request and overwrite its
++  // data with stale filter results.
++  const reqIdRef = useRef(0);
++
+   const run = useCallback(async () => {
+-    setIsLoading(true);
+-    setError("");
++    const requestId = ++reqIdRef.current;
++    if (requestId === reqIdRef.current) {
++      setIsLoading(true);
++      setError("");
++    }
+     try {
+-      setData(await fetcherRef.current());
++      const result = await fetcherRef.current();
++      if (requestId !== reqIdRef.current) return; // superseded by a newer run
++      setData(result);
++      setError("");
+     } catch (err) {
++      if (requestId !== reqIdRef.current) return; // superseded by a newer run
+       const message = getErrorMessage(err, errorToast || "Request failed");
+       setError(message);
+       if (errorToast) {
+         toast({
+           title: errorToast,
+           description: message,
+           variant: "destructive",
+         });
+       }
+     } finally {
+-      setIsLoading(false);
++      // Only the latest request may clear the loading flag; a stale request
++      // finishing late must not hide the newer request's spinner.
++      if (requestId === reqIdRef.current) setIsLoading(false);
+     }
+   }, [errorToast]);
+ 
+   // Serialize deps to a stable string so the effect only re-runs when a value
+   // actually changes (identity-stable across re-renders, unlike a spread array).
+   const depsKey = deps ? JSON.stringify(deps) : null;
+ 
+   useEffect(() => {
+     if (enabled) void run();
+   }, [enabled, run, depsKey]);
+diff --git a/server/dashboard/src/types/api.ts b/server/dashboard/src/types/api.ts
+index bb9539d4..ab2cc014 100644
+--- a/server/dashboard/src/types/api.ts
++++ b/server/dashboard/src/types/api.ts
+@@ -53,26 +53,36 @@ export interface DepartmentMember {
+ 
+ export interface Department {
+   id: string;
+   name: string;
+   description: string | null;
+   created_at: string;
+   user_count: number;
+   users: DepartmentMember[];
+ }
+ 
++/**
++ * GET /webhooks response (routers/webhooks.py WebhookResponse). The stored
++ * secret is never returned in plaintext — only a masked form.
++ */
+ export interface Webhook {
+   id: string;
+   name: string;
+   url: string;
+   events: string[];
+-  secret: string | null;
++  /** Masked secret (e.g. "whse***cret"), null when no secret was set. */
++  secret_masked: string | null;
++  /**
++   * One-time plaintext secret: present ONLY in the POST /webhooks create
++   * response (WebhookCreatedResponse), never retrievable afterwards.
++   */
++  secret?: string;
+   created_at: string;
+ }
+ 
+ export interface Project {
+   id: string;
+   project_id: string;
+   name: string;
+   description: string | null;
+   git_remotes: string[];
+   /** Prompt appended when extracting memories for this project. Null = unset. */

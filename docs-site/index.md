@@ -9,17 +9,19 @@ hero:
       text: 更新日志
       link: /guide/changelog
     - theme: alt
-      text: 双轨记忆控制台
-      link: /console/
+      text: 记忆系统（mem0）
+      link: /guide/mem-tools
 features:
   - title: 标准化流程
     details: 从工程读取、提示词生成到测试开发与部署的完整 SOP，让 AI 辅助开发可复现、可交付。
-  - title: 双轨记忆控制台
-    details: 可视化地管理用户、项目、会话与归纳蒸馏，直接对接 cbmem-team 后端接口。
+  - title: mem0 长期记忆
+    details: 自托管 mem0 记忆系统（向量 + 图记忆），MCP 接入全部 AI IDE，支持项目共享池与会话留痕回放。
   - title: 设计文档
-    details: 查看架构与设计决策，了解控制台与文档站导航聚合的实现细节。
+    details: 查看架构与设计决策，了解文档站导航聚合等实现细节。
 ---
 
 ## 快速入口
 
-- [双轨记忆控制台](/console/)
+- [记忆工具速查（mem0）](/guide/mem-tools)
+- [准备工作（含记忆安装）](/guide/ready)
+- [开发 SOP](/sop/develop-sop)

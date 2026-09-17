@@ -1,8 +1,11 @@
 # SOP-M5: 团队协作指南
 
-> **版本**: v1.0
+> **版本**: v2.0
 > **适用阶段**: 开发流程 M5 - 团队协作
 > **目标读者**: 开发者、团队负责人
+> **变更说明**: 旧 Wing/Room/Drawer/Tunnel 组织模型（MemPalace）已移除。
+> 团队协作统一基于 mem0：项目共享池（`project_id`/`git_remote`）、
+> `metadata` 分类、Dashboard 管理、组织成员权限。
 
 ---
 
@@ -16,208 +19,155 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     团队协作架构                                    │
+│                    mem0 团队协作架构                               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐       │
-│  │  Wing:      │    │  Wing:      │    │  Wing:      │       │
-│  │  team-      │◄──►│  project-   │◄──►│  wing_      │       │
-│  │  backend     │    │  payment    │    │  alice      │       │
-│  └─────────────┘    └─────────────┘    └─────────────┘       │
-│        │                  │                  │                  │
-│        └──────────────────┼──────────────────┘                  │
-│                           │                                     │
-│                    ┌──────▼──────┐                              │
-│                    │   Tunnel     │                              │
-│                    │  (跨Wing连接)│                              │
-│                    └─────────────┘                              │
-│                                                                  │
+│  成员 A (CodeBuddy) ──┐                                          │
+│  成员 B (Cursor)   ───┼──► mem0 项目共享池                        │
+│  成员 C (Qoder)    ───┘    (project_id = f(git_remote))          │
+│                              │                                   │
+│              metadata.type 分类归档（fact/decision/...）          │
+│                              │                                   │
+│                    ┌─────────▼──────────┐                        │
+│                    │ mem0 Dashboard      │                       │
+│                    │ 管理/检索/事件通知   │                        │
+│                    └────────────────────┘                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. 团队 Wing 组织
+## 2. 团队记忆组织
 
-### 2.1 Wing 类型
+### 2.1 作用域模型
 
-| 类型 | 命名规范 | 用途 | 可见性 |
-|------|----------|------|----------|
-| 个人 Wing | `wing_{name}` | 个人记忆 | 仅本人 |
-| 项目 Wing | `project_{name}` | 项目共享 | 项目成员 |
-| 团队 Wing | `team_{dept}` | 团队共享 | 部门成员 |
+| 作用域 | 实现 | 用途 | 可见性 |
+|--------|------|------|--------|
+| 个人记忆 | `user_id`（个人 Key 写入，不带 project_id） | 个人记忆 | 仅本人 |
+| 项目共享池 | `project_id`（`git_remote` 解析，见 CODEBUDDY.md） | 项目共享 | 项目成员（admin key 跨用户读取） |
+| 团队/组织 | 同一组织下多个 Project | 团队共享 | 组织成员 |
 
-### 2.2 创建团队 Wing
+### 2.2 分类体系（metadata.type + topic）
 
-```bash
-# 创建后端团队 Wing
-mempalace_create_wing \
-  --name "team-backend" \
-  --description "后端团队知识库"
-```
+| type | 用途 | 示例 |
+|------|------|------|
+| `fact` | 架构决策、技术约束 | "主数据库为 PostgreSQL" |
+| `decision` | ADR、方案取舍 | "ADR-042: 统一使用 OSS" |
+| `preference` | 代码风格、工具选择 | "偏好构造器注入" |
+| `note` | 经验教训、最佳实践、事故复盘 | "N+1 问题与解决方案" |
+| `conversation` | 会话留痕 | 每轮 Q/A 原文 |
 
-### 2.3 创建团队 Room
+主题维度写入 `metadata.topic`（如 `["支付","Redis"]`），检索靠语义搜索天然覆盖。
 
-```bash
-# API 设计规范
-mempalace_create_room \
-  --wing "team-backend" \
-  --name "api-standards" \
-  --description "API 设计规范与标准"
-
-# 数据库规范
-mempalace_create_room \
-  --wing "team-backend" \
-  --name "database-guidelines" \
-  --description "数据库设计规范"
-
-# 事故报告
-mempalace_create_room \
-  --wing "team-backend" \
-  --name "incident-reports" \
-  --description "生产事故报告"
-```
-
-### 2.4 建议的团队 Wing 结构
+### 2.3 建议的团队知识结构
 
 ```
-team-backend/
-├── api-standards        # API 设计规范
-├── database-guidelines  # 数据库规范
-├── architecture        # 架构决策
-├── incident-reports    # 事故报告
-├── lessons-learned     # 经验教训
-└── best-practices      # 最佳实践
-
-team-frontend/
-├── component-library   # 组件库规范
-├── coding-style        # 编码风格
-├── design-system      # 设计系统
-└── accessibility      # 无障碍规范
-
-team-shared/
-├── onboarding         # 新人入门
-├── tools-setup        # 工具配置
-└── process           # 流程规范
+项目共享池 (project_id="ai-dev-sop")
+├── type=decision          # 架构决策 / ADR
+├── type=fact              # 技术事实
+├── type=note (topic=...)  # 经验教训 / 最佳实践 / 事故复盘
+├── type=preference        # 团队约定
+└── type=conversation      # 会话留痕（按 session_id 分组）
 ```
 
 ---
 
 ## 3. 权限管理
 
-### 3.1 授权访问
+### 3.1 成员与角色（mem0 Settings → Members）
 
-```bash
-# 授权团队成员
-mempalace_grant_access \
-  --wing "team-backend" \
-  --user "alice"
-
-mempalace_grant_access \
-  --wing "team-backend" \
-  --user "bob"
+```text
+1. Dashboard → Settings → ORGANIZATION → Members
+2. Invite Member: 填写邮箱、选择作用域（Organization / Project）、选择角色
 ```
 
-### 3.2 撤销访问
+### 3.2 权限级别
 
-```bash
-# 撤销访问权限
-mempalace_revoke_access \
-  --wing "team-backend" \
-  --user "former_member"
-```
-
-### 3.3 请求访问
-
-```bash
-# 请求访问团队 Wing
-mempalace_request_access \
-  --wing "team-backend"
-```
-
-### 3.4 权限级别
-
-| 级别 | 权限 | 说明 |
+| 角色 | 权限 | 说明 |
 |------|------|------|
-| owner | 全部 | Wing 创建者 |
-| admin | 全部 | Wing 管理员 |
-| member | 读写 | 团队成员 |
-| viewer | 只读 | 访客 |
+| Can Read | 只读 | 标准 API 请求 + 读基础数据 |
+| Can Edit | 读写 | 增删改记忆、管理实体 |
+| Admin | 全部 | 含计费、成员、项目设置 |
+
+### 3.3 凭证分发
+
+```text
+1. 每位成员在 Dashboard 创建自己的 API Key（绑定对应 Project）
+2. 写入本地 git-ignored 配置（CodeBuddy 为 .codebuddy/mem0.config.json）
+3. 成员加入 roster：在 mem0.config.json 的 roster[] 登记姓名与 user_id
+4. 项目共享池由 admin key 统一拉取（get_memories(project_id=...) 跨用户）
+```
 
 ---
 
 ## 4. 跨项目知识共享
 
-### 4.1 Tunnel 连接
+### 4.1 多项目隔离与检索
 
-Tunnel 用于跨 Wing 关联相关知识。
+mem0 按 Project 隔离记忆；跨项目检索 = 分别查询各 Project（各持对应 Key）：
 
 ```bash
-# 创建 Tunnel
-mempalace_create_tunnel \
-  --source-wing "project-payment" \
-  --source-room "implementation" \
-  --target-wing "team-backend" \
-  --target-room "lessons-learned" \
-  --label "支付模块经验共享"
+# 项目 A 的共享池
+get_memories(api_key="<keyA>", project_id="project-a")
+
+# 项目 B 的共享池
+get_memories(api_key="<keyB>", project_id="project-b")
 ```
 
-### 4.2 跨 Wing 搜索
+### 4.2 知识关联
 
-```bash
-# 搜索多个 Wing
-mempalace_search \
-  --wing-ids ["project-payment", "team-backend"] \
-  --query "文件上传 方案"
-```
+旧 Tunnel（跨 Wing 连接）由 mem0 的语义检索替代：相关主题的记忆
+（即使写入自不同会话/成员）在语义空间中天然相邻，`search_memories` 一次召回。
 
-### 4.3 加载多 Wing 上下文
+### 4.3 团队事件通知（Webhooks）
 
-```bash
-# 加载多个相关项目的上下文
-mempalace_get_context \
-  --wing-ids ["project-payment", "project-oss", "team-backend"]
+```text
+Dashboard → Webhooks → Add New Webhook
+  事件: Add Memory / Update Memory / Delete Memory / Categorize Memory
+  用途: 新知识入库时通知团队 IM（Slack/钉钉等）
 ```
 
 ---
 
 ## 5. ADR 管理
 
-### 5.1 创建 ADR
+### 5.1 创建 ADR（写入共享池）
 
 ```bash
-manage_adr --op create --adr '{
-  "id": "ADR-042",
-  "title": "统一使用阿里云 OSS",
-  "status": "accepted",
-  "context": "需要统一文件存储方案",
-  "decision": "采用阿里云 OSS",
-  "consequences": [
-    "增加云服务成本",
-    "需要统一配置管理"
-  ]
-}'
+add_memory(
+  text="ADR-042: 统一使用阿里云 OSS。状态: accepted。
+        背景: 需要统一文件存储方案。决策: 采用阿里云 OSS，封装 FileService 统一接口，
+        使用 STS 令牌实现临时凭证。影响: 增加云服务成本，需要统一配置管理。",
+  api_key="<from config>", git_remote="<from config>",
+  project_id="ai-dev-sop",
+  metadata={"type":"decision", "topic":["ADR","存储"], "created_at":"<ISO8601>"}
+)
 ```
 
 ### 5.2 查询 ADR
 
 ```bash
-# 搜索 ADR
-manage_adr --op search --query "文件存储"
+# 语义搜索
+search_memories(query="文件存储 ADR", top_k=5)
 
-# 查看特定 ADR
-manage_adr --op get --id "ADR-042"
+# 全量浏览（按 created_at 排序）
+get_memories(api_key=..., project_id="ai-dev-sop")
 ```
 
-### 5.3 更新 ADR 状态
+### 5.3 更新/废弃 ADR
 
 ```bash
-# 废弃 ADR
-manage_adr --op update --id "ADR-023" --status "deprecated"
+# 1. 找到旧 ADR
+search_memories(query="ADR-023")
 
-# 修改 ADR
-manage_adr --op update --id "ADR-023" --decision "新决策内容..."
+# 2a. 更新内容
+update_memory(memory_id="xxx", text="ADR-023（已废弃）: ... 新决策见 ADR-042")
+
+# 2b. 或写入新 ADR 记忆，mem0 的 Dream(Supersede) 会自动淘汰过时事实
 ```
+
+> 文件形态的 ADR（`docs/**/ADR-*.md`）仍以文件为源；mem0 中的 ADR 记忆是其
+> 可检索摘要，两者通过 ADR 编号对应。
 
 ---
 
@@ -232,142 +182,105 @@ manage_adr --op update --id "ADR-023" --decision "新决策内容..."
 │                                                              │
 │  1. 完成开发或调试                                          │
 │     ↓                                                        │
-│  2. 提取有价值的知识                                        │
+│  2. 提取有价值的知识（durable 事实/决策/经验）                 │
 │     ↓                                                        │
-│  3. 选择合适的 Wing/Room                                    │
+│  3. 选择 metadata.type 与 topic                              │
 │     ↓                                                        │
-│  4. mempalace_add_drawer 添加                              │
+│  4. add_memory 写入项目共享池                                 │
 │     ↓                                                        │
-│  5. 创建 Tunnel 关联 (可选)                                 │
+│  5. search_memories 验证（可选）                              │
 │     ↓                                                        │
-│  6. 通知团队成员 (可选)                                     │
+│  6. Webhook 自动通知团队（如已配置）                          │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 6.2 贡献类型
 
-| 类型 | Room | Hall | 示例 |
-|------|------|------|------|
-| 技术决策 | `architecture` | `hall_facts` | ADR 记录 |
-| 最佳实践 | `best-practices` | `hall_advice` | 代码规范 |
-| 经验教训 | `lessons-learned` | `hall_discoveries` | Bug 分析 |
-| 工具配置 | `tools-setup` | `hall_preferences` | IDE 配置 |
-| 事故报告 | `incident-reports` | `hall_events` | 复盘记录 |
+| 类型 | metadata.type | 示例 |
+|------|---------------|------|
+| 技术决策 | `decision` | ADR 记录 |
+| 最佳实践 | `note` (topic=best-practices) | 代码规范 |
+| 经验教训 | `note` | Bug 分析 |
+| 工具配置 | `preference` | IDE 配置 |
+| 事故报告 | `note` (topic=incident) | 复盘记录 |
 
 ### 6.3 贡献示例
 
 ```bash
 # 贡献架构决策
-mempalace_add_drawer \
-  --wing "team-backend" \
-  --room "architecture" \
-  --hall "hall_facts" \
-  --content "ADR-042: 统一使用阿里云 OSS
-
-状态: accepted
-日期: 2024-07-10
-
-决策:
-- 采用阿里云 OSS 作为统一文件存储
-- 封装 FileService 统一接口
-- 使用 STS 令牌实现临时凭证
-
-影响:
-- 需要统一配置管理
-- 考虑多账号隔离"
+add_memory(
+  text="ADR-042: 统一使用阿里云 OSS。状态 accepted，日期 2024-07-10。
+        决策: 采用 OSS 统一文件存储；封装 FileService 统一接口；STS 临时凭证。
+        影响: 需要统一配置管理；考虑多账号隔离。",
+  metadata={"type":"decision", "topic":["ADR","存储"], "created_at":"<ISO8601>"}
+)
 
 # 贡献最佳实践
-mempalace_add_drawer \
-  --wing "team-backend" \
-  --room "best-practices" \
-  --hall "hall_advice" \
-  --content "Spring Boot 最佳实践:
-
-1. 使用构造器注入代替 @Autowired
-2. 配置使用 @ConfigurationProperties
-3. 使用 @Validated 进行参数校验
-4. 异常统一使用 @ControllerAdvice 处理
-5. 日志使用占位符而非字符串拼接"
+add_memory(
+  text="Spring Boot 最佳实践: 1. 构造器注入代替 @Autowired; 2. @ConfigurationProperties
+        管理配置; 3. @Validated 参数校验; 4. @ControllerAdvice 统一异常;
+        5. 日志用占位符而非字符串拼接。",
+  metadata={"type":"note", "topic":["best-practices","spring"], "created_at":"<ISO8601>"}
+)
 ```
 
 ---
 
 ## 7. 新人 Onboarding
 
-### 7.1 Onboarding Wing 结构
+### 7.1 Onboarding 知识结构
 
 ```
-onboarding/
-├── getting-started     # 入门指南
-│   ├── 环境搭建
-│   ├── 代码规范
-│   └── 开发流程
-├── tools-setup       # 工具配置
-│   ├── IDE 配置
-│   ├── Git 配置
-│   └── CI/CD
-└── coding-standards # 代码规范
-    ├── Java 规范
-    ├── SQL 规范
-    └── API 规范
+项目共享池 (metadata.topic="onboarding")
+├── getting-started      # 入门指南（环境搭建/开发流程）
+├── tools-setup          # 工具配置（IDE/Git/CI/CD）
+└── coding-standards     # 代码规范（Java/SQL/API）
 ```
 
 ### 7.2 Onboarding 知识导出
 
 ```bash
-# 导出 onboarding 知识
-mempalace_export \
-  --wing "onboarding" \
-  --format markdown \
-  --output onboarding-guide.md
+# Agent 批量检索后整理为 Markdown 手册
+get_memories(api_key=..., project_id="ai-dev-sop", limit=100)
+# → Agent 过滤 topic=onboarding 的条目 → 生成 onboarding-guide.md
 ```
 
 ### 7.3 新人接收流程
 
 ```
-1. 克隆团队 Palace
+1. 按 SOP-M1 完成 mem0 环境接入
    ↓
-2. 获取 onboarding guide
+2. 首次会话自动拉取项目共享池（CODEBUDDY.md 规则）
    ↓
-3. 按指南配置开发环境
+3. 向 Agent 提问 onboarding 相关问题（search_memories 自动召回）
    ↓
 4. 完成第一个任务
    ↓
-5. 开始贡献团队知识
+5. 开始贡献团队知识（add_memory）
 ```
 
 ---
 
 ## 8. 团队协作最佳实践
 
-### 8.1 Wing 维护
+### 8.1 记忆维护
 
-- **定期清理**: 归档不再活跃的项目 Wing
-- **更新命名**: 确保 Wing 名称清晰易懂
-- **监控使用**: 定期检查各 Wing 的活跃度
+- **定期清理**: Dashboard → Memories 审查过时记忆，`delete_memory` 或由 Dream 自动淘汰
+- **类型规范**: 确保 `metadata.type` 准确，便于过滤统计
+- **监控使用**: Dashboard → Dashboard 页查看存储/召回/利用率指标
 
 ### 8.2 知识质量
 
 - **具体性**: 提供足够的上下文和示例
 - **可操作性**: 他人看后能据此行动
-- **定期更新**: 过时知识及时更新或归档
+- **定期更新**: 过时知识用 `update_memory` 更新或写入新记忆（Supersede 自动替代）
 
 ### 8.3 协作文化
 
-- **鼓励贡献**: 认可知识贡献者
-- **分享文化**: 有价值的信息及时共享
-- **反馈机制**: 发现问题及时纠正
-
-### 8.4 命名规范
-
-| 资源 | 命名规范 | 示例 |
-|------|----------|------|
-| 个人 Wing | `wing_{name}` | `wing_alice` |
-| 项目 Wing | `project_{name}` | `project-payment` |
-| 团队 Wing | `team_{dept}` | `team-backend` |
-| Room | `{topic}` | `api-standards` |
-| Drawer | 描述性标题 | `ADR-042: 统一使用 OSS` |
+- **鼓励贡献**: 认可知识贡献者（metadata.by 记录提交者）
+- **分享文化**: 有价值的信息及时入库
+- **反馈机制**: 发现错误记忆及时修正
 
 ---
 
@@ -377,48 +290,50 @@ mempalace_export \
 
 | 检查项 | 验证方式 |
 |--------|----------|
-| Team Wing 存在 | `mempalace_list_wings` 查看 |
-| Room 结构正确 | `mempalace_list_rooms --wing "team-backend"` |
-| 权限配置正确 | 尝试访问团队 Wing |
+| 成员已加入 | Dashboard → Members 列表可见 |
+| 权限配置正确 | Can Read 成员尝试写入应被拒 |
+| 各成员 Key 可用 | 各自 `get_memories` 非报错 |
 
 ### 9.2 协作验证
 
 | 检查项 | 验证方式 |
 |--------|----------|
-| 知识可搜索 | `mempalace_search` 测试 |
-| Tunnel 连接正常 | 跨 Wing 搜索验证 |
-| ADR 管理可用 | `manage_adr --op search` 测试 |
+| 知识可搜索 | 成员 A 写入 → 成员 B `search_memories` 可召回 |
+| 共享池完整 | `get_memories(project_id=...)` 返回跨用户记忆 |
+| 事件通知 | 配置 Webhook 后写入记忆，观察回调 |
 
 ---
 
 ## 10. 常见问题
 
-### 10.1 无法访问团队 Wing
+### 10.1 无法访问共享池
 
 ```
 解决:
-1. 检查是否被授权: mempalace_list_wings
-2. 联系 Wing 所有者请求授权
-3. 确认 Wing 未被归档
+1. 确认 api_key 属于同一 Project
+2. 确认使用了 project_id / git_remote 参数（个人 user_id 池不可跨用户）
+3. admin key 可跨用户读取；普通成员 Key 需成员身份
 ```
 
 ### 10.2 知识冲突
 
 ```
 解决:
-1. 搜索现有知识确认是否重复
-2. 使用 mempalace_merge_drawer 合并
-3. 更新已有记忆而非创建新的
+1. 先 search_memories 确认是否重复
+2. update_memory 更新已有记忆而非创建新的
+3. 语义重复项由 Dream(Merge) 后台自动合并
 ```
 
-### 10.3 Wing 归档恢复
+### 10.3 成员离职
 
-```bash
-# 恢复归档的 Wing
-mempalace_restore_wing --wing_id "archived-project"
+```
+解决:
+1. Dashboard → Members 移除成员 / 降级为 Can Read
+2. 其记忆仍在共享池中（metadata.by 可追溯）
+3. 必要时 delete_entities 清理其个人实体记忆
 ```
 
 ---
 
-*文档更新: 2026-07-14*
+*文档更新: 2026-09-18*
 *下一步: [Phase 4: AI IDE 自动化配置](./SOP-P4-automation.md)*

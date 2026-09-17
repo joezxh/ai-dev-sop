@@ -1,3 +1,6 @@
+> [!WARNING]
+> **已废弃（2026-09-18）**：本文档描述的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，记忆功能统一替换为自托管 mem0（见 docs/quick-ref/mem0-ai-tools-config-guide.md）。本文仅作历史归档保留，内容不再维护。
+
 # 双轨记忆控制台 — 50 场景回归测试
 
 > **状态**：本文档为 Task 18 交付物，覆盖 Session/Auth、Users CRUD、Projects CRUD、Sessions、Summarize、Distill 六大模块共 50 个浏览器/手动测试场景。

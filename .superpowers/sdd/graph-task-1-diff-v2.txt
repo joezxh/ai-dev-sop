@@ -1,0 +1,358 @@
+diff --git a/server/graph_memory.py b/server/graph_memory.py
+index 53eb651c..40fb6751 100644
+--- a/server/graph_memory.py
++++ b/server/graph_memory.py
+@@ -1,18 +1,17 @@
+ """Self-built graph memory layer, aligning mem0 v1.0.11 MemoryGraph semantics
+ with a project dimension. All failures degrade to disabled + log (spec §1)."""
+ 
+ import json
+ import logging
+ import os
+ import re
+-from datetime import datetime, timezone
+ 
+ logger = logging.getLogger(__name__)
+ 
+ DEFAULT_THRESHOLD = 0.7
+ BASE_LABEL = "__Entity__"
+ SEARCH_TOP_K = 5
+ 
+ EXTRACT_ENTITIES_SYSTEM = (
+     "You are a smart assistant that extracts entities and their types from text. "
+     "If the text contains self reference such as 'I', 'me', 'my', use '{user_id}' "
+@@ -24,21 +23,21 @@ EXTRACT_RELATIONS_SYSTEM = (
+     "You are a smart assistant that extracts relationship triples from text. "
+     "The source/destination MUST be chosen from the given entity list (or the "
+     "user entity '{user_id}'). Extract the relationship between them. "
+     'Respond ONLY with JSON: {"entities": [{"source": "...", "relationship": "...", '
+     '"destination": "..."}]}. Rules: 1. Extract only what the text states. '
+     "2. Use the entity names verbatim. 3. Relationship is 1-3 words. {custom_rules}"
+ )
+ 
+ 
+ def _norm(value: str) -> str:
+-    return (value or "").strip().lower().replace(" ", "_")
++    return re.sub(r"\s+", "_", (value or "").strip().lower())
+ 
+ 
+ def sanitize_relationship(value: str) -> str:
+     collapsed = re.sub(r"\s+", "_", (value or "").strip().upper())
+     return re.sub(r"[^A-Z0-9_]", "", collapsed)
+ 
+ 
+ def _parse_json(text: str) -> dict:
+     """Parse an LLM response that may be wrapped in markdown fences."""
+     if not text:
+@@ -84,48 +83,61 @@ class GraphMemory:
+                     refresh_schema=False,
+                     driver_config={"notifications_min_severity": "OFF"},
+                 )
+             self._ensure_indexes()
+         except Exception:
+             logger.exception("GraphMemory degraded: Neo4j unavailable")
+             self.enabled = False
+             return
+         self.embedder = embedder
+         self.llm = llm
+-        self.threshold = float(
+-            threshold if threshold is not None else os.environ.get("GRAPH_THRESHOLD", DEFAULT_THRESHOLD)
+-        )
++        try:
++            self.threshold = float(
++                threshold if threshold is not None else os.environ.get("GRAPH_THRESHOLD", DEFAULT_THRESHOLD)
++            )
++        except (TypeError, ValueError):
++            logger.warning("Invalid GRAPH_THRESHOLD value %r, using default %s", threshold, DEFAULT_THRESHOLD)
++            self.threshold = float(DEFAULT_THRESHOLD)
+         self.custom_prompt = os.environ.get("GRAPH_CUSTOM_PROMPT") or None
+ 
+     # ---- internals -------------------------------------------------------
+ 
+     def _ensure_indexes(self) -> None:
+         for statement in (
+             f"CREATE INDEX graph_user IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.user_id)",
+             f"CREATE INDEX graph_project IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.project_id)",
+             f"CREATE INDEX graph_name_user IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.name, n.user_id)",
+         ):
+             try:
+                 self.graph.query(statement)
+             except Exception:  # noqa: BLE001 — index creation is best-effort
+                 logger.debug("graph index statement skipped: %s", statement)
+ 
+     def _scope_match(self, filters: dict, alias: str = "n") -> str:
+-        """Cypher property predicate for the active scope (personal vs project)."""
++        """Cypher property predicate for the active scope (personal vs project).
++
++        Project scope matches on project_id only. Personal scope matches on
++        user_id AND the exact project dimension (coalesce so that a null
++        $project_id matches nodes without a project_id — same-identity scope).
++        """
+         if filters.get("scope") == "project" and filters.get("project_id"):
+             return f"{alias}.project_id = $project_id"
+-        return f"{alias}.user_id = $user_id"
++        return (
++            f"{alias}.user_id = $user_id "
++            f"AND coalesce({alias}.project_id, '') = coalesce($project_id, '')"
++        )
+ 
+     def _scope_params(self, filters: dict) -> dict:
+         if filters.get("scope") == "project" and filters.get("project_id"):
+             return {"project_id": filters["project_id"]}
+-        return {"user_id": filters.get("user_id")}
++        # Personal scope: both params always present (project_id may be None).
++        return {"user_id": filters.get("user_id"), "project_id": filters.get("project_id")}
+ 
+     def _extract_entities(self, data: str, filters: dict) -> list[dict]:
+         user_id = filters.get("user_id") or "unknown"
+         messages = [
+             {"role": "system", "content": EXTRACT_ENTITIES_SYSTEM.replace("{user_id}", user_id)},
+             {"role": "user", "content": data},
+         ]
+         parsed = _parse_json(self.llm.generate_response(messages))
+         entities = []
+         for item in parsed.get("entities") or []:
+@@ -141,68 +153,81 @@ class GraphMemory:
+         user_id = filters.get("user_id") or "unknown"
+         rules = "4. " + self.custom_prompt if self.custom_prompt else ""
+         system = EXTRACT_RELATIONS_SYSTEM.replace("{user_id}", user_id).replace("{custom_rules}", rules)
+         user_content = f"List of entities: {[e['entity'] for e in entities]}\n\nText: {data}"
+         messages = [{"role": "system", "content": system}, {"role": "user", "content": user_content}]
+         parsed = _parse_json(self.llm.generate_response(messages))
+         triples = []
+         for item in parsed.get("entities") or []:
+             source, destination = _norm(item.get("source")), _norm(item.get("destination"))
+             rel = sanitize_relationship(item.get("relationship"))
++            # Self-reference endpoints map to the user entity, same as entities.
++            if source == "i":
++                source = user_id
++            if destination == "i":
++                destination = user_id
+             if not (source and destination and rel):
+                 continue
++            if rel[0].isdigit():
++                # A digit-leading relationship type is not a valid Cypher
++                # identifier — skip the triple rather than corrupt the query.
++                logger.debug("Skipping triple with invalid relationship type: %s", rel)
++                continue
+             triples.append({"source": source, "relationship": rel, "destination": destination})
+         return triples
+ 
+     def _find_similar_node(self, name: str, filters: dict) -> dict | None:
+         embedding = self.embedder.embed(name)
++        # Disambiguation is confined to the same identity scope
++        # (user_id + project dimension), never across scopes.
+         scope = self._scope_match(filters)
+-        extra = "" if filters.get("scope") == "project" else (
+-            " AND (n.project_id = $project_id OR n.project_id IS NULL)"
+-            if filters.get("project_id") else ""
+-        )
+         cypher = (
+-            f"MATCH (n:{BASE_LABEL}) WHERE {scope}{extra} AND n.embedding IS NOT NULL "
++            f"MATCH (n:{BASE_LABEL}) WHERE {scope} AND n.embedding IS NOT NULL "
+             "WITH n, vector.similarity.cosine(n.embedding, $embedding) AS similarity "
+             "WHERE similarity >= $threshold "
+             "RETURN elementId(n) AS eid, n.name AS name, n.type AS type "
+             "ORDER BY similarity DESC LIMIT 1"
+         )
+         params = self._scope_params(filters)
+         params.update({"embedding": embedding, "threshold": self.threshold})
+         rows = self.graph.query(cypher, params) or []
+         return rows[0] if rows else None
+ 
+     # ---- public API ------------------------------------------------------
+ 
+     def add(self, data: str, filters: dict) -> dict:
+         if not self.enabled:
+             return {"added_entities": [], "deleted_entities": []}
++        if not filters.get("user_id"):
++            # Reads may hit the shared project pool, but writes always come
++            # from a real user's add — refuse unowned writes.
++            logger.warning("GraphMemory.add requires user_id in filters, skipping")
++            return {"added_entities": [], "deleted_entities": []}
+         try:
+             entities = self._extract_entities(data, filters)
+             triples = self._extract_relations(data, filters, entities)
+             added = []
+             for t in triples:
+                 src = self._find_similar_node(t["source"], filters) or {"name": t["source"], "type": "entity"}
+                 dst = self._find_similar_node(t["destination"], filters) or {"name": t["destination"], "type": "entity"}
+                 src_emb = self.embedder.embed(src["name"])
+                 dst_emb = self.embedder.embed(dst["name"])
+                 cypher = (
+-                    f"MERGE (a:{BASE_LABEL} {{name: $source, user_id: $user_id}}) "
++                    # Node identity = (name, user_id, project_id): a personal
++                    # node (project_id null) is never reused by a project add.
++                    f"MERGE (a:{BASE_LABEL} {{name: $source, user_id: $user_id, project_id: $project_id}}) "
+                     "ON CREATE SET a.created = timestamp(), a.mentions = 1, a.type = $source_type "
+                     "ON MATCH SET a.mentions = coalesce(a.mentions, 0) + 1 "
+-                    "SET a.project_id = $project_id "
+                     "CALL db.create.setNodeVectorProperty(a, 'embedding', $source_embedding) "
+-                    f"MERGE (b:{BASE_LABEL} {{name: $destination, user_id: $user_id}}) "
++                    f"MERGE (b:{BASE_LABEL} {{name: $destination, user_id: $user_id, project_id: $project_id}}) "
+                     "ON CREATE SET b.created = timestamp(), b.mentions = 1, b.type = $destination_type "
+                     "ON MATCH SET b.mentions = coalesce(b.mentions, 0) + 1 "
+-                    "SET b.project_id = $project_id "
+                     "CALL db.create.setNodeVectorProperty(b, 'embedding', $destination_embedding) "
+                     f"MERGE (a)-[r:{t['relationship']}]->(b) "
+                     "ON CREATE SET r.created = timestamp(), r.mentions = 1, r.valid = true, "
+                     "r.user_id = $user_id, r.project_id = $project_id "
+                     "ON MATCH SET r.mentions = coalesce(r.mentions, 0) + 1, "
+                     "r.updated_at = timestamp(), r.valid = true "
+                     "RETURN coalesce(a.name, '') AS source, type(r) AS relationship, "
+                     "coalesce(b.name, '') AS destination"
+                 )
+                 params = {
+@@ -248,22 +273,24 @@ class GraphMemory:
+                 from rank_bm25 import BM25Okapi
+                 corpus = [
+                     [str(t.get("source", "")), str(t.get("relationship", "")), str(t.get("destination", ""))]
+                     for t in all_triples
+                 ]
+                 bm25 = BM25Okapi(corpus)
+                 scores = bm25.get_scores(query.split())
+                 ranked = sorted(zip(all_triples, scores), key=lambda pair: pair[1], reverse=True)
+                 return [{k: t.get(k, "") for k in ("source", "relationship", "destination")}
+                         for t, _ in ranked[:SEARCH_TOP_K]]
+-            except ImportError:
+-                return all_triples[:SEARCH_TOP_K]
++            except Exception:  # rank_bm25 unavailable or ranking failed — degrade
++                logger.debug("BM25 ranking unavailable, degrading to sequential order")
++                return [{k: t.get(k, "") for k in ("source", "relationship", "destination")}
++                        for t in all_triples[:SEARCH_TOP_K]]
+         except Exception:
+             logger.exception("GraphMemory.search failed (degraded)")
+             return []
+ 
+     def get_all(self, filters: dict, limit: int = 100) -> list[dict]:
+         if not self.enabled:
+             return []
+         try:
+             cypher = (
+                 f"MATCH (n:{BASE_LABEL})-[r]->(m) "
+@@ -273,35 +300,51 @@ class GraphMemory:
+                 "coalesce(m.name, '') AS destination LIMIT $limit"
+             )
+             return self.graph.query(cypher, {**self._scope_params(filters), "limit": limit}) or []
+         except Exception:
+             logger.exception("GraphMemory.get_all failed (degraded)")
+             return []
+ 
+     def soft_delete_for_text(self, data: str, filters: dict) -> None:
+         if not self.enabled:
+             return
++        if not filters.get("user_id") and not filters.get("project_id"):
++            logger.warning("GraphMemory.soft_delete_for_text requires user_id or project_id, skipping")
++            return
+         try:
+             entities = self._extract_entities(data, filters)
+             triples = self._extract_relations(data, filters, entities)
++            scope_a = self._scope_match(filters, "a")
++            scope_b = self._scope_match(filters, "b")
++            scope_r = self._scope_match(filters, "r")
+             for t in triples:
+                 cypher = (
+-                    f"MATCH (a:{BASE_LABEL} {{name: $source, user_id: $user_id}})-[r]->"
+-                    f"(b:{BASE_LABEL} {{name: $destination, user_id: $user_id}}) "
+-                    f"WHERE type(r) = $rel "
++                    f"MATCH (a:{BASE_LABEL} {{name: $source}})-[r]->"
++                    f"(b:{BASE_LABEL} {{name: $destination}}) "
++                    f"WHERE type(r) = $rel AND {scope_a} AND {scope_b} AND {scope_r} "
+                     "SET r.valid = false, r.invalidated_at = datetime()"
+                 )
+                 self.graph.query(cypher, {
+                     "source": t["source"], "destination": t["destination"],
+-                    "rel": t["relationship"], "user_id": filters.get("user_id"),
++                    "rel": t["relationship"], **self._scope_params(filters),
+                 })
+         except Exception:
+             logger.exception("GraphMemory.soft_delete_for_text failed (degraded)")
+ 
+     def hard_delete(self, filters: dict) -> None:
+         if not self.enabled:
+             return
++        # Destructive guard: never issue an unbounded DETACH DELETE. A missing
++        # scope key would otherwise produce `n.user_id = null` (silently
++        # deleting nothing today, but catastrophic if scope predicates change).
++        if filters.get("scope") == "project":
++            if not filters.get("project_id"):
++                logger.warning("GraphMemory.hard_delete: project scope requires project_id, skipping")
++                return
++        elif not filters.get("user_id"):
++            logger.warning("GraphMemory.hard_delete: user scope requires user_id, skipping")
++            return
+         try:
+             cypher = f"MATCH (n:{BASE_LABEL}) WHERE {self._scope_match(filters)} DETACH DELETE n"
+             self.graph.query(cypher, self._scope_params(filters))
+         except Exception:
+             logger.exception("GraphMemory.hard_delete failed (degraded)")
+diff --git a/server/tests/test_graph_memory.py b/server/tests/test_graph_memory.py
+index f53862ef..24e96ef9 100644
+--- a/server/tests/test_graph_memory.py
++++ b/server/tests/test_graph_memory.py
+@@ -149,13 +149,64 @@ def test_soft_delete_marks_invalid():
+     ])
+     g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
+     g.soft_delete_for_text("alice works on payments", FILTERS)
+     cyphers = " || ".join(c for c, _ in neo4j.queries)
+     assert "valid = false" in cyphers or "valid=false" in cyphers
+ 
+ 
+ def test_hard_delete_uses_detach_delete():
+     neo4j = FakeNeo4j()
+     g = gm.GraphMemory(embedder=FakeEmbedder(), llm=FakeLLM([]), driver=neo4j, threshold=0.7)
+-    g.hard_delete({"project_id": "p1"})
++    g.hard_delete({"user_id": "u1"})
+     cyphers = " || ".join(c for c, _ in neo4j.queries)
+     assert "DETACH DELETE" in cyphers
++
++
++# ---- regression tests (CR fixes) -----------------------------------------
++
++
++def test_personal_node_not_reused_by_project_add():
++    # 同名实体在个人作用域与项目作用域应是两个节点：
++    neo4j = FakeNeo4j([("vector.similarity", [])])
++    llm = FakeLLM([
++        '{"entities":[{"entity":"alice","entity_type":"person"}]}',
++        '{"entities":[{"source":"alice","relationship":"WORKS_ON","destination":"payments"}]}',
++        # second add() re-runs the same two extraction calls
++        '{"entities":[{"entity":"alice","entity_type":"person"}]}',
++        '{"entities":[{"source":"alice","relationship":"WORKS_ON","destination":"payments"}]}',
++    ])
++    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
++    g.add("alice works on payments", {"user_id": "u1", "project_id": None})
++    g.add("alice works on payments", {"user_id": "u1", "project_id": "p1"})
++    merge_params = [p for c, p in neo4j.queries if "MERGE (a" in c]
++    vals = {(p["source"], p["user_id"], p.get("project_id")) for p in merge_params}
++    assert ("alice", "u1", None) in vals and ("alice", "u1", "p1") in vals
++
++
++def test_hard_delete_without_scope_is_noop():
++    neo4j = FakeNeo4j()
++    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=FakeLLM([]), driver=neo4j, threshold=0.7)
++    baseline = len(neo4j.queries)  # index statements issued by the constructor
++    g.hard_delete({})
++    assert len(neo4j.queries) == baseline  # 绝不生成无界 DETACH DELETE
++
++
++def test_project_hard_delete_uses_project_predicate():
++    neo4j = FakeNeo4j()
++    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=FakeLLM([]), driver=neo4j, threshold=0.7)
++    g.hard_delete({"project_id": "p1", "scope": "project"})
++    cypher, params = neo4j.queries[-1]  # last query = the DETACH DELETE (constructor issued indexes first)
++    assert "project_id" in cypher and params.get("project_id") == "p1"
++    assert "user_id" not in params
++
++
++def test_extract_relations_maps_self_reference():
++    neo4j = FakeNeo4j([("vector.similarity", [])])
++    llm = FakeLLM([
++        '{"entities":[{"entity":"u1","entity_type":"self"},{"entity":"alice","entity_type":"person"}]}',
++        '{"entities":[{"source":"i","relationship":"WORKS_WITH","destination":"alice"}]}',
++    ])
++    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
++    out = g.add("I work with alice", {"user_id": "u1"})
++    params = [p for c, p in neo4j.queries if "MERGE (a" in c]
++    assert all(p["source"] != "i" for p in params)
++    assert any(p["source"] == "u1" for p in params)

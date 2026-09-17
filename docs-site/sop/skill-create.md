@@ -567,7 +567,7 @@ flowchart TD
 ### C. 参考资源
 
 - [法律 Claude 中文 Skills 项目](https://github.com/claude-for-legal-ZH)
-- [MemPalace 官方文档](https://mempalaceofficial.com/)
+- [mem0 官方文档](https://docs.mem0.ai/)
 - [WorkBuddy Bench Paper](https://reference/workbuddy-bench/paper)
 
 ---

@@ -1,0 +1,51 @@
+diff --git a/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx b/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
+index f24b6146..0730ee22 100644
+--- a/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
+@@ -67,25 +67,43 @@ export default function MemoryExportsPage() {
+         responseType: "blob",
+       });
+       const url = URL.createObjectURL(res.data as Blob);
+       const a = document.createElement("a");
+       a.href = url;
+       a.download = "memories-export.jsonl";
+       a.click();
+       URL.revokeObjectURL(url);
+       setError(null);
+       toast({ title: "Export downloaded", variant: "success" });
+-    } catch (e: any) {
+-      const detail =
++    } catch (e: unknown) {
++      let detail =
+         typeof e === "string"
+           ? e
+-          : (e?.response?.data?.detail ?? e?.message ?? "Export failed");
++          : ((e as { message?: string })?.message ?? "Export failed");
++      const data =
++        typeof e === "object" && e !== null
++          ? (e as { response?: { data?: unknown } }).response?.data
++          : undefined;
++      if (data instanceof Blob) {
++        try {
++          const parsed = JSON.parse(await data.text()) as { detail?: unknown };
++          if (typeof parsed.detail === "string") detail = parsed.detail;
++        } catch {
++          /* keep fallback detail */
++        }
++      } else if (
++        typeof data === "object" &&
++        data !== null &&
++        typeof (data as { detail?: unknown }).detail === "string"
++      ) {
++        detail = (data as { detail: string }).detail;
++      }
+       setError(detail);
+       toast({ title: detail, variant: "warning" });
+     } finally {
+       setExporting(false);
+     }
+   }
+ 
+   return (
+     <div className="p-6 space-y-6">
+       <div>

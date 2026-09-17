@@ -43,7 +43,7 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - APP_DB_NAME=mem0_app
       - JWT_SECRET=${JWT_SECRET}
-      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - DASHBOARD_URL=http://localhost:3001
       - MEM0_TELEMETRY=false
       - MEM0_DIR=/app/data

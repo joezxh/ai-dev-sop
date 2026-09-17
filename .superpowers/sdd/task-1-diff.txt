@@ -1,0 +1,214 @@
+1b349988 feat(server): add GET /stats aggregation endpoint
+ server/main.py             |  2 ++
+ server/routers/stats.py    | 73 ++++++++++++++++++++++++++++++++++++++++++++
+ server/tests/test_stats.py | 76 ++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 151 insertions(+)
+diff --git a/server/main.py b/server/main.py
+index abd1e490..a0069f65 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -22,20 +22,21 @@ from fastapi.middleware.cors import CORSMiddleware
+ from fastapi.responses import JSONResponse, RedirectResponse
+ from models import RequestLog, User
+ from pydantic import BaseModel, Field
+ from rate_limit import limiter
+ from routers import api_keys as api_keys_router
+ from routers import auth as auth_router
+ from routers import departments as departments_router
+ from routers import entities as entities_router
+ from routers import projects as projects_router
+ from routers import requests as requests_router
++from routers import stats as stats_router
+ from routers import users as users_router
+ from gitmatch import resolve_project_id
+ from schemas import MessageResponse
+ from server_state import (
+     get_current_config,
+     get_memory_instance,
+     initialize_state,
+     set_session_factory,
+     update_config,
+ )
+@@ -215,20 +216,21 @@ app.add_middleware(
+     allow_headers=["*"],
+ )
+ 
+ app.include_router(auth_router.router)
+ app.include_router(api_keys_router.router)
+ app.include_router(entities_router.router)
+ app.include_router(requests_router.router)
+ app.include_router(departments_router.router)
+ app.include_router(projects_router.router)
+ app.include_router(users_router.router)
++app.include_router(stats_router.router)
+ 
+ 
+ class Message(BaseModel):
+     role: str = Field(..., description="Role of the message (user or assistant).")
+     content: str = Field(..., description="Message content.")
+ 
+ 
+ class MemoryCreate(BaseModel):
+     messages: List[Message] = Field(..., description="List of messages to store.")
+     user_id: Optional[str] = None
+diff --git a/server/routers/stats.py b/server/routers/stats.py
+new file mode 100644
+index 00000000..593021f8
+--- /dev/null
++++ b/server/routers/stats.py
+@@ -0,0 +1,73 @@
++from datetime import datetime, timedelta, timezone
++
++from auth import require_admin
++from db import get_db
++from fastapi import APIRouter, Depends, HTTPException, Query
++from models import RequestLog
++from pydantic import BaseModel
++from sqlalchemy import select
++from sqlalchemy.orm import Session
++from server_state import get_memory_instance
++
++router = APIRouter(prefix="/stats", tags=["stats"])
++
++RANGE_CHOICES = ("24h", "7d", "30d", "90d", "all")
++RANGE_TO_HOURS = {"24h": 24, "7d": 168, "30d": 720, "90d": 2160}
++API_KEY_AUTH_TYPES = ("api_key", "admin_api_key")
++
++
++def request_action(method: str, path: str) -> str | None:
++    """Map a request-log row to a dashboard action bucket."""
++    p = (path or "").rstrip("/")
++    if method == "POST" and p == "/memories":
++        return "add"
++    if method == "POST" and p == "/search":
++        return "search"
++    if method == "GET" and p == "/memories":
++        return "get_all"
++    return None
++
++
++def _iter_memory_payloads(limit: int = 10_000) -> list[dict]:
++    results = get_memory_instance().vector_store.list(top_k=limit)
++    rows = results[0] if results and isinstance(results, list) and isinstance(results[0], list) else results or []
++    return [getattr(row, "payload", None) or {} for row in rows]
++
++
++class StatsResponse(BaseModel):
++    requests: dict
++    memories_total: int
++    entities: dict
++
++
++@router.get("", response_model=StatsResponse)
++def get_stats(
++    range: str = Query(default="7d"),
++    _admin=Depends(require_admin),
++    db: Session = Depends(get_db),
++):
++    if range not in RANGE_CHOICES:
++        raise HTTPException(status_code=400, detail=f"range must be one of {RANGE_CHOICES}")
++    stmt = select(RequestLog).where(RequestLog.auth_type.in_(API_KEY_AUTH_TYPES))
++    if range != "all":
++        since = datetime.now(timezone.utc) - timedelta(hours=RANGE_TO_HOURS[range])
++        stmt = stmt.where(RequestLog.created_at >= since)
++    logs = db.execute(stmt).scalars().all()
++    counts = {"add": 0, "search": 0, "get_all": 0}
++    for log in logs:
++        action = request_action(log.method, log.path)
++        if action:
++            counts[action] += 1
++
++    payloads = _iter_memory_payloads()
++    entities: dict[str, set] = {"users": set(), "agents": set(), "runs": set()}
++    for payload in payloads:
++        for field, key in (("user_id", "users"), ("agent_id", "agents"), ("run_id", "runs")):
++            if payload.get(field):
++                entities[key].add(str(payload[field]))
++
++    return StatsResponse(
++        requests={**counts, "total": sum(counts.values())},
++        memories_total=len(payloads),
++        entities={k: len(v) for k, v in entities.items()},
++    )
+diff --git a/server/tests/test_stats.py b/server/tests/test_stats.py
+new file mode 100644
+index 00000000..e50ad944
+--- /dev/null
++++ b/server/tests/test_stats.py
+@@ -0,0 +1,76 @@
++from fastapi import HTTPException
++import pytest
++
++from routers import stats as stats_router
++
++
++class _Log:
++    def __init__(self, method, path):
++        self.method = method
++        self.path = path
++
++
++class _Scalars:
++    def __init__(self, items):
++        self._items = items
++
++    def all(self):
++        return self._items
++
++
++class _Result:
++    def __init__(self, items):
++        self._items = items
++
++    def scalars(self):
++        return _Scalars(self._items)
++
++
++class _DB:
++    def __init__(self, logs):
++        self._logs = logs
++
++    def execute(self, *_a, **_k):
++        return _Result(self._logs)
++
++
++class _Row:
++    def __init__(self, payload):
++        self.payload = payload
++
++
++class _VS:
++    def list(self, top_k):
++        return [[_Row({"user_id": "u1", "agent_id": "a1"}), _Row({"user_id": "u1"})]]
++
++
++class _Mem:
++    vector_store = _VS()
++
++
++def test_request_action_mapping():
++    assert stats_router.request_action("POST", "/memories") == "add"
++    assert stats_router.request_action("POST", "/search") == "search"
++    assert stats_router.request_action("GET", "/memories") == "get_all"
++    assert stats_router.request_action("GET", "/memories/123") is None
++    assert stats_router.request_action("POST", "/configure") is None
++
++
++def test_get_stats_counts_and_entities(monkeypatch):
++    logs = [
++        _Log("POST", "/memories"),
++        _Log("POST", "/search"),
++        _Log("GET", "/memories"),
++        _Log("GET", "/requests"),  # not counted
++    ]
++    monkeypatch.setattr(stats_router, "get_memory_instance", lambda: _Mem())
++    out = stats_router.get_stats(range="24h", _admin=None, db=_DB(logs))
++    assert out.requests == {"add": 1, "search": 1, "get_all": 1, "total": 3}
++    assert out.memories_total == 2
++    assert out.entities == {"users": 1, "agents": 1, "runs": 0}
++
++
++def test_get_stats_rejects_bad_range():
++    with pytest.raises(HTTPException) as exc:
++        stats_router.get_stats(range="1h", _admin=None, db=_DB([]))
++    assert exc.value.status_code == 400

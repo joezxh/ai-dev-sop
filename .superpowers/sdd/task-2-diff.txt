@@ -1,0 +1,315 @@
+2a989800 feat(server): project-level custom instructions + expiration defaults; restore write params
+ server/db.py                          |  6 ++++++
+ server/main.py                        | 27 +++++++++++++++++++++++++++
+ server/models.py                      |  6 ++++--
+ server/routers/projects.py            | 25 +++++++++++++++++++++++++
+ server/tests/test_project_defaults.py | 28 ++++++++++++++++++++++++++++
+ 5 files changed, 90 insertions(+), 2 deletions(-)
+diff --git a/server/db.py b/server/db.py
+index c9c153fa..4888596d 100644
+--- a/server/db.py
++++ b/server/db.py
+@@ -50,10 +50,16 @@ def ensure_tenant_schema(target_engine) -> None:
+         )
+         conn.execute(
+             text(
+                 "DO $$ BEGIN "
+                 "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_department_id') THEN "
+                 "ALTER TABLE users ADD CONSTRAINT fk_users_department_id "
+                 "FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL; "
+                 "END IF; END $$;"
+             )
+         )
++        conn.execute(
++            text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS custom_instructions TEXT NULL")
++        )
++        conn.execute(
++            text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS memory_expiration_date DATE NULL")
++        )
+diff --git a/server/main.py b/server/main.py
+index a0069f65..919163af 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -588,20 +588,41 @@ def _filter_by_project_id(data: Dict[str, Any], project_id: Optional[str]) -> Di
+     """Post-filter memory results by metadata.project_id (Mem0 cannot filter nested metadata)."""
+     if not project_id:
+         return data
+     results = data.get("results") or []
+     filtered = [
+         r for r in results if isinstance(r, dict) and (r.get("metadata") or {}).get("project_id") == project_id
+     ]
+     return {**data, "results": filtered}
+ 
+ 
++def _load_project(project_id: str):
++    from sqlalchemy import select as _select
++    from models import Project
++
++    with SessionLocal() as session:
++        return session.scalar(_select(Project).where(Project.project_id == project_id))
++
++
++def _apply_project_defaults(memory_create, project) -> Dict[str, Any]:
++    """Project-scoped defaults: custom extraction prompt and expiration date.
++    Explicit per-request values always win."""
++    overrides: Dict[str, Any] = {}
++    if project is None:
++        return overrides
++    if not memory_create.prompt and project.custom_instructions:
++        overrides["prompt"] = project.custom_instructions
++    if memory_create.expiration_date is None and project.memory_expiration_date is not None:
++        overrides["expiration_date"] = project.memory_expiration_date.isoformat()
++    return overrides
++
++
+ @app.post("/memories", summary="Create memories")
+ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+     """Store new memories, scoped by user and (optionally) project."""
+     is_admin = _auth is None or _auth.role == "admin"
+     owner_user_id, owner_agent_id, owner_run_id = _scope_identifiers(
+         _auth, memory_create.user_id, memory_create.agent_id, memory_create.run_id
+     )
+     if not any([owner_user_id, owner_agent_id, owner_run_id]):
+         raise HTTPException(status_code=400, detail="At least one identifier (user_id, agent_id, run_id) is required.")
+ 
+@@ -615,25 +636,31 @@ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+         resolved = resolve_project_id(memory_create.git_remote)
+         if project_id and resolved and resolved != project_id:
+             raise HTTPException(
+                 status_code=400, detail="project_id does not match the project resolved from git_remote."
+             )
+         project_id = project_id or resolved
+         metadata["git_remote"] = memory_create.git_remote
+     if project_id:
+         metadata["project_id"] = project_id
+ 
++    overrides = _apply_project_defaults(memory_create, _load_project(project_id) if project_id else None)
++
+     params = {k: v for k, v in {
+         "user_id": owner_user_id,
+         "agent_id": owner_agent_id,
+         "run_id": owner_run_id,
+         "metadata": metadata,
++        "infer": True if memory_create.infer is None else memory_create.infer,
++        "memory_type": memory_create.memory_type,
++        "prompt": memory_create.prompt or overrides.get("prompt"),
++        "expiration_date": memory_create.expiration_date or overrides.get("expiration_date"),
+     }.items() if v is not None}
+     try:
+         response = get_memory_instance().add(messages=[m.model_dump() for m in memory_create.messages], **params)
+         if response.get("results"):
+             telemetry.log_dashboard_nudge_once(DASHBOARD_URL)
+         return JSONResponse(content=response)
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+diff --git a/server/models.py b/server/models.py
+index b5a9f304..226bc564 100644
+--- a/server/models.py
++++ b/server/models.py
+@@ -1,14 +1,14 @@
+ import uuid
+-from datetime import datetime, timezone
++from datetime import date, datetime, timezone
+ 
+-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
++from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+ from sqlalchemy.orm import Mapped, mapped_column, relationship
+ 
+ from db import Base
+ 
+ 
+ def _utcnow() -> datetime:
+     return datetime.now(timezone.utc)
+ 
+ 
+ def _new_uuid() -> uuid.UUID:
+@@ -101,14 +101,16 @@ class Project(Base):
+     """
+ 
+     __tablename__ = "projects"
+ 
+     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_new_uuid)
+     project_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+     name: Mapped[str] = mapped_column(String(255))
+     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+     git_remotes: Mapped[list] = mapped_column(JSON, default=list)
+     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
++    custom_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
++    memory_expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+     updated_at: Mapped[datetime] = mapped_column(
+         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+     )
+diff --git a/server/routers/projects.py b/server/routers/projects.py
+index 6559c1d3..d57ea4ac 100644
+--- a/server/routers/projects.py
++++ b/server/routers/projects.py
+@@ -1,65 +1,84 @@
+ import uuid
++from datetime import date
+ 
+ from fastapi import APIRouter, Depends, HTTPException, Query
+ from pydantic import BaseModel
+ from sqlalchemy import or_, select
+ from sqlalchemy.orm import Session
+ 
+ from auth import require_admin
+ from db import get_db
+ from gitmatch import resolve_project_id
+ from models import Project
+ from schemas import MessageResponse
+ 
+ router = APIRouter(prefix="/projects", tags=["projects"])
+ 
+ 
+ class ProjectCreate(BaseModel):
+     project_id: str
+     name: str
+     description: str | None = None
+     git_remotes: list[str] = []
++    custom_instructions: str | None = None
++    memory_expiration_date: str | None = None  # YYYY-MM-DD
+ 
+ 
+ class ProjectUpdate(BaseModel):
+     name: str | None = None
+     description: str | None = None
+     git_remotes: list[str] | None = None
++    custom_instructions: str | None = None
++    memory_expiration_date: str | None = None  # YYYY-MM-DD
+ 
+ 
+ class ProjectResponse(BaseModel):
+     id: str
+     project_id: str
+     name: str
+     description: str | None
+     git_remotes: list[str]
++    custom_instructions: str | None = None
++    memory_expiration_date: str | None = None
+     created_by: str
+     created_at: str
+     updated_at: str
+ 
+ 
+ class MatchRequest(BaseModel):
+     git_remote: str | list[str]
+ 
+ 
+ class MatchResponse(BaseModel):
+     project_id: str | None
+ 
+ 
++def _parse_expiration_date(value: str | None) -> date | None:
++    """Parse YYYY-MM-DD; ValueError → 400."""
++    if value is None:
++        return None
++    try:
++        return date.fromisoformat(value)
++    except ValueError:
++        raise HTTPException(status_code=400, detail="memory_expiration_date must be in YYYY-MM-DD format.")
++
++
+ def _to_response(project: Project) -> ProjectResponse:
+     return ProjectResponse(
+         id=str(project.id),
+         project_id=project.project_id,
+         name=project.name,
+         description=project.description,
+         git_remotes=list(project.git_remotes or []),
++        custom_instructions=project.custom_instructions,
++        memory_expiration_date=project.memory_expiration_date.isoformat() if project.memory_expiration_date else None,
+         created_by=str(project.created_by),
+         created_at=project.created_at.isoformat() if project.created_at else "",
+         updated_at=project.updated_at.isoformat() if project.updated_at else "",
+     )
+ 
+ 
+ @router.get("", response_model=list[ProjectResponse])
+ def list_projects(q: str | None = None, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     stmt = select(Project).order_by(Project.name)
+     if q:
+@@ -73,20 +92,22 @@ def list_projects(q: str | None = None, _admin=Depends(require_admin), db: Sessi
+ def create_project(body: ProjectCreate, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     if not body.project_id or not body.project_id.strip():
+         raise HTTPException(status_code=400, detail="project_id is required.")
+     if db.scalar(select(Project).where(Project.project_id == body.project_id)):
+         raise HTTPException(status_code=409, detail="A project with this project_id already exists.")
+     project = Project(
+         project_id=body.project_id.strip(),
+         name=body.name,
+         description=body.description,
+         git_remotes=list(body.git_remotes or []),
++        custom_instructions=body.custom_instructions,
++        memory_expiration_date=_parse_expiration_date(body.memory_expiration_date),
+         created_by=_admin.id,
+     )
+     db.add(project)
+     db.commit()
+     db.refresh(project)
+     return _to_response(project)
+ 
+ 
+ @router.get("/match", response_model=MatchResponse)
+ def match_project(
+@@ -116,20 +137,24 @@ def update_project(
+ ):
+     project = db.scalar(select(Project).where(Project.project_id == project_id))
+     if project is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+     if body.name is not None:
+         project.name = body.name
+     if body.description is not None:
+         project.description = body.description
+     if body.git_remotes is not None:
+         project.git_remotes = list(body.git_remotes)
++    if body.custom_instructions is not None:
++        project.custom_instructions = body.custom_instructions
++    if body.memory_expiration_date is not None:
++        project.memory_expiration_date = _parse_expiration_date(body.memory_expiration_date)
+     db.commit()
+     db.refresh(project)
+     return _to_response(project)
+ 
+ 
+ @router.delete("/{project_id}", response_model=MessageResponse)
+ def delete_project(project_id: str, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+     project = db.scalar(select(Project).where(Project.project_id == project_id))
+     if project is None:
+         raise HTTPException(status_code=404, detail="Project not found.")
+diff --git a/server/tests/test_project_defaults.py b/server/tests/test_project_defaults.py
+new file mode 100644
+index 00000000..a29b7f6d
+--- /dev/null
++++ b/server/tests/test_project_defaults.py
+@@ -0,0 +1,28 @@
++from types import SimpleNamespace
++
++from main import _apply_project_defaults
++
++
++def _mc(prompt=None, expiration_date=None):
++    return SimpleNamespace(prompt=prompt, expiration_date=expiration_date)
++
++
++def _proj(instructions=None, expiration=None):
++    return SimpleNamespace(custom_instructions=instructions, memory_expiration_date=expiration)
++
++
++def test_no_project_no_overrides():
++    assert _apply_project_defaults(_mc(), None) == {}
++
++
++def test_project_defaults_applied():
++    p = _proj(instructions="Only store tech preferences", expiration=__import__("datetime").date(2027, 1, 1))
++    out = _apply_project_defaults(_mc(), p)
++    assert out["prompt"] == "Only store tech preferences"
++    assert out["expiration_date"] == "2027-01-01"
++
++
++def test_explicit_request_values_win():
++    p = _proj(instructions="proj", expiration=__import__("datetime").date(2027, 1, 1))
++    out = _apply_project_defaults(_mc(prompt="explicit", expiration_date="2030-05-05"), p)
++    assert out == {}

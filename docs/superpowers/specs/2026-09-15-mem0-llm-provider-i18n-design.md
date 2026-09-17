@@ -1,9 +1,121 @@
 # mem0 LLM Provider 扩展 + Dashboard i18n 设计文档
 
 - 日期：2026-09-15
-- 状态：已评审，待编写实施计划
+- 状态：**已实现**（Phase 1 + Phase 2 均已落地，待端到端验收）
 - 仓库：mem0 子模块（`d:\projects\ai-dev-sop\mem0`，即 `mem0ai/mem0`）
 - 范围：Dashboard 与 server 端配置层，不变更 `mem0/mem0/` 核心库
+
+### 实现状态总览
+
+| 项目 | 状态 | 实现位置 |
+|------|------|----------|
+| PRESETS 预设表 | ✅ 已实现 | `server/main.py:74-105` |
+| `GET /configure/providers` 含 presets | ✅ 已实现 | `server/main.py:393` |
+| `POST /configure/test` 测试连接 | ✅ 已实现 | `server/main.py:405-450` |
+| 错误分类（auth/connection/model_not_found/timeout/other） | ✅ 已实现 | `server/main.py:435-444` |
+| Dashboard `ProviderConfig` 类型 | ✅ 已实现 | `src/utils/self-hosted-config.ts:1-9` |
+| Dashboard `ProviderPreset` 类型 + 前端兜底预设 | ✅ 已实现 | `src/utils/self-hosted-config.ts:62-87` |
+| `buildProviderConfig()` 含 `openai_base_url` | ✅ 已实现 | `src/utils/self-hosted-config.ts:44-60` |
+| `CONFIGURE_TEST` 端点常量 | ✅ 已实现 | `src/utils/api-endpoints.ts:17` |
+| Setup 页面（预设下拉/base_url/测试连接） | ✅ 已实现 | `src/app/setup/page.tsx` |
+| Configuration 页面（预设下拉/base_url/测试连接） | ✅ 已实现 | `src/app/(root)/dashboard/configuration/page.tsx` |
+| i18n `LanguageProvider` + `useTranslation()` | ✅ 已实现 | `src/i18n/index.tsx` |
+| i18n 字典 `en.ts` / `zh.ts` | ✅ 已实现 | `src/i18n/en.ts` (75行) / `src/i18n/zh.ts` (66行) |
+| `LanguageSwitcher` 组件 | ✅ 已实现 | `src/components/language-switcher.tsx` |
+| 导航栏 i18n（main-nav.tsx 用 `t()` 包裹所有 key） | ✅ 已实现 | `src/app/(root)/dashboard/components/main-nav.tsx:42-56` |
+| Setup/Config/Login 页面 i18n | ✅ 已实现 | 各页面已 `import { useTranslation } from "@/i18n"` |
+| `PROVIDERS.md` 文档 | ✅ 已实现 | `deploy/mem0/PROVIDERS.md` |
+| server pytest 测试 | ✅ 已实现 | `server/tests/test_configure.py` (101行) |
+
+---
+
+## 0. 实现细节补充（writing-plans 参考）
+
+> 以下类型定义和接口契约已在代码中实现，此处汇总供实施计划回溯。
+
+### 0.1 TypeScript 类型定义（已实现于 `self-hosted-config.ts`）
+
+```typescript
+// 后端配置块
+type ProviderConfig = {
+  provider?: string;
+  config?: {
+    model?: string;
+    api_key?: string;
+    openai_base_url?: string;
+    embedding_dims?: number;
+  };
+};
+
+// 前端预设
+type ProviderPreset = {
+  id: string;           // "openai" | "dashscope" | "ollama" | ...
+  label: string;        // "OpenAI" | "阿里云百炼" | "Ollama (本地)" | ...
+  provider: string;     // 实际发给 server 的 provider 值
+  baseUrl: string;      // 预填的 base_url
+  llmModel: string;     // 默认 LLM 模型
+  embedderModel: string;// 默认嵌入模型
+  embeddingDims: number | null;
+  apiKeyRequired: boolean;
+};
+
+// 构建函数签名
+function buildProviderConfig(opts: ProviderConfigOptions): { provider: string; config: Record<string, unknown> } | undefined;
+function getProviderPresets(serverPresets?: Record<string, any>): ProviderPreset[];
+```
+
+### 0.2 `/configure/test` 请求/响应契约（已实现于 `main.py:405-450`）
+
+请求 body（`Dict[str, Any]`，非 Pydantic model）：
+```json
+{
+  "llm": { "provider": "openai", "config": { "model": "qwen-plus", "openai_base_url": "...", "api_key": "..." } },
+  "embedder": { "provider": "openai", "config": { "model": "text-embedding-v4", "openai_base_url": "...", "api_key": "..." } }
+}
+```
+
+响应（HTTP 始终 200）：
+```json
+{ "ok": true,  "latency_ms": 812.3, "model": "qwen-plus" }
+{ "ok": false, "error": { "type": "auth|connection|model_not_found|timeout|other", "detail": "..." } }
+```
+
+错误分类映射：
+| openai SDK 异常 | error.type |
+|----------------|------------|
+| `AuthenticationError` (401/403) | `auth` |
+| `NotFoundError` (404) | `model_not_found` |
+| `APITimeoutError` | `timeout` |
+| `APIConnectionError` | `connection` |
+| 其他 `Exception` | `other` |
+| `asyncio.TimeoutError` (15s) | `timeout` |
+
+### 0.3 测试文件路径约定
+
+| 测试类型 | 路径 | 运行命令 |
+|----------|------|----------|
+| server 单元测试 | `mem0/server/tests/test_configure.py` | `cd mem0/server && pytest tests/test_configure.py -v` |
+| Dashboard 类型检查 | `mem0/server/dashboard/` | `cd mem0/server/dashboard && pnpm typecheck` |
+| Dashboard lint | `mem0/server/dashboard/` | `cd mem0/server/dashboard && pnpm prettier --check .` |
+
+### 0.4 i18n 字典 key 清单（已实现于 `en.ts` / `zh.ts`）
+
+```
+common.save / common.cancel / common.test / common.testConnection
+setup.title / setup.step1.title / setup.step2.title / setup.step4.success
+config.title / config.llmProvider / config.llmModel / config.llmBaseUrl / config.llmApiKey
+config.embedderProvider / config.embedderModel / config.embedderBaseUrl / config.embedderApiKey
+config.noKeyNeeded / config.testOk / config.testFail
+auth.login / auth.email / auth.password
+nav.dashboard / nav.requests / nav.memories / nav.entities / nav.categories
+nav.webhooks / nav.analytics / nav.export / nav.apiKeys / nav.configuration / nav.settings
+nav.users / nav.departments / nav.projects
+tenant.usersTitle / tenant.usersDesc / tenant.departmentsTitle / tenant.departmentsDesc
+tenant.projectsTitle / tenant.projectsDesc / tenant.name / tenant.description
+tenant.email / tenant.role / tenant.projectId / tenant.gitRemotes / tenant.gitRemotesHint
+tenant.members / tenant.memberCount / tenant.testMatch / tenant.matchResult
+tenant.noMatch / tenant.noProject / tenant.createdAt / tenant.userScoped
+```
 
 ---
 

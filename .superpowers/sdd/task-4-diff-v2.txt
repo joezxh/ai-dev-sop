@@ -1,0 +1,177 @@
+6b9d4099 fix(server): harden webhook dispatch (no-throw guard) and validate webhook URL scheme
+diff --git a/server/main.py b/server/main.py
+index 36ea5341..c01e679b 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -613,40 +613,45 @@ def _apply_project_defaults(memory_create, project) -> Dict[str, Any]:
+     if project is None:
+         return overrides
+     if not memory_create.prompt and project.custom_instructions:
+         overrides["prompt"] = project.custom_instructions
+     if memory_create.expiration_date is None and project.memory_expiration_date is not None:
+         overrides["expiration_date"] = project.memory_expiration_date.isoformat()
+     return overrides
+ 
+ 
+ def _fire_webhooks(results: list) -> None:
+-    """Deliver memory events to subscribed webhooks off-thread."""
+-    events = events_from_add_response(results)
+-    if not events:
+-        return
+-    import threading
+-
+-    from db import SessionLocal as _SL
+-    from models import Webhook as _Webhook
+-    from sqlalchemy import select as _select
+-
+-    def _run() -> None:
+-        try:
+-            with _SL() as session:
+-                hooks = session.execute(_select(_Webhook)).scalars().all()
+-                for event in events:
+-                    trigger_webhooks(hooks, event, {"results": results})
+-        except Exception:
+-            logging.exception("Webhook dispatch failed")
+-
+-    threading.Thread(target=_run, daemon=True).start()
++    """Deliver memory events to subscribed webhooks off-thread. Never raises:
++    webhook delivery must not turn an already-successful memory write into a
++    500 for the caller."""
++    try:
++        events = events_from_add_response(results)
++        if not events:
++            return
++        import threading
++
++        from db import SessionLocal as _SL
++        from models import Webhook as _Webhook
++        from sqlalchemy import select as _select
++
++        def _run() -> None:
++            try:
++                with _SL() as session:
++                    hooks = session.execute(_select(_Webhook)).scalars().all()
++                    for event in events:
++                        trigger_webhooks(hooks, event, {"results": results})
++            except Exception:
++                logging.exception("Webhook dispatch failed")
++
++        threading.Thread(target=_run, daemon=True).start()
++    except Exception:
++        logging.exception("Webhook dispatch failed")
+ 
+ 
+ @app.post("/memories", summary="Create memories")
+ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+     """Store new memories, scoped by user and (optionally) project."""
+     is_admin = _auth is None or _auth.role == "admin"
+     owner_user_id, owner_agent_id, owner_run_id = _scope_identifiers(
+         _auth, memory_create.user_id, memory_create.agent_id, memory_create.run_id
+     )
+     if not any([owner_user_id, owner_agent_id, owner_run_id]):
+diff --git a/server/routers/webhooks.py b/server/routers/webhooks.py
+index cdbcfff3..62714118 100644
+--- a/server/routers/webhooks.py
++++ b/server/routers/webhooks.py
+@@ -1,10 +1,12 @@
++from urllib.parse import urlparse
++
+ from fastapi import APIRouter, Depends, HTTPException
+ from pydantic import BaseModel
+ from sqlalchemy import select
+ from sqlalchemy.orm import Session
+ 
+ from auth import require_admin
+ from db import get_db
+ from models import Webhook
+ 
+ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+@@ -35,22 +37,31 @@ def _to_response(hook: Webhook) -> WebhookResponse:
+         created_at=hook.created_at.isoformat() if hook.created_at else "",
+     )
+ 
+ 
+ @router.get("", response_model=list[WebhookResponse])
+ def list_webhooks(_admin=Depends(require_admin), db: Session = Depends(get_db)):
+     hooks = db.execute(select(Webhook).order_by(Webhook.created_at)).scalars().all()
+     return [_to_response(h) for h in hooks]
+ 
+ 
++def _validate_url(url: str) -> None:
++    """Reject non-http(s) or hostless URLs. Private-range blocking is out of
++    scope (endpoints are admin-gated); keep validation simple."""
++    parsed = urlparse(url)
++    if parsed.scheme not in ("http", "https") or not parsed.netloc:
++        raise HTTPException(status_code=400, detail="url must be a valid http(s) URL")
++
++
+ @router.post("", response_model=WebhookResponse, status_code=201)
+ def create_webhook(body: WebhookCreate, _admin=Depends(require_admin), db: Session = Depends(get_db)):
++    _validate_url(body.url)
+     bad = [e for e in body.events if e not in ALLOWED_EVENTS]
+     if bad:
+         raise HTTPException(status_code=400, detail=f"Unknown events: {bad}. Allowed: {ALLOWED_EVENTS}")
+     hook = Webhook(name=body.name, url=body.url, events=body.events, secret=body.secret)
+     db.add(hook)
+     db.commit()
+     db.refresh(hook)
+     return _to_response(hook)
+ 
+ 
+diff --git a/server/tests/test_webhooks.py b/server/tests/test_webhooks.py
+index c37bc35b..a138e0e8 100644
+--- a/server/tests/test_webhooks.py
++++ b/server/tests/test_webhooks.py
+@@ -1,12 +1,15 @@
+ from types import SimpleNamespace
+ 
++import pytest
++from fastapi import HTTPException
++
+ from webhooks_client import events_from_add_response, trigger_webhooks
+ 
+ 
+ def test_events_from_add_response():
+     results = [{"event": "ADD"}, {"event": "UPDATE"}, {"event": "NOOP"}]
+     assert events_from_add_response(results) == {"memory_added", "memory_updated"}
+     assert events_from_add_response([]) == set()
+ 
+ 
+ def test_trigger_filters_by_subscription(monkeypatch):
+@@ -24,10 +27,36 @@ def test_trigger_filters_by_subscription(monkeypatch):
+     assert [(u, j) for u, j in calls] == [("http://x/1", {"event": "memory_added", "data": {"id": "1"}})]
+ 
+ 
+ def test_trigger_never_raises(monkeypatch):
+     def boom(*a, **k):
+         raise RuntimeError("down")
+ 
+     monkeypatch.setattr("webhooks_client.httpx.post", boom)
+     hook = SimpleNamespace(name="h", url="http://x", events=["memory_added"], secret=None)
+     trigger_webhooks([hook], "memory_added", {})  # must not raise
++
++
++def test_create_webhook_rejects_non_http_url():
++    from routers.webhooks import create_webhook, WebhookCreate
++    body = WebhookCreate(name="bad", url="ftp://example.com/x", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_create_webhook_rejects_missing_host():
++    from routers.webhooks import create_webhook, WebhookCreate
++    body = WebhookCreate(name="bad", url="http://", events=["memory_added"])
++    with pytest.raises(HTTPException) as exc:
++        create_webhook(body, _admin=None, db=object())
++    assert exc.value.status_code == 400
++
++
++def test_fire_webhooks_never_propagates(monkeypatch):
++    import main as m
++
++    def boom(results):
++        raise RuntimeError("dispatch exploded")
++
++    monkeypatch.setattr(m, "events_from_add_response", boom)
++    m._fire_webhooks([{"event": "ADD"}])  # must not raise

@@ -1,0 +1,701 @@
+ab81d8ff feat(dashboard): reorganize nav into SETUP/ACTIVITY/TENANT/ACCOUNT; drop cloud-upsell stubs
+ .../src/app/(root)/dashboard/analytics/page.tsx    |  54 -------
+ .../src/app/(root)/dashboard/api-keys/page.tsx     |  11 --
+ .../src/app/(root)/dashboard/categories/page.tsx   |  36 -----
+ .../app/(root)/dashboard/components/main-nav.tsx   | 174 ++++++++-------------
+ .../app/(root)/dashboard/configuration/page.tsx    |   9 --
+ .../src/app/(root)/dashboard/export/page.tsx       |  65 --------
+ .../src/app/(root)/dashboard/memories/page.tsx     |  11 --
+ server/dashboard/src/i18n/en.ts                    |   3 +
+ server/dashboard/src/i18n/zh.ts                    |   3 +
+ 9 files changed, 73 insertions(+), 293 deletions(-)
+diff --git a/server/dashboard/src/app/(root)/dashboard/analytics/page.tsx b/server/dashboard/src/app/(root)/dashboard/analytics/page.tsx
+deleted file mode 100644
+index 5147c678..00000000
+--- a/server/dashboard/src/app/(root)/dashboard/analytics/page.tsx
++++ /dev/null
+@@ -1,54 +0,0 @@
+-"use client";
+-
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+-
+-function AnalyticsMockup() {
+-  return (
+-    <div className="space-y-4">
+-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+-        {[
+-          { label: "Total Operations", value: "12,847" },
+-          { label: "Avg Latency", value: "142ms" },
+-          { label: "Success Rate", value: "99.7%" },
+-        ].map((stat) => (
+-          <Card key={stat.label} className="border-memBorder-primary">
+-            <CardContent className="p-4">
+-              <p className="text-xs text-onSurface-default-tertiary">
+-                {stat.label}
+-              </p>
+-              <p className="text-2xl font-semibold mt-1">{stat.value}</p>
+-            </CardContent>
+-          </Card>
+-        ))}
+-      </div>
+-      <Card className="border-memBorder-primary">
+-        <CardHeader className="pb-2">
+-          <CardTitle className="text-sm">Operations over time</CardTitle>
+-        </CardHeader>
+-        <CardContent className="p-4">
+-          <div className="h-[200px] flex items-end gap-1">
+-            {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 50].map((h, i) => (
+-              <div
+-                key={i}
+-                className="flex-1 bg-surface-default-brand rounded-t"
+-                style={{ height: `${h}%` }}
+-              />
+-            ))}
+-          </div>
+-        </CardContent>
+-      </Card>
+-    </div>
+-  );
+-}
+-
+-export default function AnalyticsPage() {
+-  return (
+-    <LockedPage
+-      title="Analytics"
+-      description="Track memory operations, latency, and usage patterns over time."
+-      previewContent={<AnalyticsMockup />}
+-      utmMedium="dashboard-locked-analytics"
+-    />
+-  );
+-}
+diff --git a/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx b/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx
+index e38386fe..0b50b666 100644
+--- a/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx
+@@ -12,21 +12,20 @@ import {
+   DialogTitle,
+   DialogTrigger,
+ } from "@/components/ui/dialog";
+ import { DataTable } from "@/components/shared/data-table";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
+ import { api } from "@/utils/api";
+ import { API_KEY_ENDPOINTS } from "@/utils/api-endpoints";
+ import { toast } from "@/components/ui/use-toast";
+-import { UpgradeBanner } from "@/components/self-hosted/upgrade-banner";
+ import { Plus, Copy, Check, Trash2 } from "lucide-react";
+ import { CopyToClipboard } from "react-copy-to-clipboard";
+ import { format } from "date-fns";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import { ApiKey, ApiKeyCreateResponse } from "@/types/api";
+ 
+ export default function ApiKeysPage() {
+   const [createOpen, setCreateOpen] = useState(false);
+   const [newLabel, setNewLabel] = useState("");
+@@ -196,30 +195,20 @@ export default function ApiKeysPage() {
+                   className="w-full"
+                 >
+                   Done
+                 </Button>
+               </div>
+             )}
+           </DialogContent>
+         </Dialog>
+       </div>
+ 
+-      {keys.length >= 3 && (
+-        <UpgradeBanner
+-          id="api-keys-3"
+-          message="Managing multiple apps? Cloud offers project-based isolation."
+-          ctaLabel="Explore Cloud"
+-          ctaUrl="https://app.mem0.ai?utm_source=oss&utm_medium=dashboard-api-keys"
+-          variant="cloud"
+-        />
+-      )}
+-
+       {isLoading ? (
+         <TableSkeleton rows={3} columns={4} />
+       ) : keys.length === 0 ? (
+         <EmptyState
+           title="No API keys yet"
+           description="Create your first API key to start using the Mem0 API."
+         />
+       ) : (
+         <Card className="border-memBorder-primary overflow-hidden">
+           <DataTable
+diff --git a/server/dashboard/src/app/(root)/dashboard/categories/page.tsx b/server/dashboard/src/app/(root)/dashboard/categories/page.tsx
+deleted file mode 100644
+index 39cc979e..00000000
+--- a/server/dashboard/src/app/(root)/dashboard/categories/page.tsx
++++ /dev/null
+@@ -1,36 +0,0 @@
+-"use client";
+-
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent } from "@/components/ui/card";
+-
+-function CategoriesMockup() {
+-  const categories = ["Health", "Preferences", "Work"];
+-  return (
+-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+-      {categories.map((cat) => (
+-        <Card key={cat} className="border-memBorder-primary">
+-          <CardContent className="p-4">
+-            <p className="text-sm font-medium mb-3">{cat}</p>
+-            {[1, 2, 3].map((i) => (
+-              <div
+-                key={i}
+-                className="h-8 bg-surface-default-secondary rounded mb-2"
+-              />
+-            ))}
+-          </CardContent>
+-        </Card>
+-      ))}
+-    </div>
+-  );
+-}
+-
+-export default function CategoriesPage() {
+-  return (
+-    <LockedPage
+-      title="Custom Categories"
+-      description="Organize memories by domain -- health, preferences, work, and more."
+-      previewContent={<CategoriesMockup />}
+-      utmMedium="dashboard-locked-categories"
+-    />
+-  );
+-}
+diff --git a/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx b/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
+index f8185b4a..bd0a987f 100644
+--- a/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
+@@ -1,113 +1,159 @@
+ "use client";
+ 
+ import * as React from "react";
+ import Link from "next/link";
+ import {
+   Activity,
+   Building2,
+   ChartLine,
+-  ChevronDown,
++  FlaskConical,
+   Folder,
+-  FolderInput,
+   GalleryVerticalEnd,
+   KeyRound,
++  Rocket,
+   Settings,
+-  Tags,
+   Users,
+-  WebhookIcon,
+   Wrench,
+ } from "lucide-react";
+ import { useSelector } from "react-redux";
+ import { RootState } from "@/store/store";
+-import { Badge } from "@/components/ui/badge";
+-import {
+-  Collapsible,
+-  CollapsibleContent,
+-  CollapsibleTrigger,
+-} from "@/components/ui/collapsible";
+ import {
+   Sidebar,
+   SidebarContent,
+   SidebarGroup,
+   SidebarMenu,
+   SidebarMenuButton,
+   SidebarMenuItem,
+   SidebarRail,
+   SidebarGroupLabel,
+ } from "@/components/ui/sidebar";
+ import { usePathname } from "next/navigation";
+ import { cn } from "@/lib/utils";
+ import { useTranslation } from "@/i18n";
+ 
+ const NAV_KEYS: Record<string, string> = {
++  "Get Started": "nav.getStarted",
++  Playground: "nav.playground",
++  Dashboard: "nav.dashboardOverview",
+   Requests: "nav.requests",
+   Memories: "nav.memories",
+   Entities: "nav.entities",
+-  Categories: "nav.categories",
+-  Webhooks: "nav.webhooks",
+-  Analytics: "nav.analytics",
+-  Export: "nav.export",
+   "API Keys": "nav.apiKeys",
+   Configuration: "nav.configuration",
+   Settings: "nav.settings",
+   Users: "nav.users",
+   Departments: "nav.departments",
+   Projects: "nav.projects",
+ };
+ 
+ export function MainNav({
+   className,
+   ...props
+ }: React.HTMLAttributes<HTMLElement>) {
+   const pathname = usePathname();
+   const isSidebarCollapsed = useSelector(
+     (state: RootState) => state.layout.isSidebarCollapsed,
+   );
+-  const [isCloudOpen, setIsCloudOpen] = React.useState(true);
+   const { t } = useTranslation();
+ 
+   return (
+     <Sidebar
+       collapsible={isSidebarCollapsed ? "icon" : undefined}
+       className={cn(className, "border-r-0 w-full mb-0 bg-transparent")}
+       {...props}
+     >
+       <SidebarContent>
+         <SidebarGroup>
+           <SidebarMenu className="gap-0">
+             <div className="flex flex-col gap-3">
++              <div className="flex flex-col gap-0">
++                {!isSidebarCollapsed && (
++                  <SidebarGroupLabel className="mb-0">SETUP</SidebarGroupLabel>
++                )}
++                {[
++                  {
++                    title: "Get Started",
++                    url: "/dashboard/get-started",
++                    icon: Rocket,
++                    active: pathname === "/dashboard/get-started",
++                  },
++                  {
++                    title: "Playground",
++                    url: "/dashboard/playground",
++                    icon: FlaskConical,
++                    active: pathname === "/dashboard/playground",
++                  },
++                  {
++                    title: "API Keys",
++                    url: "/dashboard/api-keys",
++                    icon: KeyRound,
++                    active: pathname === "/dashboard/api-keys",
++                  },
++                ].map((item) => (
++                  <SidebarMenuItem key={item.title}>
++                    <SidebarMenuButton
++                      asChild
++                      collapsed={isSidebarCollapsed}
++                      active={item.active}
++                      tooltip={isSidebarCollapsed ? item.title : undefined}
++                    >
++                      <Link
++                        href={item.url}
++                        className={cn(
++                          "flex items-center w-full",
++                          isSidebarCollapsed
++                            ? "justify-center mx-auto"
++                            : "gap-1.5",
++                        )}
++                      >
++                        <item.icon className="size-4 shrink-0" />
++                        {!isSidebarCollapsed && (
++                          <span>{t(NAV_KEYS[item.title] ?? item.title)}</span>
++                        )}
++                      </Link>
++                    </SidebarMenuButton>
++                  </SidebarMenuItem>
++                ))}
++              </div>
++
+               <div className="flex flex-col gap-0">
+                 {!isSidebarCollapsed && (
+                   <SidebarGroupLabel className="mb-0">
+                     ACTIVITY
+                   </SidebarGroupLabel>
+                 )}
+                 {[
++                  {
++                    title: "Dashboard",
++                    url: "/dashboard/overview",
++                    icon: ChartLine,
++                    active: pathname === "/dashboard/overview",
++                  },
+                   {
+                     title: "Requests",
+                     url: "/dashboard/requests",
+                     icon: Activity,
+                     active: pathname === "/dashboard/requests",
+                   },
+-                  {
+-                    title: "Memories",
+-                    url: "/dashboard/memories",
+-                    icon: GalleryVerticalEnd,
+-                    active: pathname === "/dashboard/memories",
+-                  },
+                   {
+                     title: "Entities",
+                     url: "/dashboard/entities",
+                     icon: Users,
+                     active: pathname === "/dashboard/entities",
+                   },
++                  {
++                    title: "Memories",
++                    url: "/dashboard/memories",
++                    icon: GalleryVerticalEnd,
++                    active: pathname === "/dashboard/memories",
++                  },
+                 ].map((item) => (
+                   <SidebarMenuItem key={item.title}>
+                     <SidebarMenuButton
+                       asChild
+                       collapsed={isSidebarCollapsed}
+                       active={item.active}
+                       tooltip={isSidebarCollapsed ? item.title : undefined}
+                     >
+                       <Link
+                         href={item.url}
+@@ -177,113 +223,27 @@ export function MainNav({
+                       </Link>
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                 ))}
+               </div>
+ 
+               {isSidebarCollapsed && (
+                 <div className="h-[1px] w-full bg-memBorder-primary my-2" />
+               )}
+ 
+-              <Collapsible
+-                open={isCloudOpen}
+-                onOpenChange={setIsCloudOpen}
+-                className="flex flex-col gap-0"
+-              >
+-                {!isSidebarCollapsed && (
+-                  <CollapsibleTrigger asChild>
+-                    <SidebarGroupLabel className="cursor-pointer mb-0">
+-                      CLOUD FEATURES
+-                      <ChevronDown
+-                        className={cn(
+-                          "size-3 transition-transform duration-200",
+-                          isCloudOpen ? "" : "-rotate-90",
+-                        )}
+-                      />
+-                    </SidebarGroupLabel>
+-                  </CollapsibleTrigger>
+-                )}
+-                <CollapsibleContent className="flex flex-col gap-0">
+-                  {[
+-                    {
+-                      title: "Categories",
+-                      url: "/dashboard/categories",
+-                      icon: Tags,
+-                    },
+-                    {
+-                      title: "Webhooks",
+-                      url: "/dashboard/webhooks",
+-                      icon: WebhookIcon,
+-                    },
+-                    {
+-                      title: "Analytics",
+-                      url: "/dashboard/analytics",
+-                      icon: ChartLine,
+-                    },
+-                    {
+-                      title: "Export",
+-                      url: "/dashboard/export",
+-                      icon: FolderInput,
+-                    },
+-                  ].map((item) => (
+-                    <SidebarMenuItem key={item.title}>
+-                      <SidebarMenuButton
+-                        asChild
+-                        collapsed={isSidebarCollapsed}
+-                        active={pathname === item.url}
+-                        tooltip={isSidebarCollapsed ? item.title : undefined}
+-                      >
+-                        <Link
+-                          href={item.url}
+-                          className={cn(
+-                            "flex items-center w-full",
+-                            isSidebarCollapsed
+-                              ? "justify-center mx-auto"
+-                              : "gap-1.5",
+-                          )}
+-                        >
+-                          <item.icon className="size-4 shrink-0" />
+-                          {!isSidebarCollapsed && (
+-                            <>
+-                              <span>{t(NAV_KEYS[item.title] ?? item.title)}</span>
+-                              <Badge
+-                                variant="outline"
+-                                className="ml-auto text-memGold-600 border-memGold-300 typo-caption-sm px-1.5 py-0"
+-                              >
+-                                PRO
+-                              </Badge>
+-                            </>
+-                          )}
+-                        </Link>
+-                      </SidebarMenuButton>
+-                    </SidebarMenuItem>
+-                  ))}
+-                </CollapsibleContent>
+-              </Collapsible>
+-
+-              {isSidebarCollapsed && (
+-                <div className="h-[1px] w-full bg-memBorder-primary my-2" />
+-              )}
+-
+               <div className="flex flex-col gap-0">
+                 {!isSidebarCollapsed && (
+                   <SidebarGroupLabel className="mb-0">
+                     ACCOUNT
+                   </SidebarGroupLabel>
+                 )}
+                 {[
+-                  {
+-                    title: "API Keys",
+-                    url: "/dashboard/api-keys",
+-                    icon: KeyRound,
+-                    active: pathname === "/dashboard/api-keys",
+-                  },
+                   {
+                     title: "Configuration",
+                     url: "/dashboard/configuration",
+                     icon: Wrench,
+                     active: pathname === "/dashboard/configuration",
+                   },
+                   {
+                     title: "Settings",
+                     url: "/dashboard/settings",
+                     icon: Settings,
+diff --git a/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx b/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx
+index e4acffa1..0260e83d 100644
+--- a/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx
+@@ -6,21 +6,20 @@ import { Input } from "@/components/ui/input";
+ import { Label } from "@/components/ui/label";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+ } from "@/components/ui/select";
+ import { toast } from "@/components/ui/use-toast";
+-import { UpgradeBanner } from "@/components/self-hosted/upgrade-banner";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { cn } from "@/lib/utils";
+ import { useTranslation } from "@/i18n";
+ import { api } from "@/utils/api";
+ import { MEMORY_ENDPOINTS } from "@/utils/api-endpoints";
+ import {
+   buildProviderConfig,
+   getEffectiveConfig,
+   getProviderPresets,
+ } from "@/utils/self-hosted-config";
+@@ -360,21 +359,13 @@ export default function ConfigurationPage() {
+             </p>
+           )}
+         </div>
+       )}
+ 
+       {isAdmin && (
+         <Button onClick={handleSave} disabled={isSaving}>
+           {isSaving ? "Saving..." : `${t("common.save")} Configuration`}
+         </Button>
+       )}
+-
+-      <UpgradeBanner
+-        id="config-sso"
+-        message="Looking for SSO / SAML? Available in Enterprise."
+-        ctaLabel="Contact sales"
+-        ctaUrl="https://app.mem0.ai/enterprise?utm_source=oss&utm_medium=dashboard-configuration-sso"
+-        variant="enterprise"
+-      />
+     </div>
+   );
+ }
+diff --git a/server/dashboard/src/app/(root)/dashboard/export/page.tsx b/server/dashboard/src/app/(root)/dashboard/export/page.tsx
+deleted file mode 100644
+index 26f8423c..00000000
+--- a/server/dashboard/src/app/(root)/dashboard/export/page.tsx
++++ /dev/null
+@@ -1,65 +0,0 @@
+-"use client";
+-
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent } from "@/components/ui/card";
+-import { Label } from "@/components/ui/label";
+-import { Button } from "@/components/ui/button";
+-
+-function ExportMockup() {
+-  return (
+-    <div className="space-y-4">
+-      <Card className="border-memBorder-primary">
+-        <CardContent className="p-6 space-y-4">
+-          <div className="space-y-2">
+-            <Label>Format</Label>
+-            <div className="flex gap-2">
+-              {["JSON", "CSV", "Pydantic Schema"].map((fmt) => (
+-                <Button
+-                  key={fmt}
+-                  variant="outline"
+-                  size="sm"
+-                  disabled
+-                  className={fmt === "JSON" ? "border-memPurple-300" : ""}
+-                >
+-                  {fmt}
+-                </Button>
+-              ))}
+-            </div>
+-          </div>
+-          <div className="space-y-2">
+-            <Label>Sample output</Label>
+-            <Card className="border-memBorder-primary bg-surface-default-secondary">
+-              <CardContent className="p-3">
+-                <pre className="text-xs text-onSurface-default-secondary font-mono whitespace-pre-wrap">
+-                  {`{
+-  "memories": [
+-    {
+-      "id": "mem_abc123",
+-      "content": "User prefers dark mode",
+-      "user_id": "user_1",
+-      "created_at": "2026-04-10T12:00:00Z"
+-    }
+-  ],
+-  "total": 1247
+-}`}
+-                </pre>
+-              </CardContent>
+-            </Card>
+-          </div>
+-          <Button disabled>Export Memories</Button>
+-        </CardContent>
+-      </Card>
+-    </div>
+-  );
+-}
+-
+-export default function ExportPage() {
+-  return (
+-    <LockedPage
+-      title="Export"
+-      description="Export your memories in JSON, CSV, or Pydantic schema format."
+-      previewContent={<ExportMockup />}
+-      utmMedium="dashboard-locked-export"
+-    />
+-  );
+-}
+diff --git a/server/dashboard/src/app/(root)/dashboard/memories/page.tsx b/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
+index 23cce7dd..00fc38f4 100644
+--- a/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
+@@ -11,21 +11,20 @@ import { DataTable } from "@/components/shared/data-table";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
+ import {
+   Sheet,
+   SheetContent,
+   SheetHeader,
+   SheetTitle,
+   SheetDescription,
+ } from "@/components/ui/sheet";
+-import { UpgradeBanner } from "@/components/self-hosted/upgrade-banner";
+ import { toast } from "@/components/ui/use-toast";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { api } from "@/utils/api";
+ import { MEMORY_ENDPOINTS, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import { Memory, Project } from "@/types/api";
+ 
+ const PAGE_SIZE = 20;
+ // Keep in sync with ALL_MEMORIES_LIMIT in server/main.py.
+ const MEMORY_FETCH_LIMIT = 1000;
+@@ -111,30 +110,20 @@ export default function MemoriesPage() {
+       width: 120,
+       render: (value: string) =>
+         value ? format(new Date(value), "MMM d, yyyy") : "--",
+     },
+   ];
+ 
+   return (
+     <div className="space-y-4">
+       <h1 className="text-xl font-semibold font-fustat">Memories</h1>
+ 
+-      {memories.length >= MEMORY_FETCH_LIMIT && (
+-        <UpgradeBanner
+-          id="memories-1k"
+-          message="1,000+ memories stored. Categories can help organize them."
+-          ctaLabel="Explore Cloud"
+-          ctaUrl="https://app.mem0.ai?utm_source=oss&utm_medium=dashboard-memories"
+-          variant="cloud"
+-        />
+-      )}
+-
+       <div className="flex gap-3">
+         <Input
+           placeholder="Filter by User ID (optional)"
+           value={userId}
+           onChange={(e) => setUserId(e.target.value)}
+           onKeyDown={(e) => {
+             if (e.key === "Enter") {
+               setPage(0);
+               refetch();
+             }
+diff --git a/server/dashboard/src/i18n/en.ts b/server/dashboard/src/i18n/en.ts
+index 2ad8a8d4..7476e8ca 100644
+--- a/server/dashboard/src/i18n/en.ts
++++ b/server/dashboard/src/i18n/en.ts
+@@ -25,20 +25,23 @@ export const en = {
+     testOk: "Connection OK",
+     testFail: "Connection failed",
+   },
+   auth: {
+     login: "Sign in",
+     email: "Email",
+     password: "Password",
+   },
+   nav: {
+     dashboard: "Dashboard",
++    dashboardOverview: "Dashboard",
++    getStarted: "Get Started",
++    playground: "Playground",
+     requests: "Requests",
+     memories: "Memories",
+     entities: "Entities",
+     categories: "Categories",
+     webhooks: "Webhooks",
+     analytics: "Analytics",
+     export: "Export",
+     apiKeys: "API Keys",
+     configuration: "Configuration",
+     settings: "Settings",
+diff --git a/server/dashboard/src/i18n/zh.ts b/server/dashboard/src/i18n/zh.ts
+index 631593e4..e8ed4dac 100644
+--- a/server/dashboard/src/i18n/zh.ts
++++ b/server/dashboard/src/i18n/zh.ts
+@@ -18,20 +18,23 @@ export const zh: Dict = {
+     embedderModel: "模型",
+     embedderBaseUrl: "嵌入接口地址",
+     embedderApiKey: "嵌入密钥",
+     noKeyNeeded: "本地部署：无需密钥",
+     testOk: "连接成功",
+     testFail: "连接失败",
+   },
+   auth: { login: "登录", email: "邮箱", password: "密码" },
+   nav: {
+     dashboard: "仪表盘",
++    dashboardOverview: "总览",
++    getStarted: "接入",
++    playground: "调试沙盒",
+     requests: "请求",
+     memories: "记忆",
+     entities: "实体",
+     categories: "分类",
+     webhooks: "Webhook",
+     analytics: "分析",
+     export: "导出",
+     apiKeys: "API 密钥",
+     configuration: "配置",
+     settings: "设置",

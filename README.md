@@ -10,7 +10,7 @@ This repository contains the complete development SOP for **mediation-platform**
 
 - Standardized development workflows from "one-sentence requirement" to "code delivery"
 - Skills for AI coding tools (Cursor, Qoder, CodeBuddy, Claude Code)
-- Double-track memory framework (MemPalace × codebase-mem-mcp)
+- Long-term memory via self-hosted **mem0** (vector + graph memory), MCP-integrated across all AI IDEs
 - Scenario-based pipelines for different development patterns
 - QA automation with end-to-end browser testing
 - Documentation templates and scene prompts
@@ -44,7 +44,7 @@ The core SOP document (`develop-sop.md`) covers:
 | §2 | Prompt Generation - Test prompts, development prompts, scene templates |
 | §3 | Testing & Development - End-to-end execution, batch processing |
 | §4 | Scenario SOPs - Framework, one-sentence, upgrade, copy pipelines |
-| §5 | Double-Track Memory - MemPalace × codebase-mem-mcp framework |
+| §5 | Long-Term Memory - mem0 memory system (store/retrieve/team sharing) |
 | §6 | Documentation - Product research, market research templates |
 
 ### 2. Skills (`skills/`)
@@ -52,9 +52,10 @@ The core SOP document (`develop-sop.md`) covers:
 - **qa-dev**: Test + development automation skill with `/qa-dev` command
 - Supports batch execution, unattended mode, regression testing
 
-### 3. Tools (`tools/`)
+### 3. Memory Service (`deploy/mem0/`)
 
-- **cbmem-team**: HTTP multi-user wrapper around `codebase-memory-mcp` for team collaboration
+- **mem0**: self-hosted long-term memory service (API :8888 / MCP :8080 / Dashboard :3001),
+  backed by PostgreSQL (pgvector) + Neo4j, MCP-integrated with CodeBuddy / Qoder / Cursor etc.
 
 ### 4. Example Projects (`example/`)
 
@@ -83,29 +84,42 @@ The core SOP document (`develop-sop.md`) covers:
 | `copy-app-pipeline.md` | Clone mobile apps (uniapp) |
 | `java-upgrade-pipeline.md` | Technology stack migration |
 
-## Double-Track Memory Framework
+## Long-Term Memory (mem0)
 
-Combines natural language memory with code structure memory:
+Provides long-term memory to all AI development tools via MCP:
 
-| Track | Technology | Purpose |
-|-------|------------|---------|
-| **Track A** | MemPalace | Team semantic memory, decisions, customer requirements |
-| **Track B** | codebase-mem-mcp | Code structure, architecture, call chains |
+| Capability | Description |
+|------------|-------------|
+| Long-term memory | Conversations/facts/decisions/preferences, vector retrieval (pgvector) |
+| Graph memory | Entity relation graph (Neo4j), `GRAPH_ENABLED=true` |
+| Team sharing | `git_remote` → `project_id` shared pool, cross-user retrieval |
+| Session transcript | Per-turn Q/A verbatim archive, grouped by `session_id` |
 
 ### Deployment
 
 ```bash
-# Track A: MemPalace (Docker)
-docker run -d --name mempalace \
-  -p 8080:8080 \
-  -v ~/.mempalace:/data \
-  -e MP_VECTOR_BACKEND=chromadb \
-  mempalace/mempalace:0.8.3
+# One-shot install (service + IDE config)
+./scripts/install-all.sh          # Linux/macOS
+./scripts/install-all.ps1         # Windows
 
-# Track B: codebase-memory-mcp
-npm install -g codebase-memory-mcp
-codebase-memory-mcp install
+# Or manual
+cd deploy/mem0 && docker compose up -d
 ```
+
+### IDE Integration
+
+```json
+{
+  "mcpServers": {
+    "mem0-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  }
+}
+```
+
+See [docs/quick-ref/mem0-ai-tools-config-guide.md](docs/quick-ref/mem0-ai-tools-config-guide.md) for the full guide.
 
 ## Getting Started
 
@@ -135,7 +149,7 @@ rm -rf temp-design
 }
 ```
 
-**Cursor:** Install MCP servers for `playwright` and `memplace`.
+**Cursor:** Install the `mem0` MCP server (see [docs/ide-config/ide-mcp-templates.md](docs/ide-config/ide-mcp-templates.md)).
 
 ### 3. Map Your Codebase
 
@@ -196,8 +210,7 @@ ai-dev-sop/
 │   │   ├── java-upgrade-pipeline.md
 │   │   ├── docs-pipeline.md
 │   │   ├── qa-dev-sop.md
-│   │   ├── mempalace-codebase-mem-framework.md
-│   │   └── benchmark/       # Evaluation datasets
+│   │   └── benchmark/       # Evaluation datasets (historical, archived with old memory system)
 │   │       ├── DS-Decision.md
 │   │       ├── DS-CallPath.md
 │   │       ├── DS-Cross.md
@@ -206,27 +219,17 @@ ai-dev-sop/
 │   │       └── DS-DeadCode.md
 │   └── scene/
 ├── skills/
-│   └── qa-dev/
-├── tools/
-│   └── cbmem-team/       # Team wrapper for codebase-memory-mcp
-│       ├── cmd/
-│       │   ├── cbmem-team/
-│       │   └── cbmem-mint-token/
-│       └── internal/
-│           ├── pool/
-│           ├── mcp/
-│           ├── auth/
-│           └── store/
-└── example/
-    └── ai-coding-boot/
+│   ├── qa-dev/
+│   └── mem0-longterm-memory/   # mem0 memory skill
+└── deploy/
+    └── mem0/               # Self-hosted mem0 (API/MCP/Dashboard)
 ```
 
 ## Resources
 
-- [MemPalace GitHub](https://github.com/MemPalace/mempalace)
-- [MemPalace Documentation](https://mempalaceofficial.com/)
-- [codebase-memory-mcp GitHub](https://github.com/DeusData/codebase-memory-mcp)
-- [codebase-memory-mcp npm](https://www.npmjs.com/package/codebase-memory-mcp)
+- [mem0 Documentation](https://docs.mem0.ai/)
+- [mem0 MCP Integration Guide](https://docs.mem0.ai/platform/mem0-mcp)
+- [Mem0 Cloud Dashboard](https://app.mem0.ai/)
 
 ## License
 

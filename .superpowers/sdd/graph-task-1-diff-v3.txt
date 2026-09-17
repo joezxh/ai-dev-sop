@@ -1,0 +1,175 @@
+diff --git a/server/graph_memory.py b/server/graph_memory.py
+index 40fb6751..752b0b4e 100644
+--- a/server/graph_memory.py
++++ b/server/graph_memory.py
+@@ -88,21 +88,24 @@ class GraphMemory:
+             logger.exception("GraphMemory degraded: Neo4j unavailable")
+             self.enabled = False
+             return
+         self.embedder = embedder
+         self.llm = llm
+         try:
+             self.threshold = float(
+                 threshold if threshold is not None else os.environ.get("GRAPH_THRESHOLD", DEFAULT_THRESHOLD)
+             )
+         except (TypeError, ValueError):
+-            logger.warning("Invalid GRAPH_THRESHOLD value %r, using default %s", threshold, DEFAULT_THRESHOLD)
++            # Log the raw value actually read (the `threshold` argument may be
++            # None here when the bad value came from the env).
++            raw = threshold if threshold is not None else os.environ.get("GRAPH_THRESHOLD")
++            logger.warning("Invalid GRAPH_THRESHOLD value %r, using default %s", raw, DEFAULT_THRESHOLD)
+             self.threshold = float(DEFAULT_THRESHOLD)
+         self.custom_prompt = os.environ.get("GRAPH_CUSTOM_PROMPT") or None
+ 
+     # ---- internals -------------------------------------------------------
+ 
+     def _ensure_indexes(self) -> None:
+         for statement in (
+             f"CREATE INDEX graph_user IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.user_id)",
+             f"CREATE INDEX graph_project IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.project_id)",
+             f"CREATE INDEX graph_name_user IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.name, n.user_id)",
+@@ -122,22 +125,26 @@ class GraphMemory:
+         if filters.get("scope") == "project" and filters.get("project_id"):
+             return f"{alias}.project_id = $project_id"
+         return (
+             f"{alias}.user_id = $user_id "
+             f"AND coalesce({alias}.project_id, '') = coalesce($project_id, '')"
+         )
+ 
+     def _scope_params(self, filters: dict) -> dict:
+         if filters.get("scope") == "project" and filters.get("project_id"):
+             return {"project_id": filters["project_id"]}
+-        # Personal scope: both params always present (project_id may be None).
+-        return {"user_id": filters.get("user_id"), "project_id": filters.get("project_id")}
++        # Personal scope: both params always present. project_id is
++        # materialized to "" (never None): Neo4j rejects MERGE on a null
++        # property value (error 22N31), and the read predicate
++        # `coalesce(n.project_id, '') = coalesce($project_id, '')` treats
++        # null and '' as the same personal-scope bucket.
++        return {"user_id": filters.get("user_id"), "project_id": filters.get("project_id") or ""}
+ 
+     def _extract_entities(self, data: str, filters: dict) -> list[dict]:
+         user_id = filters.get("user_id") or "unknown"
+         messages = [
+             {"role": "system", "content": EXTRACT_ENTITIES_SYSTEM.replace("{user_id}", user_id)},
+             {"role": "user", "content": data},
+         ]
+         parsed = _parse_json(self.llm.generate_response(messages))
+         entities = []
+         for item in parsed.get("entities") or []:
+@@ -188,60 +195,75 @@ class GraphMemory:
+             "ORDER BY similarity DESC LIMIT 1"
+         )
+         params = self._scope_params(filters)
+         params.update({"embedding": embedding, "threshold": self.threshold})
+         rows = self.graph.query(cypher, params) or []
+         return rows[0] if rows else None
+ 
+     # ---- public API ------------------------------------------------------
+ 
+     def add(self, data: str, filters: dict) -> dict:
++        """Extract entities/relations and merge them into the graph.
++
++        Node identity is (name, user_id, project_id), with project_id
++        materialized to "" for personal scope (a real Neo4j rejects MERGE
++        with a null property value — error 22N31). Migration note: any
++        legacy nodes written with a null project_id (should none exist)
++        will NOT be hit by personal/project retrieval or scope predicates —
++        a one-time backfill (`SET n.project_id = ''` where
++        `n.project_id IS NULL`) would be required; there is no live legacy
++        data, so this is documented only.
++        """
+         if not self.enabled:
+             return {"added_entities": [], "deleted_entities": []}
+         if not filters.get("user_id"):
+             # Reads may hit the shared project pool, but writes always come
+             # from a real user's add — refuse unowned writes.
+             logger.warning("GraphMemory.add requires user_id in filters, skipping")
+             return {"added_entities": [], "deleted_entities": []}
+         try:
+             entities = self._extract_entities(data, filters)
+             triples = self._extract_relations(data, filters, entities)
+             added = []
+             for t in triples:
+                 src = self._find_similar_node(t["source"], filters) or {"name": t["source"], "type": "entity"}
+                 dst = self._find_similar_node(t["destination"], filters) or {"name": t["destination"], "type": "entity"}
+                 src_emb = self.embedder.embed(src["name"])
+                 dst_emb = self.embedder.embed(dst["name"])
+                 cypher = (
+                     # Node identity = (name, user_id, project_id): a personal
+-                    # node (project_id null) is never reused by a project add.
++                    # node (project_id materialized to "") is never reused by
++                    # a project add. No SET a.project_id / SET b.project_id —
++                    # identity keys are only in the MERGE pattern.
+                     f"MERGE (a:{BASE_LABEL} {{name: $source, user_id: $user_id, project_id: $project_id}}) "
+                     "ON CREATE SET a.created = timestamp(), a.mentions = 1, a.type = $source_type "
+                     "ON MATCH SET a.mentions = coalesce(a.mentions, 0) + 1 "
+                     "CALL db.create.setNodeVectorProperty(a, 'embedding', $source_embedding) "
+                     f"MERGE (b:{BASE_LABEL} {{name: $destination, user_id: $user_id, project_id: $project_id}}) "
+                     "ON CREATE SET b.created = timestamp(), b.mentions = 1, b.type = $destination_type "
+                     "ON MATCH SET b.mentions = coalesce(b.mentions, 0) + 1 "
+                     "CALL db.create.setNodeVectorProperty(b, 'embedding', $destination_embedding) "
+                     f"MERGE (a)-[r:{t['relationship']}]->(b) "
+                     "ON CREATE SET r.created = timestamp(), r.mentions = 1, r.valid = true, "
+                     "r.user_id = $user_id, r.project_id = $project_id "
+                     "ON MATCH SET r.mentions = coalesce(r.mentions, 0) + 1, "
+                     "r.updated_at = timestamp(), r.valid = true "
+                     "RETURN coalesce(a.name, '') AS source, type(r) AS relationship, "
+                     "coalesce(b.name, '') AS destination"
+                 )
+                 params = {
+                     "source": src["name"], "destination": dst["name"],
+                     "source_type": src.get("type", "entity"), "destination_type": dst.get("type", "entity"),
+                     "source_embedding": src_emb, "destination_embedding": dst_emb,
+-                    "user_id": filters.get("user_id"), "project_id": filters.get("project_id"),
++                    # project_id materialized to "" for personal scope — a
++                    # null MERGE key is invalid in Neo4j (22N31).
++                    "user_id": filters.get("user_id"), "project_id": filters.get("project_id") or "",
+                 }
+                 rows = self.graph.query(cypher, params) or []
+                 added.extend(rows or [t])
+             return {"added_entities": added, "deleted_entities": []}
+         except Exception:
+             logger.exception("GraphMemory.add failed (degraded, main flow unaffected)")
+             return {"added_entities": [], "deleted_entities": []}
+ 
+     def search(self, query: str, filters: dict, limit: int = 100) -> list[dict]:
+         if not self.enabled:
+diff --git a/server/tests/test_graph_memory.py b/server/tests/test_graph_memory.py
+index 24e96ef9..53468121 100644
+--- a/server/tests/test_graph_memory.py
++++ b/server/tests/test_graph_memory.py
+@@ -170,23 +170,31 @@ def test_personal_node_not_reused_by_project_add():
+     llm = FakeLLM([
+         '{"entities":[{"entity":"alice","entity_type":"person"}]}',
+         '{"entities":[{"source":"alice","relationship":"WORKS_ON","destination":"payments"}]}',
+         # second add() re-runs the same two extraction calls
+         '{"entities":[{"entity":"alice","entity_type":"person"}]}',
+         '{"entities":[{"source":"alice","relationship":"WORKS_ON","destination":"payments"}]}',
+     ])
+     g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
+     g.add("alice works on payments", {"user_id": "u1", "project_id": None})
+     g.add("alice works on payments", {"user_id": "u1", "project_id": "p1"})
+-    merge_params = [p for c, p in neo4j.queries if "MERGE (a" in c]
++    merge_calls = [(c, p) for c, p in neo4j.queries if "MERGE (a" in c]
++    # params are materialized: personal scope project_id is "" (never None) —
++    # a null MERGE key would fail on real Neo4j (22N31).
++    merge_params = [p for _, p in merge_calls]
+     vals = {(p["source"], p["user_id"], p.get("project_id")) for p in merge_params}
+-    assert ("alice", "u1", None) in vals and ("alice", "u1", "p1") in vals
++    assert ("alice", "u1", "") in vals and ("alice", "u1", "p1") in vals
++    # lock the MERGE pattern keys: project_id must be part of the identity
++    # pattern, not rewritten via SET afterwards.
++    cypher = next(c for c, _ in merge_calls)
++    assert "project_id: $project_id" in cypher      # MERGE 模式键包含 project_id
++    assert "SET a.project_id" not in cypher         # 身份键之外不得再改写
+ 
+ 
+ def test_hard_delete_without_scope_is_noop():
+     neo4j = FakeNeo4j()
+     g = gm.GraphMemory(embedder=FakeEmbedder(), llm=FakeLLM([]), driver=neo4j, threshold=0.7)
+     baseline = len(neo4j.queries)  # index statements issued by the constructor
+     g.hard_delete({})
+     assert len(neo4j.queries) == baseline  # 绝不生成无界 DETACH DELETE
+ 
+ 

@@ -1,0 +1,220 @@
+diff --git a/server/graph_memory.py b/server/graph_memory.py
+index c392a17c..0b8a42a6 100644
+--- a/server/graph_memory.py
++++ b/server/graph_memory.py
+@@ -262,31 +262,33 @@ class GraphMemory:
+                 added.extend(rows or [t])
+             return {"added_entities": added, "deleted_entities": []}
+         except Exception:
+             logger.exception("GraphMemory.add failed (degraded, main flow unaffected)")
+             return {"added_entities": [], "deleted_entities": []}
+ 
+     def _guard_unscoped_read(self, filters: dict, op: str) -> bool:
+         """Return True when the read must be refused (log + empty result).
+ 
+         Same guard semantics as hard_delete: a project scope without
+-        project_id, or filters with neither user_id nor project_id, would
+-        otherwise produce a null-property predicate matching nothing today
+-        but silently widening if scope predicates ever change.
++        project_id, or a user scope (explicit or default) without user_id,
++        would otherwise produce a null-property predicate matching nothing
++        today but silently widening if scope predicates ever change. In
++        search's case refusing early also avoids a wasted LLM extraction
++        call for a query that can never match.
+         """
+         if filters.get("scope") == "project":
+             if not filters.get("project_id"):
+                 logger.warning("GraphMemory.%s: project scope requires project_id, refusing", op)
+                 return True
+             return False
+-        if not filters.get("user_id") and not filters.get("project_id"):
+-            logger.warning("GraphMemory.%s: filters require user_id or project_id, refusing", op)
++        if not filters.get("user_id"):
++            logger.warning("GraphMemory.%s: user scope requires user_id, refusing", op)
+             return True
+         return False
+ 
+     def search(self, query: str, filters: dict, limit: int = 100) -> list[dict]:
+         if not self.enabled:
+             return []
+         if self._guard_unscoped_read(filters, "search"):
+             return []
+         try:
+             entities = self._extract_entities(query, filters)
+diff --git a/server/main.py b/server/main.py
+index f42b20f2..73d6675d 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -1,18 +1,10 @@
+-import time as _tmod
+-_TMARK = _tmod.perf_counter()
+-def _mark(label):
+-    global _TMARK
+-    _now = _tmod.perf_counter()
+-    logging.getLogger("startup").info("[startup] %-50s +%.2fs", label, _now - _TMARK)
+-    _TMARK = _now
+-
+ import asyncio
+ import json
+ import logging
+ import os
+ import time
+ from concurrent.futures import ThreadPoolExecutor
+ 
+ import openai as openai_sdk
+ from datetime import datetime, timedelta, timezone
+ from typing import Any, Dict, List, Optional
+@@ -59,22 +51,21 @@ from server_state import (
+ from slowapi import _rate_limit_exceeded_handler
+ from slowapi.errors import RateLimitExceeded
+ from sqlalchemy import func, select
+ 
+ from mem0.exceptions import ValidationError as Mem0ValidationError
+ from mem0.utils.factory import EmbedderFactory, LlmFactory
+ 
+ load_dotenv()
+ 
+ install_request_id_logging()
+-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - [%(request_id)s] %(message)s")
+-_mark("top-level imports (mem0/openai/routers/...) up to logging setup")
++logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - [%(request_id)s] %(message)s")
+ 
+ MIN_KEY_LENGTH = 16
+ SENSITIVE_CONFIG_KEYS = {
+     "admin_api_key",
+     "api_key",
+     "authorization",
+     "jwt_secret",
+     "password",
+     "password_hash",
+     "secret",
+@@ -157,21 +148,20 @@ if AUTH_DISABLED:
+     logging.warning("AUTH_DISABLED is enabled. Protected endpoints are open for local development only.")
+ elif ADMIN_API_KEY and len(ADMIN_API_KEY) < MIN_KEY_LENGTH:
+     logging.warning(
+         "ADMIN_API_KEY is shorter than %d characters - consider using a longer key for production.",
+         MIN_KEY_LENGTH,
+     )
+ elif not ADMIN_API_KEY:
+     _warn_if_unconfigured()
+ 
+ telemetry.log_status()
+-_mark("telemetry.log_status")
+ 
+ POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "postgres")
+ POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
+ POSTGRES_DB = os.environ.get("POSTGRES_DB", "postgres")
+ POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")
+ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "postgres")
+ POSTGRES_COLLECTION_NAME = os.environ.get("POSTGRES_COLLECTION_NAME", "memories")
+ 
+ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+ HISTORY_DB_PATH = os.environ.get("HISTORY_DB_PATH", "/app/history/history.db")
+@@ -195,75 +185,62 @@ DEFAULT_CONFIG = {
+         "provider": "openai",
+         "config": {"api_key": OPENAI_API_KEY, "temperature": 0.2, "model": DEFAULT_LLM_MODEL},
+     },
+     "embedder": {"provider": "openai", "config": {"api_key": OPENAI_API_KEY, "model": DEFAULT_EMBEDDER_MODEL}},
+     "history_db_path": HISTORY_DB_PATH,
+ }
+ 
+ 
+ set_session_factory(SessionLocal)
+ initialize_state(DEFAULT_CONFIG)
+-_mark("initialize_state -> Memory.from_config (neo4j + pgvector)")
+ 
+ # Ensure multi-tenant tables (departments, projects) exist and the alembic-managed
+ # `users` table gains its department_id column (create_all never alters tables).
+ from db import Base, ensure_tenant_schema, engine  # noqa: E402
+ 
+ Base.metadata.create_all(engine)
+ ensure_tenant_schema(engine)
+-_mark("create_all + ensure_tenant_schema (postgres)")
+ 
+ 
+ app = FastAPI(
+     title="Mem0 REST APIs",
+     description=(
+         "A REST API for managing and searching memories for your AI Agents and Apps.\n\n"
+         "## Authentication\n"
+         "Supports Bearer JWT tokens, per-user API keys via `X-API-Key` header, "
+         "or the legacy `ADMIN_API_KEY` environment variable. Set `AUTH_DISABLED=true` for local development only."
+     ),
+     version="1.0.0",
+     redirect_slashes=False,
+ )
+ app.state.limiter = limiter
+ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+ app.add_exception_handler(UpstreamError, upstream_error_handler)
+ DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:3000")
+-# CORS allowed origins. Defaults cover the local dashboard on :3000/:3001 and the
+-# value advertised via DASHBOARD_URL. Override with CORS_ALLOW_ORIGINS (comma-separated)
+-# when fronting the API with a proxy/gateway. allow_credentials=True + a reflected
+-# origin is valid, so "*" is also accepted for local dev.
+-_cors_env = os.environ.get("CORS_ALLOW_ORIGINS", "").strip()
+-_CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()] or [
+-    DASHBOARD_URL,
+-    "http://localhost:3000",
+-    "http://localhost:3001",
+-]
+ app.add_middleware(
+     CORSMiddleware,
+-    allow_origins=_CORS_ORIGINS,
++    allow_origins=[DASHBOARD_URL],
+     allow_credentials=True,
+     allow_methods=["*"],
+     allow_headers=["*"],
+ )
+ 
+ app.include_router(auth_router.router)
+ app.include_router(api_keys_router.router)
+ app.include_router(entities_router.router)
+ app.include_router(requests_router.router)
+ app.include_router(departments_router.router)
+ app.include_router(projects_router.router)
+ app.include_router(users_router.router)
+ app.include_router(stats_router.router)
+ app.include_router(graph_router.router)
+ app.include_router(webhooks_router.router)
+-_mark("FastAPI app + all routers registered")
+ 
+ 
+ class Message(BaseModel):
+     role: str = Field(..., description="Role of the message (user or assistant).")
+     content: str = Field(..., description="Message content.")
+ 
+ 
+ class MemoryCreate(BaseModel):
+     messages: List[Message] = Field(..., description="List of messages to store.")
+     user_id: Optional[str] = None
+diff --git a/server/server_state.py b/server/server_state.py
+index f4d6866d..b9fbf8f7 100644
+--- a/server/server_state.py
++++ b/server/server_state.py
+@@ -107,20 +107,26 @@ def update_config(updates: Dict[str, Any]) -> Dict[str, Any]:
+ 
+ def get_graph_memory():
+     """Lazily construct the GraphMemory singleton from the live Memory config.
+ 
+     Reuses the same embedder/LLM instances as the vector memory so graph
+     entity embeddings live in the same vector space and relation extraction
+     uses the same model. Construction failures degrade inside GraphMemory
+     itself (enabled=False), never raising to the caller.
+     """
+     global _graph_memory
++    # Double-checked locking: the common path (singleton already built) must
++    # not take _state_lock — a slow Neo4j connection inside the constructor
++    # would otherwise block every get_memory_instance() caller for its
++    # duration.
++    if _graph_memory is not None:
++        return _graph_memory
+     with _state_lock:
+         if _graph_memory is None:
+             from graph_memory import GraphMemory
+ 
+             memory = get_memory_instance()
+             _graph_memory = GraphMemory(embedder=memory.embedding_model, llm=memory.llm)
+         return _graph_memory
+ 
+ 
+ def get_current_config() -> Dict[str, Any]:

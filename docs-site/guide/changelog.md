@@ -1,5 +1,15 @@
 # 更新日志
 
+## v2.0.0（2026-09-18）
+
+### 记忆系统切换为 mem0
+
+- 移除旧双轨记忆系统（`tools/mempalace`、`tools/codebase-memory-mcp`、`tools/cbmem-team`）
+- 记忆功能统一替换为自托管 **mem0**（仓库 `deploy/mem0/`：API :8888 / MCP :8080 / Dashboard :3001）
+- SOP-M1~M5 全部更新为 mem0 工作流；新增《mem0 AI 工具配置手册》（`docs/quick-ref/`）
+- 控制台页面下线（管理功能由 mem0 Dashboard 提供），导航与开发代理同步移除
+- 历史设计文档（superpowers specs/plans、benchmark）标注废弃归档
+
 ## v1.1.0（2026-07-12）
 
 ### 顶栏文档聚合菜单
@@ -16,7 +26,7 @@
 - VitePress 1.3 + Vue 3 文档站点
 - 中英日三语支持（zh-CN / en / ja）
 - 完整 7 阶段 SOP（§0 → §6）拆分
-- 双轨记忆框架（§5）配套
+- 双轨记忆框架（§5）配套【v2.0 起替换为 mem0】
 - 场景 pipeline 文档（§4 / reference/）
 - GitHub Pages 部署工作流
 - Giscus 评论 / Mermaid 图表
@@ -31,5 +41,5 @@
 ### 待办（v1.1）
 
 - 完整 EN/JA 子页面翻译
-- MemPalace / codebase-mem-mcp 可视化演示
+- MemPalace / codebase-mem-mcp 可视化演示【已随旧记忆系统废弃】
 - SOP 视频教程

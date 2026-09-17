@@ -1,5 +1,11 @@
 # SOP-M4: 知识沉淀指南
 
+> **版本**: v2.0
+> **适用阶段**: 开发流程 M4 - 知识沉淀
+> **目标读者**: 开发者
+> **变更说明**: 旧双轨沉淀（MemPalace 手动写入 × cbmem-team Console 归纳蒸馏）已移除，
+> 统一改为 **mem0** 沉淀：Agent 自动提交（MCP `add_memory`）+ Dashboard 人工浏览，
+> AI 归纳/蒸馏由 Agent 在会话内完成（结合 `infer=True` 事实抽取）。
 
 ---
 
@@ -7,49 +13,49 @@
 
 ### 1.1 目标
 
-将开发过程中的知识结构化沉淀，使用归纳/蒸馏提取关键信息，写入 MemPalace 供团队复用。
+将开发过程中的知识结构化沉淀，写入 mem0 项目共享池供团队复用。
 
-### 1.2 双轨沉淀模式
+### 1.2 mem0 沉淀模式
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     双轨沉淀模式                                    │
+│                     mem0 知识沉淀                                  │
 ├───────────────────────────┬─────────────────────────────────────┤
-│   轨道 A: MemPalace       │     轨道 B: cbmem-team Console     │
-│   (人工写入)              │     (AI 归纳蒸馏)                   │
+│   Agent 自动提交            │     Dashboard 人工管理               │
+│   (MCP add_memory)        │     (localhost:3001)                │
 ├───────────────────────────┼─────────────────────────────────────┤
-│  ✓ 手动添加关键记忆        │  ✓ 会话归纳 (5 Hall)               │
-│  ✓ ADR 记录              │  ✓ 知识蒸馏                        │
-│  ✓ 最佳实践              │  ✓ 自动结构化                      │
+│  ✓ 会话留痕（每轮 Q/A）     │  ✓ 浏览 / 检索 / 分组查看            │
+│  ✓ 决策与事实记录          │  ✓ Copilot 辅助归纳                  │
+│  ✓ 最佳实践 / 经验教训      │  ✓ 按 session_id / type 过滤         │
+│  ✓ infer=True 事实抽取      │  ✓ Webhooks 事件通知                 │
 └───────────────────────────┴─────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Hall 分类体系
+## 2. 分类体系（metadata.type）
 
-### 2.1 Hall 类型说明
+### 2.1 类型说明
 
-| Hall | 说明 | 内容类型 | 示例 |
+| type | 说明 | 内容类型 | 示例 |
 |------|------|----------|------|
-| `hall_facts` | 事实 | 技术决策、架构约束 | "我们使用 PostgreSQL 作为主数据库" |
-| `hall_events` | 事件 | 会议、里程碑、调试 | "2024-07-10 完成支付模块重构" |
-| `hall_discoveries` | 发现 | 性能问题、Bug 根因 | "发现 N+1 查询问题，使用 EntityGraph 解决" |
-| `hall_preferences` | 偏好 | 代码风格、工具选择 | "团队偏好使用 Lombok 简化 POJO" |
-| `hall_advice` | 建议 | 最佳实践、避坑指南 | "新模块建议使用 DDD 架构" |
+| `fact` | 事实 | 技术决策、架构约束 | "我们使用 PostgreSQL 作为主数据库" |
+| `decision` | 决策 | ADR、方案取舍 | "选择 EntityGraph 而非 DTO 投影" |
+| `preference` | 偏好 | 代码风格、工具选择 | "团队偏好使用 Lombok 简化 POJO" |
+| `note` | 经验/发现 | 性能问题、Bug 根因、建议 | "发现 N+1 查询问题，使用 EntityGraph 解决" |
+| `conversation` | 会话留痕 | 每轮 Q/A 原文 | 见 `CODEBUDDY.md` §2.1 |
 
-### 2.2 Wing/Room 命名规范
+### 2.2 作用域约定
 
-| 层级 | 命名规范 | 示例 |
-|------|----------|------|
-| 个人 Wing | `wing_{name}` | `wing_alice` |
-| 项目 Wing | `project_{name}` | `project-payment` |
-| 团队 Wing | `team_{dept}` | `team-backend` |
-| Room | `{主题}` | `architecture`, `api-standards` |
+| 维度 | 取值 | 示例 |
+|------|------|------|
+| 个人归属 | `user_id` | `admin@mem0.dev`（见 `.codebuddy/mem0.config.json` roster） |
+| 项目归属 | `project_id`（由 `git_remote` 解析） | `ai-dev-sop` |
+| 关联人物 | `metadata.people[]` | `["alice", "bob"]` |
 
 ---
 
-## 3. 会话归纳 (Console)
+## 3. 知识归纳（AI 辅助）
 
 ### 3.1 适用场景
 
@@ -62,127 +68,76 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  会话归纳流程 (Console)                          │
+│                  会话归纳流程 (Agent + mem0)                  │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. 打开 Console → /console/#/summarize                   │
+│  1. 对 Agent 提供会议纪要 / 会话上下文                        │
 │     ↓                                                        │
-│  2. 选择要归纳的会话 (可多选)                               │
+│  2. 要求 Agent 归纳关键信息（事实/决策/发现/偏好/建议）        │
 │     ↓                                                        │
-│  3. 设置归纳深度: shallow / deep / expert                  │
+│  3. Agent 逐条组织为自然语言陈述                              │
 │     ↓                                                        │
-│  4. 选择目标 Wing                                           │
+│  4. 逐条 add_memory(text=..., metadata.type=...)             │
+│     （或合并为一条 add_memory(infer=True) 让 mem0 抽取）       │
 │     ↓                                                        │
-│  5. 点击 "Start Summarization"                           │
-│     ↓                                                        │
-│  6. 查看 5 Hall 归纳结果                                    │
-│     ↓                                                        │
-│  7. 点击 "Write to MemPalace" 提交                         │
+│  5. search_memories 验证写入结果                              │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 归纳深度
-
-| 深度 | 说明 | 适用场景 |
-|------|------|----------|
-| `shallow` | 快速概览 | 日常讨论 |
-| `deep` | 详细分析 | 架构评审 (推荐) |
-| `expert` | 专家级 | 重大技术决策 |
-
-### 3.4 归纳结果示例
+### 3.3 归纳结果示例
 
 ```
-hall_facts:
-- 决定使用 DDD 架构模式
-- 用户模块采用 CQRS 读写分离
-- 订单模块使用 Saga 模式处理分布式事务
-
-hall_events:
-- 2024-07-10 架构评审会议纪要
-- 确认技术选型方向
-
-hall_discoveries:
-- 当前单体架构难以支持高并发
-- 需要提前规划微服务拆分
-
-hall_preferences:
-- 团队倾向于使用注解式事务
-- 偏好 Lombok 简化代码
-
-hall_advice:
-- 新模块建议直接从 DDD Template 创建
-- 跨模块调用优先使用事件驱动
+fact:      决定使用 DDD 架构模式；用户模块采用 CQRS 读写分离
+decision:  订单模块使用 Saga 模式处理分布式事务
+note:      当前单体架构难以支持高并发，需要提前规划微服务拆分
+preference: 团队倾向于使用注解式事务；偏好 Lombok 简化代码
+note(建议): 新模块建议直接从 DDD Template 创建；跨模块调用优先事件驱动
 ```
 
 ---
 
-## 4. 知识蒸馏 (Console)
+## 4. 知识蒸馏（深度提炼）
 
 ### 4.1 适用场景
 
 - 性能问题解决后
 - 复杂 Bug 修复后
 - 技术难点突破后
-- 代码优化后
 
 ### 4.2 蒸馏流程
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  知识蒸馏流程 (Console)                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. 打开 Console → /console/#/distill                      │
-│     ↓                                                        │
-│  2. 选择要蒸馏的会话 (可多选)                               │
-│     ↓                                                        │
-│  3. 设置蒸馏规则:                                           │
-│     - min_value_score: 评分阈值 (默认 0.7)                  │
-│     - dimensions: ["fact", "decision", "discovery"]         │
-│     ↓                                                        │
-│  4. 选择目标 Wing                                           │
-│     ↓                                                        │
-│  5. 点击 "Start Distillation"                              │
-│     ↓                                                        │
-│  6. 查看蒸馏结果:                                           │
-│     - knowledge_fragments (知识碎片)                        │
-│     - decisions (决策记录)                                  │
-│     - tech_debt (技术债务)                                 │
-│     ↓                                                        │
-│  7. 点击 "Write to MemPalace" 提交                         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+1. Agent 回顾解决过程（问题 → 原因 → 方案 → 验证）
+   ↓
+2. 提炼为 3 类知识：
+   - knowledge_fragments → type=note
+   - decisions           → type=decision
+   - tech_debt           → type=note（正文标注"技术债务"）
+   ↓
+3. 逐条 add_memory（含上下文与建议）
+   ↓
+4. search_memories 验证
 ```
 
-### 4.3 蒸馏结果类型
+### 4.3 蒸馏结果示例
 
-**knowledge_fragments**:
-```json
-{
-  "content": "使用 @EntityGraph 注解可以解决 N+1 查询问题，配合 @QueryHints 实现加载超时控制",
-  "source": "OrderService 优化过程",
-  "score": 0.95
-}
+**知识碎片（type=note）**：
+```
+使用 @EntityGraph 注解可以解决 N+1 查询问题，配合 @QueryHints 实现加载超时控制。
+来源: OrderService 优化过程
 ```
 
-**decisions**:
-```json
-{
-  "title": "选择 EntityGraph 而非 DTO 投影",
-  "decision": "EntityGraph 更灵活，可以动态控制加载深度，适合复杂聚合根场景",
-  "context": "用户模块订单查询优化"
-}
+**决策记录（type=decision）**：
+```
+选择 EntityGraph 而非 DTO 投影：EntityGraph 更灵活，可动态控制加载深度，
+适合复杂聚合根场景。上下文: 用户模块订单查询优化。
 ```
 
-**tech_debt**:
-```json
-{
-  "title": "历史代码未使用批量操作",
-  "description": "早期实现中存在 for 循环内单条查询",
-  "impact": "中等",
-  "suggestion": "建议重构为 MyBatis-Plus batch 操作"
-}
+**技术债务（type=note）**：
+```
+[技术债务] 历史代码未使用批量操作：早期实现存在 for 循环内单条查询，影响中等。
+建议重构为 MyBatis-Plus batch 操作。
 ```
 
 ---
@@ -192,94 +147,64 @@ hall_advice:
 ### 5.1 添加架构决策
 
 ```bash
-mempalace_add_drawer \
-  --wing "project-myapp" \
-  --room "architecture" \
-  --hall "hall_facts" \
-  --content "ADR-001: 选择 PostgreSQL 作为主数据库
-
-原因:
-1. 支持 JSONB 类型，适合灵活 schema
-2. pgvector 支持向量存储
-3. 团队熟悉度高
-
-决策日期: 2024-01-15
-决策者: 技术委员会"
+add_memory(
+  text="ADR-001: 选择 PostgreSQL 作为主数据库。原因: 1. 支持 JSONB 类型，适合灵活 schema;
+        2. pgvector 支持向量存储; 3. 团队熟悉度高。决策日期: 2024-01-15，决策者: 技术委员会",
+  api_key="<from config>", git_remote="<from config>",
+  user_id="admin@mem0.dev", project_id="ai-dev-sop",
+  metadata={"type":"decision", "people":["技术委员会"], "created_at":"<ISO8601>"}
+)
 ```
 
 ### 5.2 添加最佳实践
 
 ```bash
-mempalace_add_drawer \
-  --wing "team-backend" \
-  --room "best-practices" \
-  --hall "hall_advice" \
-  --content "API 错误处理规范:
-
-1. 使用统一的 ErrorResponse 结构
-2. HTTP 状态码遵循语义
-   - 4xx: 客户端错误
-   - 5xx: 服务端错误
-3. 错误消息对用户友好，内部日志记录详细堆栈
-4. 敏感信息脱敏处理"
+add_memory(
+  text="API 错误处理规范: 1. 使用统一的 ErrorResponse 结构; 2. HTTP 状态码遵循语义
+        (4xx 客户端错误 / 5xx 服务端错误); 3. 错误消息对用户友好，内部日志记录详细堆栈;
+        4. 敏感信息脱敏处理",
+  metadata={"type":"note", "people":[], "created_at":"<ISO8601>"}
+)
 ```
 
 ### 5.3 添加经验教训
 
 ```bash
-mempalace_add_drawer \
-  --wing "project-payment" \
-  --room "lessons-learned" \
-  --hall "hall_discoveries" \
-  --content "支付模块优化经验:
-
-- 使用 Redis 分布式锁解决并发重复支付
-- 幂等键设计: orderId + timestamp
-- 补偿机制: 定时任务扫描超时订单
-- 幂等性通过唯一索引保证"
+add_memory(
+  text="支付模块优化经验: 使用 Redis 分布式锁解决并发重复支付; 幂等键设计 orderId+timestamp;
+        补偿机制为定时任务扫描超时订单; 幂等性通过唯一索引保证",
+  metadata={"type":"note", "people":["支付模块负责人"], "created_at":"<ISO8601>"}
+)
 ```
 
-### 5.4 添加标签
+### 5.4 标签
 
-```bash
-mempalace_tag_drawer \
-  --drawer_id "drawer-xxx" \
-  --tags ["支付", "性能优化", "Redis", "分布式"]
-```
+mem0 无独立标签操作，主题标签写入 `metadata`（如 `"topic": ["支付","Redis"]`），
+或在正文中自然提及，由语义检索覆盖。
 
 ---
 
-## 6. 归纳/蒸馏最佳实践
+## 6. 沉淀最佳实践
 
-### 6.1 选择合适的会话
+### 6.1 选择合适的内容
 
-| 会话类型 | 适合归纳 | 适合蒸馏 | 说明 |
-|----------|----------|----------|------|
-| 架构评审会议 | ✅ | ❌ | 归纳决策和共识 |
-| Bug 分析讨论 | ✅ | ✅ | 归纳根因 + 蒸馏经验 |
-| 性能优化 | ✅ | ✅ | 归纳方案 + 蒸馏发现 |
-| 日常开发 | ❌ | ❌ | 内容可能不够有价值 |
+| 内容类型 | 是否沉淀 | 说明 |
+|----------|----------|------|
+| 架构评审结论 | ✅ type=decision/fact | 归纳决策和共识 |
+| Bug 根因分析 | ✅ type=note | 根因 + 修复方案 |
+| 性能优化经验 | ✅ type=note | 方案 + 数据 |
+| 日常开发琐事 | ❌ | 不够 durable，不要入库 |
 
-### 6.2 评分阈值选择
-
-| min_value_score | 过滤程度 | 适用场景 |
-|-----------------|----------|----------|
-| 0.9 | 严格 | 只保留最有价值的 |
-| 0.7 | 适中 (推荐) | 平衡数量和质量 |
-| 0.5 | 宽松 | 宁可多不要少 |
-
-### 6.3 提交流程
+### 6.2 提交流程
 
 ```
-1. 确认归纳/蒸馏结果质量
+1. 确认内容质量（具体、可操作、有上下文）
    ↓
-2. 如有必要，微调内容
+2. 组织为自然语言陈述
    ↓
-3. 点击 "Write to MemPalace"
+3. add_memory 提交（mem0 按内容哈希去重，重复提交安全）
    ↓
-4. 幂等写入，重复提交不会重复
-   ↓
-5. 在 MemPalace 中验证写入结果
+4. search_memories 验证写入结果
 ```
 
 ---
@@ -299,21 +224,20 @@ mempalace_tag_drawer \
 
 - 过于显而易见的常识
 - 无法验证的猜测
-- 与已有记忆重复的内容
+- 与已有记忆重复的内容（先 `search_memories` 查重）
 - 缺乏上下文的孤立信息
 
 ### 7.3 知识更新
 
 ```bash
-# 更新已有记忆
-mempalace_update_drawer \
-  --drawer_id "drawer-xxx" \
-  --body "更新的内容..."
+# 1. 找到旧记忆的 memory_id
+search_memories(query="<旧记忆关键词>")
 
-# 合并相似记忆
-mempalace_merge_drawer \
-  --source_id "drawer-xxx" \
-  --target_id "drawer-yyy"
+# 2. 更新内容
+update_memory(memory_id="xxx", text="更新后的内容...")
+
+# 3. 新事实替代旧事实也可直接写入新记忆：
+#    mem0 的 Dream 机制（Supersede/Merge）会自动淘汰过时记忆、合并重复项
 ```
 
 ---
@@ -324,7 +248,7 @@ mempalace_merge_drawer \
 
 | 检查项 | 验证方式 |
 |--------|----------|
-| Hall 分类正确 | 记忆放在合适的 Hall |
+| 类型正确 | `metadata.type` 与内容匹配 |
 | 内容完整 | 包含必要的上下文 |
 | 可操作性 | 他人看后知道如何行动 |
 
@@ -332,10 +256,13 @@ mempalace_merge_drawer \
 
 ```bash
 # 查看写入结果
-mempalace_list_drawers --hall "hall_advice"
+get_memories(api_key=..., project_id="ai-dev-sop")
 
 # 搜索验证
-mempalace_search "API 错误处理"
+search_memories(query="API 错误处理", top_k=5)
+
+# Dashboard 人工复核
+# http://localhost:3001 → Memories → 按 type 过滤
 ```
 
 ---
@@ -346,22 +273,24 @@ mempalace_search "API 错误处理"
 
 ```
 原因: 会话内容不够丰富
-解决: 选择内容更丰富的会话，或使用 deep 深度
+解决: 提供更完整的上下文（会议纪要/决策记录），让 Agent 分主题归纳
 ```
 
-### 9.2 蒸馏结果为空
+### 9.2 检索不到刚写入的记忆
 
 ```
-原因: 评分阈值太高或会话内容价值低
-解决: 降低 min_value_score (如 0.5)，或选择更有价值的会话
+原因: 作用域不一致（user_id / project_id / api_key 不匹配）
+解决: 统一使用 .codebuddy/mem0.config.json 中的凭证与 project_id
 ```
 
 ### 9.3 重复提交
 
 ```
-解决: MemPalace 写入是幂等的，重复提交不会产生重复内容
+解决: mem0 按内容哈希去重，重复提交不会产生重复内容；
+     Dream(Merge) 会在后台合并语义重复的记忆
 ```
 
 ---
-*上一步: [SOP-M3: 团队协作](./SOP-M3-development.md)*
+
+*文档更新: 2026-09-18*
 *下一步: [SOP-M5: 团队协作](./SOP-M5-collaboration.md)*

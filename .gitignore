@@ -10,6 +10,11 @@ dist
 target
 .DS_Store
 example
+# Local mem0 MCP config (contains api_key — never commit)
+.codebuddy/mem0.config.json
+# Local per-session id for mem0 conversation traceability (regenerated each session)
+.codebuddy/.session_id
+
 # Allow GitHub workflows
 !.github/
 !.github/workflows/

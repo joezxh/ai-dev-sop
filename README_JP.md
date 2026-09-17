@@ -2,7 +2,7 @@
 
 **AI 開発 SOP とスキル**
 
-AI 支援開発のための包括的な標準作業手順（SOP）リポジトリ。開発ワークフロー、スキルツール、自動化テスト、ダブルトラックメモリフレームワークを備えています。
+AI 支援開発のための包括的な標準作業手順（SOP）リポジトリ。開発ワークフロー、スキルツール、自動化テスト、mem0 長期メモリシステムを備えています。
 
 ## 概要
 
@@ -12,7 +12,7 @@ AI 支援開発のための包括的な標準作業手順（SOP）リポジト�
 
 - **7段階パイプライン**：インストール → 理解 → プロンプト生成 → シナリオ選択 → テスト自動化 → ドキュメント自動化 → 運用要件自動化
 - **スキルクラスター**：superpower、gstack、get-shit-done、OpenSpec などの AI 開発スキル
-- **ダブルトラックメモリフレームワーク**：MemPalace（セマンティックメモリ）× codebase-mem-mcp（コード構造メモリ）
+- **mem0 長期メモリ**：セルフホスト mem0（ベクトル + グラフメモリ）、MCP による全 AI IDE 統合
 - **シナリオベースパイプライン**：スキャフォールド、一言必要条件、アップグレード、複製、Web/App クローン
 - **QA 自動化**：`/qa-dev` スキルによるエンドツーエンドブラウザ自動化テスト
 - **マルチ IDE サポート**：Cursor、Qoder、CodeBuddy、Claude Code
@@ -46,7 +46,7 @@ AI 支援開発のための包括的な標準作業手順（SOP）リポジト�
 | §2 | プロンプト生成 - テストプロンプト、開発プロンプト、シナリオテンプレート |
 | §3 | テストと開発 - エンドツーエンド実行、バッチ処理 |
 | §4 | シナリオ SOP - スキャフォールド、一言必要条件、アップグレード、複製パイプライン |
-| §5 | ダブルトラックメモリ - MemPalace × codebase-mem-mcp フレームワーク |
+| §5 | 長期メモリ - mem0 メモリシステム（保存/検索/チーム共有） |
 | §6 | ドキュメント作成 - 製品研究、市場調査テンプレート |
 
 ### 2. スキル（`skills/`）
@@ -54,9 +54,10 @@ AI 支援開発のための包括的な標準作業手順（SOP）リポジト�
 - **qa-dev**: テスト+開発自動化スキル、`/qa-dev` コマンドをサポート
 - バッチ実行、無人モード、回帰テストをサポート
 
-### 3. ツール（`tools/`）
+### 3. メモリサービス（`deploy/mem0/`）
 
-- **cbmem-team**: codebase-memory-mcp の HTTP マルチユーザー ラッパー、チームコラボレーション用
+- **mem0**: セルフホスト長期メモリサービス（API :8888 / MCP :8080 / Dashboard :3001）、
+  PostgreSQL(pgvector) + Neo4j 基盤、CodeBuddy / Qoder / Cursor 等へ MCP 統合
 
 ### 4. サンプルプロジェクト（`example/`）
 
@@ -85,29 +86,42 @@ AI 支援開発のための包括的な標準作業手順（SOP）リポジト�
 | `copy-app-pipeline.md` | モバイルアプリのクローン（uniapp） |
 | `java-upgrade-pipeline.md` | テクノロジース택 마이グレーション |
 
-## ダブルトラックメモリフレームワーク
+## mem0 長期メモリシステム
 
-自然言語メモリとコード構造メモリを組み合わせます：
+MCP プロトコルですべての AI 開発ツールに長期メモリを提供します：
 
-| トラック | テクノロジー | 目的 |
-|------|------|------|
-| **トラック A** | MemPalace | チームセマンティックメモリ、意思決定、顧客要件 |
-| **トラック B** | codebase-mem-mcp | コード構造、アーキテクチャグラフ、コールチェーン |
+| 機能 | 説明 |
+|------|------|
+| 長期メモリ | 会話/事実/意思決定/設定、ベクトル検索（pgvector） |
+| グラフメモリ | エンティティ関係グラフ（Neo4j）、`GRAPH_ENABLED=true` |
+| チーム共有 | `git_remote` → `project_id` 共有プール、クロスユーザー検索 |
+| 会話ログ | 毎ターンの Q/A 原文アーカイブ、`session_id` でグループ化 |
 
 ### デプロイ
 
 ```bash
-# トラック A：MemPalace（Docker）
-docker run -d --name mempalace \
-  -p 8080:8080 \
-  -v ~/.mempalace:/data \
-  -e MP_VECTOR_BACKEND=chromadb \
-  mempalace/mempalace:0.8.3
+# ワンクリックインストール（サービス + IDE 設定）
+./scripts/install-all.sh          # Linux/macOS
+./scripts/install-all.ps1         # Windows
 
-# トラック B：codebase-memory-mcp
-npm install -g codebase-memory-mcp
-codebase-memory-mcp install
+# または手動
+cd deploy/mem0 && docker compose up -d
 ```
+
+### IDE 統合
+
+```json
+{
+  "mcpServers": {
+    "mem0-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  }
+}
+```
+
+詳細は [docs/quick-ref/mem0-ai-tools-config-guide.md](docs/quick-ref/mem0-ai-tools-config-guide.md) を参照。
 
 ## クイックスタート
 
@@ -137,7 +151,7 @@ rm -rf temp-design
 }
 ```
 
-**Cursor:** `playwright` と `memplace` MCP サーバーをインストールします。
+**Cursor:** `mem0` MCP サーバーをインストールします（[docs/ide-config/ide-mcp-templates.md](docs/ide-config/ide-mcp-templates.md) 参照）。
 
 ### 3. コードベースのマップ
 
@@ -198,8 +212,7 @@ ai-dev-sop/
 │   │   ├── java-upgrade-pipeline.md
 │   │   ├── docs-pipeline.md
 │   │   ├── qa-dev-sop.md
-│   │   ├── mempalace-codebase-mem-framework.md
-│   │   └── benchmark/       # 評価データセット
+│   │   └── benchmark/       # 評価データセット（履歴、旧メモリシステムと共にアーカイブ）
 │   │       ├── DS-Decision.md
 │   │       ├── DS-CallPath.md
 │   │       ├── DS-Cross.md
@@ -208,27 +221,17 @@ ai-dev-sop/
 │   │       └── DS-DeadCode.md
 │   └── scene/
 ├── skills/
-│   └── qa-dev/
-├── tools/
-│   └── cbmem-team/       # codebase-memory-mcp チームラッパー
-│       ├── cmd/
-│       │   ├── cbmem-team/
-│       │   └── cbmem-mint-token/
-│       └── internal/
-│           ├── pool/
-│           ├── mcp/
-│           ├── auth/
-│           └── store/
-└── example/
-    └── ai-coding-boot/
+│   ├── qa-dev/
+│   └── mem0-longterm-memory/   # mem0 メモリスキル
+└── deploy/
+    └── mem0/               # セルフホスト mem0（API/MCP/Dashboard）
 ```
 
 ## リソースリンク
 
-- [MemPalace GitHub](https://github.com/MemPalace/mempalace)
-- [MemPalace ドキュメント](https://mempalaceofficial.com/)
-- [codebase-memory-mcp GitHub](https://github.com/DeusData/codebase-memory-mcp)
-- [codebase-memory-mcp npm](https://www.npmjs.com/package/codebase-memory-mcp)
+- [mem0 ドキュメント](https://docs.mem0.ai/)
+- [mem0 MCP 統合ガイド](https://docs.mem0.ai/platform/mem0-mcp)
+- [Mem0 Cloud Dashboard](https://app.mem0.ai/)
 
 ## ライセンス
 

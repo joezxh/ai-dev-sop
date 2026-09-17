@@ -1,8 +1,9 @@
-# 双轨记忆系统验证检查清单
+# mem0 记忆系统验证检查清单
 
-> **版本**: v1.0
+> **版本**: v2.0
 > **适用阶段**: Phase 5 - 验证与优化
 > **目标读者**: 测试人员、新成员
+> **变更说明**: 旧双轨记忆系统（MemPalace/cbmem-team/codebase-memory-mcp）已移除。
 
 ---
 
@@ -12,160 +13,77 @@
 
 | 检查项 | 验证命令 | 期望结果 |
 |--------|----------|----------|
-| MemPalace 健康 | `curl http://192.168.100.83:8089/healthz` | `{"status":"ok"}` |
-| cbmem-team 健康 | `curl http://192.168.100.83:8787/healthz` | `{"status":"ok"}` |
-| Console 访问 | 浏览器打开 `http://192.168.100.83:8787/console/` | 正常显示登录页 |
+| mem0 API | `curl -s http://localhost:8888/docs` | 返回 Swagger 页 |
+| MCP 端点 | `curl -s http://127.0.0.1:8080/mcp` | 返回 serverInfo |
+| Dashboard | 浏览器打开 `http://localhost:3001` | 登录页正常 |
+| 容器状态 | `docker compose -f deploy/mem0/docker-compose.yaml ps` | 全部 healthy |
 
 ### 1.2 MCP 连接
 
-| 检查项 | 验证命令 | 期望结果 |
+| 检查项 | 验证方式 | 期望结果 |
 |--------|----------|----------|
-| MCP 初始化 | `curl .../mcp?as=test&project=/test ...initialize` | 返回 serverInfo |
-| 工具列表 | `curl .../mcp ...tools/list` | 返回可用工具列表 |
-| JWT 认证 | `curl -H "Authorization: Bearer xxx" .../mcp` | 认证成功 |
+| IDE MCP 面板 | 重启 IDE 查看 | mem0 server 绿色/在线 |
+| 工具列表 | 调用工具列表 | 出现 `add_memory` / `search_memories` 等 |
+| 认证 | 携带 `api_key` 调用 | 无 401 |
 
 ---
 
 ## 2. 功能验证
 
-### 2.1 MemPalace 功能
+### 2.1 记忆读写
 
 | 功能 | 验证步骤 | 期望结果 |
 |------|----------|----------|
-| 创建 Wing | `mempalace create-wing --name "test"` | 创建成功 |
-| 列出 Wing | `mempalace list-wings` | 显示所有 Wing |
-| 创建 Room | `mempalace create-room --wing "test" --name "room1"` | 创建成功 |
-| 添加记忆 | `mempalace add-drawer ...` | 添加成功 |
-| 搜索记忆 | `mempalace search "关键词"` | 返回相关结果 |
+| 写入记忆 | `add_memory(text="测试记忆", api_key=..., git_remote=...)` | 返回 memory_id |
+| 语义搜索 | `search_memories(query="测试记忆")` | 召回刚写入的条目 |
+| 全量拉取 | `get_memories(project_id="ai-dev-sop")` | 返回项目共享池 |
+| 更新记忆 | `update_memory(memory_id, text="更新")` | 更新成功 |
+| 删除记忆 | `delete_memory(memory_id)` | 删除成功 |
 
-### 2.2 cbmem-team 功能
-
-| 功能 | 验证步骤 | 期望结果 |
-|------|----------|----------|
-| 用户创建 | `POST /admin/users` | 创建成功 |
-| Token 发行 | `POST /admin/users/:id/token` | 返回 JWT |
-| MCP 调用 | `POST /mcp ...tools/call` | 返回工具结果 |
-| 会话捕获 | 调用 MCP 后查询 | 显示会话记录 |
-| 会话归纳 | Console 操作 | 生成 5 Hall 结果 |
-
-### 2.3 Codebase 功能
+### 2.2 项目共享池
 
 | 功能 | 验证步骤 | 期望结果 |
 |------|----------|----------|
-| 索引创建 | `index_repository` | 索引完成 |
-| 代码搜索 | `search_code` | 返回结果 |
-| 架构分析 | `get_architecture` | 返回架构 |
-| 调用追踪 | `trace_path` | 返回调用链 |
-| 变更检测 | `detect_changes` | 返回影响分析 |
+| 跨用户读取 | 成员 A 写入 → 成员 B `get_memories(project_id=...)` | B 能读到 A 的记忆 |
+| git_remote 解析 | 携带 `git_remote` 写入后查看 metadata | `project_id` 正确写入 |
+| 个人隔离 | 不带 project_id 写入 → 其他用户检索 | 不可见 |
+
+### 2.3 会话留痕
+
+| 功能 | 验证步骤 | 期望结果 |
+|------|----------|----------|
+| 自动入库 | 对话一轮后 `search_memories(query="Q: <本轮问题>")` | 该轮 Q/A 已入库 |
+| session 分组 | Dashboard → Memories 按 `metadata.session_id` 过滤 | 同会话各轮完整有序 |
+| 格式正确 | 查看记忆正文 | `Q:`/`A:` 分段，A 为 Markdown 全量回复 |
+
+### 2.4 图记忆（GRAPH_ENABLED=true 时）
+
+| 功能 | 验证步骤 | 期望结果 |
+|------|----------|----------|
+| Neo4j 连通 | 容器日志无图存储报错 | 正常 |
+| 实体关系 | `search_graph`（如有启用图检索）或 Dashboard Graph | 实体关系可见 |
 
 ---
 
-## 3. 体验验证
+## 3. 集成验证
 
-### 3.1 新成员体验
+| 检查项 | 验证方式 | 期望结果 |
+|--------|----------|----------|
+| 自动拉取 | 新会话首轮，Agent 是否汇报召回摘要 | CODEBUDDY.md §1 行为触发 |
+| 自动提交 | 陈述一个持久事实，观察是否自动 `add_memory` | CODEBUDDY.md §2 行为触发 |
+| 每轮留痕 | 任意一轮对话后查询 | type=conversation 记录存在 |
+| 失败降级 | 停止 mem0-api 后会话 | Agent 告知服务不可达且不编造记忆 |
 
-| 验证项 | 检查点 | 评分 (1-5) |
-|--------|--------|--------------|
-| 配置难度 | 完成配置需要多少时间？ | ___ |
-| 文档清晰度 | 文档是否清晰易懂？ | ___ |
-| 首次成功 | 首次尝试是否成功？ | ___ |
-| 问题解决 | 遇到问题是否容易解决？ | ___ |
+---
 
-### 3.2 工具使用
+## 4. 验证脚本
 
-| 工具 | 优先级 | 使用频率 | 评价 |
-|------|--------|----------|------|
-| `mempalace_search` | P0 | 高 | ___ |
-| `get_architecture` | P0 | 高 | ___ |
-| `search_code` | P0 | 高 | ___ |
-| `trace_path` | P0 | 中 | ___ |
-| `detect_changes` | P0 | 中 | ___ |
-| `mempalace_add_drawer` | P2 | 低 | ___ |
-
-### 3.3 体验问卷
-
+```bash
+#!/bin/bash
+# smoke-mem0.sh
+set -e
+curl -sf http://localhost:8888/docs > /dev/null && echo "API OK"
+curl -sf http://localhost:3001 > /dev/null && echo "Dashboard OK"
+docker compose -f deploy/mem0/docker-compose.yaml ps | grep -q healthy && echo "Containers OK"
+echo "Manual MCP checks: add_memory → search_memories in your IDE."
 ```
-新成员体验问卷
-
-1. 你觉得配置过程是否复杂？
-   □ 非常简单 □ 简单 □ 一般 □ 复杂 □ 非常复杂
-
-2. 配置过程中遇到的最大困难是什么？
-   _______________________________________________
-
-3. 文档中哪些部分最有用？
-   _______________________________________________
-
-4. 文档中哪些部分需要改进？
-   _______________________________________________
-
-5. 整体满意度评分 (1-10): ___
-
-6. 其他建议:
-   _______________________________________________
-```
-
----
-
-## 4. 性能验证
-
-### 4.1 响应时间
-
-| 操作 | 期望响应时间 | 实测时间 | 状态 |
-|------|-------------|----------|------|
-| MemPalace 搜索 | < 1s | ___ | ⬜ |
-| cbmem-team MCP 调用 | < 3s | ___ | ⬜ |
-| Console 页面加载 | < 2s | ___ | ⬜ |
-| 架构分析 | < 5s | ___ | ⬜ |
-
-### 4.2 并发能力
-
-| 场景 | 并发数 | 期望结果 | 实测结果 |
-|------|--------|----------|----------|
-| MCP 并发调用 | 10 | 正常响应 | ___ |
-| MemPalace 并发搜索 | 20 | 正常响应 | ___ |
-| Console 并发访问 | 5 | 正常响应 | ___ |
-
----
-
-## 5. 集成验证
-
-### 5.1 双轨协同
-
-| 场景 | 验证步骤 | 期望结果 |
-|------|----------|----------|
-| 先记忆后代码 | `mempalace_search` + `get_architecture` | 综合结果 |
-| 调试加记录 | `trace_path` + `mempalace_add_drawer` | 追踪+保存 |
-| 归纳后沉淀 | Console 归纳 + 提交 | 5 Hall 结果 |
-
-### 5.2 IDE 集成
-
-| IDE | MCP 连接 | 工具调用 | 状态 |
-|------|----------|----------|------|
-| Cursor | ⬜ | ⬜ | ⬜ |
-| Qoder | ⬜ | ⬜ | ⬜ |
-| Claude Desktop | ⬜ | ⬜ | ⬜ |
-
----
-
-## 6. 问题记录
-
-| # | 日期 | 问题描述 | 影响 | 状态 |
-|---|------|----------|------|------|
-| 1 | | | | ⬜ |
-| 2 | | | | ⬜ |
-| 3 | | | | ⬜ |
-
----
-
-## 7. 验证签名
-
-| 角色 | 姓名 | 日期 | 签名 |
-|------|------|------|------|
-| 测试人员 | | | |
-| 评审人员 | | | |
-| 产品负责人 | | | |
-
----
-
-*验证完成日期: _______________*

@@ -1,3 +1,0 @@
-You are summarising an AI coding session.
-Output JSON with shape:
-{ "summary": "<2 sentences>" }

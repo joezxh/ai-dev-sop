@@ -1,0 +1,271 @@
+effaedd1 fix(dashboard): send empty string to clear project custom instructions
+44ffe074 feat(dashboard): project custom instructions, expiration, danger zone
+ .../src/app/(root)/dashboard/projects/page.tsx     | 70 +++++++++++++++++++++-
+ server/dashboard/src/types/api.ts                  |  4 ++
+ 2 files changed, 73 insertions(+), 1 deletion(-)
+diff --git a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+index d5f0d96b..33232035 100644
+--- a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+@@ -8,45 +8,49 @@ import { Label } from "@/components/ui/label";
+ import { Card } from "@/components/ui/card";
+ import { Textarea } from "@/components/ui/textarea";
+ import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+ } from "@/components/ui/dialog";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
++import { toast } from "@/components/ui/use-toast";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import { api } from "@/utils/api";
+-import { PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
++import { MEMORY_ENDPOINTS, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
+ import { Project } from "@/types/api";
+ import { useTranslation } from "@/i18n";
+ 
+ const PAGE_SIZE = 10;
+ 
+ export default function ProjectsPage() {
+   const { t } = useTranslation();
+   const [items, setItems] = useState<Project[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+ 
+   const [q, setQ] = useState("");
+   const [page, setPage] = useState(0);
+ 
+   const [dialogOpen, setDialogOpen] = useState(false);
+   const [editing, setEditing] = useState<Project | null>(null);
+   const [projectId, setProjectId] = useState("");
+   const [name, setName] = useState("");
+   const [description, setDescription] = useState("");
+   const [gitRemotes, setGitRemotes] = useState("");
++  const [customInstructions, setCustomInstructions] = useState("");
++  const [expirationDate, setExpirationDate] = useState("");
+   const [toDelete, setToDelete] = useState<Project | null>(null);
++  const [toPurge, setToPurge] = useState<Project | null>(null);
+ 
+   const [matchInput, setMatchInput] = useState("");
+   const [matchResult, setMatchResult] = useState<string | null>(null);
+ 
+   async function load(search: string = q) {
+     setLoading(true);
+     try {
+       const res = await api.get(PROJECT_ENDPOINTS.BASE, {
+         params: search.trim() ? { q: search.trim() } : undefined,
+       });
+@@ -69,63 +73,87 @@ export default function ProjectsPage() {
+     if (!projectId.trim()) {
+       setError("project_id is required");
+       return;
+     }
+     try {
+       const body = {
+         project_id: projectId.trim(),
+         name,
+         description: description || null,
+         git_remotes: gitRemotes.split("\n").map((s) => s.trim()).filter(Boolean),
++        // PUT /projects is a partial update: `null` means "not provided" and is a
++        // no-op server-side, so a cleared field must be sent as "" to actually clear.
++        custom_instructions: customInstructions.trim(),
++        // No way to clear the date yet: "" is rejected (400) and null is a no-op.
++        memory_expiration_date: expirationDate || null,
+       };
+       if (editing) {
+         await api.put(PROJECT_ENDPOINTS.BY_ID(editing.project_id), body);
+       } else {
+         await api.post(PROJECT_ENDPOINTS.BASE, body);
+       }
+       setDialogOpen(false);
+       await load();
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Save failed");
+     }
+   }
+ 
+   function openCreate() {
+     setEditing(null);
+     setProjectId("");
+     setName("");
+     setDescription("");
+     setGitRemotes("");
++    setCustomInstructions("");
++    setExpirationDate("");
+     setDialogOpen(true);
+   }
+ 
+   function openEdit(p: Project) {
+     setEditing(p);
+     setProjectId(p.project_id);
+     setName(p.name);
+     setDescription(p.description ?? "");
+     setGitRemotes((p.git_remotes ?? []).join("\n"));
++    setCustomInstructions(p.custom_instructions ?? "");
++    setExpirationDate(p.memory_expiration_date ?? "");
+     setDialogOpen(true);
+   }
+ 
+   async function handleDelete() {
+     if (!toDelete) return;
+     try {
+       await api.delete(PROJECT_ENDPOINTS.BY_ID(toDelete.project_id));
+       setToDelete(null);
+       await load();
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Delete failed");
+       setToDelete(null);
+     }
+   }
+ 
++  async function deleteAllMemories() {
++    if (!toPurge) return;
++    try {
++      const res = await api.delete(
++        `${MEMORY_ENDPOINTS.BASE}?project_id=${encodeURIComponent(toPurge.project_id)}`
++      );
++      toast({ title: `Deleted ${res.data?.deleted ?? 0} memories`, variant: "success" });
++      setError(null);
++    } catch (e: any) {
++      setError(e?.response?.data?.detail ?? "Delete failed");
++    } finally {
++      setToPurge(null);
++    }
++  }
++
+   async function testMatch() {
+     setMatchResult(null);
+     try {
+       const res = await api.post(PROJECT_ENDPOINTS.MATCH, {
+         git_remote: matchInput.split("\n").map((s) => s.trim()).filter(Boolean),
+       });
+       setMatchResult(res.data?.project_id ?? null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Match failed");
+     }
+@@ -192,20 +220,29 @@ export default function ProjectsPage() {
+                     <td className="px-4">{p.name}</td>
+                     <td className="px-4 text-memText-secondary">
+                       {(p.git_remotes ?? []).map((r) => (
+                         <div key={r} className="font-mono text-xs flex items-center gap-1">
+                           <GitBranch className="size-3 shrink-0" />
+                           <span className="break-all">{r}</span>
+                         </div>
+                       ))}
+                     </td>
+                     <td className="px-4 text-right whitespace-nowrap">
++                      <Button
++                        variant="ghost"
++                        size="sm"
++                        className="text-onSurface-danger-primary text-xs"
++                        title="Delete every memory stored under this project_id"
++                        onClick={() => setToPurge(p)}
++                      >
++                        Delete All Memories
++                      </Button>
+                       <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
+                         <Pencil className="size-3.5" />
+                       </Button>
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         className="text-onSurface-danger-primary"
+                         onClick={() => setToDelete(p)}
+                       >
+                         <Trash2 className="size-3.5" />
+@@ -298,32 +335,63 @@ export default function ProjectsPage() {
+               <Label htmlFor="proj-remotes">{t("tenant.gitRemotes")}</Label>
+               <Textarea
+                 id="proj-remotes"
+                 className="font-mono text-xs"
+                 value={gitRemotes}
+                 onChange={(e) => setGitRemotes(e.target.value)}
+                 rows={4}
+               />
+               <p className="text-xs text-memText-secondary">{t("tenant.gitRemotesHint")}</p>
+             </div>
++            <div className="space-y-2">
++              <Label htmlFor="proj-instructions">Custom Instructions（记忆抽取规则）</Label>
++              <Textarea
++                id="proj-instructions"
++                value={customInstructions}
++                onChange={(e) => setCustomInstructions(e.target.value)}
++                rows={3}
++                placeholder="例如：只存储技术偏好与项目约定，忽略闲聊"
++              />
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="proj-expiration">
++                Memory Expiration Date（项目默认过期日，可选）
++              </Label>
++              <Input
++                id="proj-expiration"
++                type="date"
++                value={expirationDate}
++                onChange={(e) => setExpirationDate(e.target.value)}
++              />
++            </div>
+             <DialogFooter>
+               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                 {t("common.cancel")}
+               </Button>
+               <Button type="submit">{t("common.save")}</Button>
+             </DialogFooter>
+           </form>
+         </DialogContent>
+       </Dialog>
+ 
+       <DeleteConfirmationModal
+         isOpen={!!toDelete}
+         onClose={() => setToDelete(null)}
+         onConfirm={handleDelete}
+         title="Delete project"
+         description="This project will be removed. Memories keep their stored project_id."
+         itemName={toDelete?.project_id ?? ""}
+         confirmButtonText="Delete"
+       />
++
++      <DeleteConfirmationModal
++        isOpen={!!toPurge}
++        onClose={() => setToPurge(null)}
++        onConfirm={deleteAllMemories}
++        title="Delete all memories"
++        description="Every memory stored under this project_id will be permanently deleted. The project itself and its git remotes are kept. This cannot be undone."
++        itemName={toPurge?.project_id ?? ""}
++        confirmButtonText="Delete All Memories"
++      />
+     </div>
+   );
+ }
+diff --git a/server/dashboard/src/types/api.ts b/server/dashboard/src/types/api.ts
+index 9cd69cfc..7b1f4abf 100644
+--- a/server/dashboard/src/types/api.ts
++++ b/server/dashboard/src/types/api.ts
+@@ -59,20 +59,24 @@ export interface Department {
+   user_count: number;
+   users: DepartmentMember[];
+ }
+ 
+ export interface Project {
+   id: string;
+   project_id: string;
+   name: string;
+   description: string | null;
+   git_remotes: string[];
++  /** Prompt appended when extracting memories for this project. Null = unset. */
++  custom_instructions: string | null;
++  /** Default expiration for memories in this project, "YYYY-MM-DD". Null = never. */
++  memory_expiration_date: string | null;
+   created_by: string;
+   created_at: string;
+   updated_at: string;
+ }
+ 
+ export interface DashboardUser {
+   id: string;
+   name: string;
+   email: string;
+   role: string;

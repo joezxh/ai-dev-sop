@@ -1,121 +1,100 @@
-# AI IDE MCP 配置模板
+# AI IDE MCP 配置模板（mem0）
 
-> 包含 Cursor、Qoder、Claude Desktop 的 MCP 配置模板
+> 旧双轨记忆系统（cbmem-team / mempalace）已于 2026-09 移除，统一接入自托管 mem0。
+> 云端 / 多工具 / 进阶选项详见 [quick-ref/mem0-ai-tools-config-guide.md](../quick-ref/mem0-ai-tools-config-guide.md)。
 
 ---
 
-## 1. Cursor 配置
+## 1. 通用前提
 
-### 1.1 配置文件
+```bash
+# 启动本地 mem0（API:8888 / MCP:8080 / Dashboard:3001）
+cd deploy/mem0 && docker compose up -d
+```
 
-**路径**: `~/.cursor/mcp.json` (Windows: `C:\Users\<用户名>\.cursor\mcp.json`)
+- MCP 端点：`http://127.0.0.1:8080/mcp`（Streamable HTTP）
+- API Key：Dashboard `http://localhost:3001` 登录后创建，或读 `.codebuddy/mem0.config.json`
+- 环境变量：`MEM0_API_KEY=m0-...`
 
-### 1.2 完整配置模板
+---
+
+## 2. Cursor 配置
+
+**路径**：`~/.cursor/mcp.json`
 
 ```json
 {
   "mcpServers": {
-    "cbmem-team": {
-      "url": "http://192.168.100.83:8787/mcp?as={{USER_ID}}&project={{SERVER_PROJECT_PATH}}",
+    "mem0": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
       "headers": {
-        "Authorization": "Bearer {{JWT_TOKEN}}"
+        "Authorization": "Bearer m0-你的密钥"
       }
-    },
-    "mempalace": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "ghcr.io/mempalace/mempalace:latest"]
     }
   }
 }
 ```
 
-### 1.3 本地 MemPalace 配置
+## 3. Qoder 配置
+
+**入口**：个人设置 → MCP 服务 → 配置文件添加（插件 ≥ v2.5.0，智能体模式）
 
 ```json
 {
   "mcpServers": {
-    "cbmem-team": {
-      "url": "http://192.168.100.83:8787/mcp?as={{USER_ID}}&project={{SERVER_PROJECT_PATH}}",
+    "mem0": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
       "headers": {
-        "Authorization": "Bearer {{JWT_TOKEN}}"
+        "Authorization": "Bearer m0-你的密钥"
       }
-    },
-    "mempalace": {
-      "command": "mempalace",
-      "args": ["mcp", "run"]
     }
   }
 }
 ```
 
-### 1.4 配置说明
+## 4. CodeBuddy 配置
 
-| 占位符 | 说明 | 示例 |
-|--------|------|------|
-| `{{USER_ID}}` | 你的用户 ID | `alice` |
-| `{{SERVER_PROJECT_PATH}}` | 服务端项目路径 | `/var/lib/cbmem-team/users/alice/projects/myapp` |
-| `{{JWT_TOKEN}}` | JWT Token | `eyJhbGciOiJIUzI1NiIs...` |
-
----
-
-## 2. Qoder 配置
-
-### 2.1 配置文件
-
-**路径**: `~/.qoder/mcp.json` (Windows: `C:\Users\<用户名>\.qoder\mcp.json`)
-
-### 2.2 完整配置模板
+**入口**：Settings → MCP → Add MCP
 
 ```json
 {
   "mcpServers": {
-    "cbmem-team": {
-      "url": "http://192.168.100.83:8787/mcp?as={{USER_ID}}&project={{SERVER_PROJECT_PATH}}",
-      "headers": {
-        "Authorization": "Bearer {{JWT_TOKEN}}"
-      }
-    },
-    "mempalace": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "ghcr.io/mempalace/mempalace:latest"]
+    "mem0-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "transport": "streamable-http"
     }
   }
 }
 ```
 
-### 2.3 Qoder 设置
+> CodeBuddy 下工具调用通过 `api_key` 参数鉴权（每工具必填），凭证读 `.codebuddy/mem0.config.json`，行为规则见根 `CODEBUDDY.md`。
 
-在 Qoder 中启用 MCP:
+## 5. Codex 配置
 
-1. 打开设置 (`Ctrl + ,`)
-2. 导航至「扩展」或「Plugins」
-3. 确保 MCP Client 插件已启用
-4. 重启 Qoder
+**路径**：`~/.codex/config.toml`（`codex mcp add` 仅支持 stdio，HTTP 须手写）
 
----
+```toml
+[mcp_servers.mem0]
+url = "http://127.0.0.1:8080/mcp"
+bearer_token_env_var = "MEM0_API_KEY"
+```
 
-## 3. Claude Desktop 配置
+## 6. Claude Desktop 配置
 
-### 3.1 配置文件
-
-**路径**:
-- macOS: `~/.config/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-### 3.2 完整配置模板
+**路径**：`%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
-    "cbmem-team": {
-      "url": "http://192.168.100.83:8787/mcp?as={{USER_ID}}&project={{SERVER_PROJECT_PATH}}",
+    "mem0": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
       "headers": {
-        "Authorization": "Bearer {{JWT_TOKEN}}"
+        "Authorization": "Bearer m0-你的密钥"
       }
-    },
-    "mempalace": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "ghcr.io/mempalace/mempalace:latest"]
     }
   }
 }
@@ -123,154 +102,58 @@
 
 ---
 
-## 4. 配置生成脚本
+## 7. 配置生成脚本
 
-### 4.1 PowerShell 脚本 (Windows)
+### 7.1 PowerShell (Windows)
 
 ```powershell
-# Generate-CursorMcpConfig.ps1
-param(
-    [string]$UserId = "alice",
-    [string]$ServerUrl = "http://192.168.100.83:8787",
-    [string]$ServerProjectPath = "/var/lib/cbmem-team/users/alice/projects/myapp",
-    [string]$JwtToken = ""
-)
-
+param([string]$ApiKey = "")
 $config = @{
     mcpServers = @{
-        "cbmem-team" = @{
-            url = "$ServerUrl/mcp?as=$UserId&project=$ServerProjectPath"
-            headers = @{
-                "Authorization" = "Bearer $JwtToken"
-            }
-        }
+        mem0 = @{ type = "http"; url = "http://127.0.0.1:8080/mcp"
+                  headers = @{ Authorization = "Bearer $ApiKey" } }
     }
 }
-
-$configPath = "$env:USERPROFILE\.cursor\mcp.json"
-$config | ConvertTo-Json -Depth 10 | Set-Content $configPath -Encoding UTF8
-
-Write-Host "Config written to: $configPath"
-Write-Host "Please restart Cursor to apply changes."
+$config | ConvertTo-Json -Depth 10 |
+    Set-Content "$env:USERPROFILE\.cursor\mcp.json" -Encoding UTF8
+Write-Host "Restart Cursor to apply."
 ```
 
-**使用**:
-
-```powershell
-# 生成配置 (手动填入 JWT Token)
-notepad $env:USERPROFILE\.cursor\mcp.json
-
-# 或使用脚本 (需要预先获取 Token)
-.\Generate-CursorMcpConfig.ps1 -UserId "alice" -JwtToken "your-token"
-```
-
-### 4.2 Bash 脚本 (Linux/macOS)
+### 7.2 Bash (Linux/macOS)
 
 ```bash
 #!/bin/bash
-# generate-mcp-config.sh
-
-USER_ID="${1:-alice}"
-SERVER_URL="${2:-http://192.168.100.83:8787}"
-SERVER_PROJECT_PATH="${3:-/var/lib/cbmem-team/users/alice/projects/myapp}"
-JWT_TOKEN="${4:-}"
-
-CONFIG_DIR="${HOME}/.cursor"
-CONFIG_FILE="${CONFIG_DIR}/mcp.json"
-
-mkdir -p "$CONFIG_DIR"
-
-cat > "$CONFIG_FILE" << EOF
+cat > "${HOME}/.cursor/mcp.json" << EOF
 {
   "mcpServers": {
-    "cbmem-team": {
-      "url": "${SERVER_URL}/mcp?as=${USER_ID}&project=${SERVER_PROJECT_PATH}",
-      "headers": {
-        "Authorization": "Bearer ${JWT_TOKEN}"
-      }
+    "mem0": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer \${MEM0_API_KEY}" }
     }
   }
 }
 EOF
-
-echo "Config written to: $CONFIG_FILE"
-echo "Please restart Cursor to apply changes."
-```
-
-**使用**:
-
-```bash
-# 基础使用
-./generate-mcp-config.sh alice
-
-# 完整参数
-./generate-mcp-config.sh alice http://192.168.100.83:8787 /path/to/project "eyJhbGci..."
-
-# 或手动编辑
-nano ~/.cursor/mcp.json
+echo "Config written. Restart your IDE."
 ```
 
 ---
 
-## 5. 多项目配置
+## 8. 多项目 / 云端
 
-### 5.1 同时连接多个项目
+- **云端**：把 URL 换成 `https://mcp.mem0.ai/mcp`（OAuth 或 Bearer Key）
+- **多项目**：不同 Project 各自创建 API Key，一条 Key 一个项目；跨项目共享见配置手册 §8
+- **stdio 替代**：`uvx mem0-mcp-server` + `MEM0_API_KEY` 环境变量（社区版已归档，可用但不再维护）
 
-```json
-{
-  "mcpServers": {
-    "cbmem-team-web": {
-      "url": "http://192.168.100.83:8787/mcp?as=alice&project=/var/lib/cbmem-team/users/alice/projects/web-frontend",
-      "headers": {
-        "Authorization": "Bearer {{JWT_TOKEN}}"
-      }
-    },
-    "cbmem-team-api": {
-      "url": "http://192.168.100.83:8787/mcp?as=alice&project=/var/lib/cbmem-team/users/alice/projects/backend-api",
-      "headers": {
-        "Authorization": "Bearer {{JWT_TOKEN}}"
-      }
-    },
-    "mempalace": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "ghcr.io/mempalace/mempalace:latest"]
-    }
-  }
-}
-```
+## 9. 故障排查
 
-### 5.2 项目别名说明
-
-| 别名 | 服务端路径 | 用途 |
-|------|-----------|------|
-| `cbmem-team-web` | `/projects/web-frontend` | 前端项目 |
-| `cbmem-team-api` | `/projects/backend-api` | 后端 API 项目 |
+| 现象 | 解决 |
+|------|------|
+| 连接拒绝 | `docker compose -f deploy/mem0/docker-compose.yaml ps` 确认 mem0-api 运行 |
+| 401 | 重新创建 Key；确认 Bearer 前缀与空格 |
+| 工具列表空 | 重启 IDE；确认 URL 以 `/mcp` 结尾 |
+| 记忆检索为空 | 确认 Key 与 project_id 同属一个项目；user_id 一致 |
 
 ---
 
-## 6. 故障排查
-
-### 6.1 MCP 服务器离线
-
-```
-排查步骤:
-1. 确认服务端运行: curl http://192.168.100.83:8787/healthz
-2. 检查 JWT Token 是否过期
-3. 确认 URL 参数格式正确
-4. 重启 Cursor IDE
-```
-
-### 6.2 Token 刷新
-
-```bash
-# 刷新 Token (30 天有效期)
-curl -X POST "http://192.168.100.83:8787/refresh?ttl=720h" \
-  -H "Authorization: Bearer $OLD_TOKEN"
-
-# 更新 mcp.json 中的 Authorization header
-# 重启 Cursor
-```
-
----
-
-*文档更新: 2026-07-14*
+*文档更新: 2026-09-18*

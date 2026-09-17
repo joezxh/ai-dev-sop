@@ -1,0 +1,153 @@
+27f11b4e feat(server): project-scoped delete-all memories endpoint
+ server/main.py                               | 48 ++++++++++++++++++++++++++--
+ server/tests/test_delete_project_memories.py | 44 +++++++++++++++++++++++++
+ 2 files changed, 89 insertions(+), 3 deletions(-)
+diff --git a/server/main.py b/server/main.py
+index 919163af..e09e2c09 100644
+--- a/server/main.py
++++ b/server/main.py
+@@ -733,20 +733,52 @@ def get_all_memories(
+             params["top_k"] = top_k
+         params["show_expired"] = show_expired
+         data = get_memory_instance().get_all(**params)
+         return _filter_by_project_id(data, project_id)
+     except HTTPException:
+         raise
+     except Exception:
+         raise upstream_error()
+ 
+ 
++def delete_memories_by_project(
++    project_id: Optional[str] = Query(None),
++    _auth=Depends(verify_auth),
++):
++    """Danger-Zone: delete every memory whose metadata.project_id matches.
++
++    Routed via the DELETE /memories endpoint below (project_id query param);
++    kept as a plain function so legacy identifier-based deletion on the same
++    route remains reachable.
++    """
++    if _auth is not None and _auth.role != "admin":
++        raise HTTPException(status_code=403, detail="Admin role required.")
++    if not project_id:
++        raise HTTPException(status_code=400, detail="project_id is required.")
++    if _load_project(project_id) is None:
++        raise HTTPException(status_code=404, detail="Project not found.")
++    data = _list_all_memories(limit=ALL_MEMORIES_LIMIT)
++    ids = [
++        r["id"]
++        for r in data.get("results", [])
++        if (r.get("metadata") or {}).get("project_id") == project_id
++    ]
++    deleted = 0
++    for memory_id in ids:
++        try:
++            get_memory_instance().delete(memory_id)
++            deleted += 1
++        except Exception:
++            logging.exception("Failed to delete memory %s", memory_id)
++    return {"deleted": deleted}
++
++
+ @app.get("/memories/{memory_id}", summary="Get a memory")
+ def get_memory(memory_id: str, _auth=Depends(verify_auth)):
+     """Retrieve a specific memory by ID."""
+     try:
+         return get_memory_instance().get(memory_id)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+ @app.post("/search", summary="Search memories")
+@@ -829,28 +861,38 @@ def delete_memory(memory_id: str, _auth=Depends(verify_auth)):
+     """Delete a specific memory by ID."""
+     try:
+         get_memory_instance().delete(memory_id=memory_id)
+         return MessageResponse(message="Memory deleted successfully")
+     except (ValueError, Mem0ValidationError) as e:
+         raise _client_error(e)
+     except Exception:
+         raise upstream_error()
+ 
+ 
+-@app.delete("/memories", summary="Delete all memories", response_model=MessageResponse)
++@app.delete("/memories", summary="Delete memories", response_model=None)
+ def delete_all_memories(
++    project_id: Optional[str] = Query(None),
+     user_id: Optional[str] = None,
+     run_id: Optional[str] = None,
+     agent_id: Optional[str] = None,
+-    _auth=Depends(require_admin),
++    _auth=Depends(verify_auth),
+ ):
+-    """Delete all memories for a given identifier. Requires admin role."""
++    """Delete memories for a given identifier or project. Requires admin role.
++
++    With project_id: Danger-Zone — deletes every memory whose metadata.project_id
++    matches (see delete_memories_by_project). Otherwise falls back to the legacy
++    identifier-based delete-all.
++    """
++    if project_id:
++        return delete_memories_by_project(project_id=project_id, _auth=_auth)
++    if _auth is not None and _auth.role != "admin":
++        raise HTTPException(status_code=403, detail="Admin role required.")
+     if not any([user_id, run_id, agent_id]):
+         raise HTTPException(status_code=400, detail="At least one identifier is required.")
+     try:
+         params = {
+             k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v
+         }
+         get_memory_instance().delete_all(**params)
+         return MessageResponse(message="All relevant memories deleted")
+     except Exception:
+         raise upstream_error()
+diff --git a/server/tests/test_delete_project_memories.py b/server/tests/test_delete_project_memories.py
+new file mode 100644
+index 00000000..2f1fa7c6
+--- /dev/null
++++ b/server/tests/test_delete_project_memories.py
+@@ -0,0 +1,44 @@
++from types import SimpleNamespace
++
++import pytest
++from fastapi import HTTPException
++
++import main as m
++
++
++def test_requires_project_id():
++    with pytest.raises(HTTPException) as exc:
++        m.delete_memories_by_project(project_id=None, _auth=None)
++    assert exc.value.status_code == 400
++
++
++def test_rejects_non_admin():
++    user = SimpleNamespace(role="user")
++    with pytest.raises(HTTPException) as exc:
++        m.delete_memories_by_project(project_id="p", _auth=user)
++    assert exc.value.status_code == 403
++
++
++def test_404_when_project_missing(monkeypatch):
++    monkeypatch.setattr(m, "_load_project", lambda pid: None)
++    with pytest.raises(HTTPException) as exc:
++        m.delete_memories_by_project(project_id="ghost", _auth=None)
++    assert exc.value.status_code == 404
++
++
++def test_deletes_only_matching(monkeypatch):
++    monkeypatch.setattr(m, "_load_project", lambda pid: SimpleNamespace(project_id=pid))
++    monkeypatch.setattr(
++        m, "_list_all_memories",
++        lambda limit: {"results": [
++            {"id": "1", "metadata": {"project_id": "p"}},
++            {"id": "2", "metadata": {"project_id": "other"}},
++            {"id": "3", "metadata": {}},
++        ]},
++    )
++    deleted_ids = []
++    inst = SimpleNamespace(delete=lambda mid: deleted_ids.append(mid))
++    monkeypatch.setattr(m, "get_memory_instance", lambda: inst)
++    out = m.delete_memories_by_project(project_id="p", _auth=None)
++    assert out == {"deleted": 1}
++    assert deleted_ids == ["1"]

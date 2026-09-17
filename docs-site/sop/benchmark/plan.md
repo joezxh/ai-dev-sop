@@ -1,3 +1,6 @@
+> [!WARNING]
+> **已废弃（2026-09-18）**：本评测数据集配套的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，统一替换为 mem0（见仓库 docs/quick-ref/mem0-ai-tools-config-guide.md）。本文仅作历史归档。
+
 # 双轨记忆框架对比评测方案 v0.1
 
 > **状态**：📘 评测方案 v0.1｜2026-07-06

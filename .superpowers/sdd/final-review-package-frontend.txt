@@ -1,0 +1,2943 @@
+ .../src/app/(root)/dashboard/analytics/page.tsx    |  54 ----
+ .../src/app/(root)/dashboard/api-keys/page.tsx     |  11 -
+ .../src/app/(root)/dashboard/categories/page.tsx   |  36 ---
+ .../app/(root)/dashboard/components/main-nav.tsx   | 350 +++++++++++----------
+ .../app/(root)/dashboard/configuration/page.tsx    |   9 -
+ .../src/app/(root)/dashboard/export/page.tsx       |  65 ----
+ .../src/app/(root)/dashboard/get-started/page.tsx  | 189 +++++++++++
+ .../src/app/(root)/dashboard/memories/page.tsx     |  39 ++-
+ .../app/(root)/dashboard/memory-exports/page.tsx   | 189 +++++++++++
+ .../src/app/(root)/dashboard/overview/page.tsx     |  87 +++++
+ .../src/app/(root)/dashboard/playground/page.tsx   | 271 ++++++++++++++++
+ .../src/app/(root)/dashboard/projects/page.tsx     |  90 +++++-
+ .../src/app/(root)/dashboard/requests/page.tsx     |  91 +++++-
+ .../src/app/(root)/dashboard/webhooks/page.tsx     | 343 +++++++++++++++++---
+ .../src/components/self-hosted/upgrade-banner.tsx  |  70 -----
+ .../components/ui/delete-confirmation-modal.tsx    |   7 +-
+ server/dashboard/src/components/ui/use-toast.ts    |   4 +-
+ server/dashboard/src/i18n/en.ts                    |  21 +-
+ server/dashboard/src/i18n/zh.ts                    |  20 +-
+ server/dashboard/src/types/api.ts                  |  24 ++
+ server/dashboard/src/utils/api-endpoints.ts        |  17 +
+ 21 files changed, 1505 insertions(+), 482 deletions(-)
+diff --git a/server/dashboard/src/app/(root)/dashboard/analytics/page.tsx b/server/dashboard/src/app/(root)/dashboard/analytics/page.tsx
+deleted file mode 100644
+index 5147c678..00000000
+--- a/server/dashboard/src/app/(root)/dashboard/analytics/page.tsx
++++ /dev/null
+@@ -1,54 +0,0 @@
+-"use client";
+-
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+-
+-function AnalyticsMockup() {
+-  return (
+-    <div className="space-y-4">
+-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+-        {[
+-          { label: "Total Operations", value: "12,847" },
+-          { label: "Avg Latency", value: "142ms" },
+-          { label: "Success Rate", value: "99.7%" },
+-        ].map((stat) => (
+-          <Card key={stat.label} className="border-memBorder-primary">
+-            <CardContent className="p-4">
+-              <p className="text-xs text-onSurface-default-tertiary">
+-                {stat.label}
+-              </p>
+-              <p className="text-2xl font-semibold mt-1">{stat.value}</p>
+-            </CardContent>
+-          </Card>
+-        ))}
+-      </div>
+-      <Card className="border-memBorder-primary">
+-        <CardHeader className="pb-2">
+-          <CardTitle className="text-sm">Operations over time</CardTitle>
+-        </CardHeader>
+-        <CardContent className="p-4">
+-          <div className="h-[200px] flex items-end gap-1">
+-            {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 50].map((h, i) => (
+-              <div
+-                key={i}
+-                className="flex-1 bg-surface-default-brand rounded-t"
+-                style={{ height: `${h}%` }}
+-              />
+-            ))}
+-          </div>
+-        </CardContent>
+-      </Card>
+-    </div>
+-  );
+-}
+-
+-export default function AnalyticsPage() {
+-  return (
+-    <LockedPage
+-      title="Analytics"
+-      description="Track memory operations, latency, and usage patterns over time."
+-      previewContent={<AnalyticsMockup />}
+-      utmMedium="dashboard-locked-analytics"
+-    />
+-  );
+-}
+diff --git a/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx b/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx
+index e38386fe..0b50b666 100644
+--- a/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/api-keys/page.tsx
+@@ -12,21 +12,20 @@ import {
+   DialogTitle,
+   DialogTrigger,
+ } from "@/components/ui/dialog";
+ import { DataTable } from "@/components/shared/data-table";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
+ import { api } from "@/utils/api";
+ import { API_KEY_ENDPOINTS } from "@/utils/api-endpoints";
+ import { toast } from "@/components/ui/use-toast";
+-import { UpgradeBanner } from "@/components/self-hosted/upgrade-banner";
+ import { Plus, Copy, Check, Trash2 } from "lucide-react";
+ import { CopyToClipboard } from "react-copy-to-clipboard";
+ import { format } from "date-fns";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import { ApiKey, ApiKeyCreateResponse } from "@/types/api";
+ 
+ export default function ApiKeysPage() {
+   const [createOpen, setCreateOpen] = useState(false);
+   const [newLabel, setNewLabel] = useState("");
+@@ -196,30 +195,20 @@ export default function ApiKeysPage() {
+                   className="w-full"
+                 >
+                   Done
+                 </Button>
+               </div>
+             )}
+           </DialogContent>
+         </Dialog>
+       </div>
+ 
+-      {keys.length >= 3 && (
+-        <UpgradeBanner
+-          id="api-keys-3"
+-          message="Managing multiple apps? Cloud offers project-based isolation."
+-          ctaLabel="Explore Cloud"
+-          ctaUrl="https://app.mem0.ai?utm_source=oss&utm_medium=dashboard-api-keys"
+-          variant="cloud"
+-        />
+-      )}
+-
+       {isLoading ? (
+         <TableSkeleton rows={3} columns={4} />
+       ) : keys.length === 0 ? (
+         <EmptyState
+           title="No API keys yet"
+           description="Create your first API key to start using the Mem0 API."
+         />
+       ) : (
+         <Card className="border-memBorder-primary overflow-hidden">
+           <DataTable
+diff --git a/server/dashboard/src/app/(root)/dashboard/categories/page.tsx b/server/dashboard/src/app/(root)/dashboard/categories/page.tsx
+deleted file mode 100644
+index 39cc979e..00000000
+--- a/server/dashboard/src/app/(root)/dashboard/categories/page.tsx
++++ /dev/null
+@@ -1,36 +0,0 @@
+-"use client";
+-
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent } from "@/components/ui/card";
+-
+-function CategoriesMockup() {
+-  const categories = ["Health", "Preferences", "Work"];
+-  return (
+-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+-      {categories.map((cat) => (
+-        <Card key={cat} className="border-memBorder-primary">
+-          <CardContent className="p-4">
+-            <p className="text-sm font-medium mb-3">{cat}</p>
+-            {[1, 2, 3].map((i) => (
+-              <div
+-                key={i}
+-                className="h-8 bg-surface-default-secondary rounded mb-2"
+-              />
+-            ))}
+-          </CardContent>
+-        </Card>
+-      ))}
+-    </div>
+-  );
+-}
+-
+-export default function CategoriesPage() {
+-  return (
+-    <LockedPage
+-      title="Custom Categories"
+-      description="Organize memories by domain -- health, preferences, work, and more."
+-      previewContent={<CategoriesMockup />}
+-      utmMedium="dashboard-locked-categories"
+-    />
+-  );
+-}
+diff --git a/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx b/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
+index f8185b4a..406d8e19 100644
+--- a/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/components/main-nav.tsx
+@@ -1,138 +1,230 @@
+ "use client";
+ 
+ import * as React from "react";
++import { useEffect, useState } from "react";
+ import Link from "next/link";
+ import {
+   Activity,
+   Building2,
+   ChartLine,
+-  ChevronDown,
++  FlaskConical,
+   Folder,
+   FolderInput,
+   GalleryVerticalEnd,
+   KeyRound,
++  Rocket,
+   Settings,
+   Tags,
+   Users,
+-  WebhookIcon,
++  Webhook,
+   Wrench,
+ } from "lucide-react";
+ import { useSelector } from "react-redux";
+ import { RootState } from "@/store/store";
+-import { Badge } from "@/components/ui/badge";
+-import {
+-  Collapsible,
+-  CollapsibleContent,
+-  CollapsibleTrigger,
+-} from "@/components/ui/collapsible";
+ import {
+   Sidebar,
+   SidebarContent,
+   SidebarGroup,
+   SidebarMenu,
+   SidebarMenuButton,
+   SidebarMenuItem,
+   SidebarRail,
+   SidebarGroupLabel,
+ } from "@/components/ui/sidebar";
+ import { usePathname } from "next/navigation";
+ import { cn } from "@/lib/utils";
+ import { useTranslation } from "@/i18n";
++import { api } from "@/utils/api";
++import { PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
++import { useApiQuery } from "@/hooks/use-api-query";
++import { Project } from "@/types/api";
++
++const PROJECT_CONTEXT_KEY = "mem0-project-context";
+ 
+ const NAV_KEYS: Record<string, string> = {
++  "Get Started": "nav.getStarted",
++  Playground: "nav.playground",
++  Dashboard: "nav.dashboardOverview",
+   Requests: "nav.requests",
+   Memories: "nav.memories",
+   Entities: "nav.entities",
+-  Categories: "nav.categories",
+   Webhooks: "nav.webhooks",
+-  Analytics: "nav.analytics",
+-  Export: "nav.export",
+   "API Keys": "nav.apiKeys",
+   Configuration: "nav.configuration",
+   Settings: "nav.settings",
+   Users: "nav.users",
+   Departments: "nav.departments",
+   Projects: "nav.projects",
++  Exports: "nav.exports",
+ };
+ 
+ export function MainNav({
+   className,
+   ...props
+ }: React.HTMLAttributes<HTMLElement>) {
+   const pathname = usePathname();
+   const isSidebarCollapsed = useSelector(
+     (state: RootState) => state.layout.isSidebarCollapsed,
+   );
+-  const [isCloudOpen, setIsCloudOpen] = React.useState(true);
+   const { t } = useTranslation();
+ 
++  const [projectContext, setProjectContext] = useState("");
++
++  useEffect(() => {
++    // localStorage is only available in the browser; read it after mount to
++    // avoid SSR/hydration mismatches.
++    try {
++      setProjectContext(localStorage.getItem(PROJECT_CONTEXT_KEY) ?? "");
++    } catch {
++      // ignore
++    }
++  }, []);
++
++  const { data: projects = [] } = useApiQuery<Project[]>(
++    async () => {
++      const res = await api.get(PROJECT_ENDPOINTS.BASE);
++      return res.data ?? [];
++    },
++    { errorToast: "Failed to load projects", initialData: [] },
++  );
++
+   return (
+     <Sidebar
+       collapsible={isSidebarCollapsed ? "icon" : undefined}
+       className={cn(className, "border-r-0 w-full mb-0 bg-transparent")}
+       {...props}
+     >
+       <SidebarContent>
+         <SidebarGroup>
+           <SidebarMenu className="gap-0">
+             <div className="flex flex-col gap-3">
++              <div className="flex flex-col gap-0">
++                {!isSidebarCollapsed && (
++                  <SidebarGroupLabel className="mb-0">SETUP</SidebarGroupLabel>
++                )}
++                {[
++                  {
++                    title: "Get Started",
++                    url: "/dashboard/get-started",
++                    icon: Rocket,
++                    active: pathname === "/dashboard/get-started",
++                  },
++                  {
++                    title: "Playground",
++                    url: "/dashboard/playground",
++                    icon: FlaskConical,
++                    active: pathname === "/dashboard/playground",
++                  },
++                  {
++                    title: "API Keys",
++                    url: "/dashboard/api-keys",
++                    icon: KeyRound,
++                    active: pathname === "/dashboard/api-keys",
++                  },
++                ].map((item) => {
++                  const label = t(NAV_KEYS[item.title] ?? item.title);
++                  return (
++                    <SidebarMenuItem key={item.title}>
++                      <SidebarMenuButton
++                        asChild
++                        collapsed={isSidebarCollapsed}
++                        active={item.active}
++                        tooltip={isSidebarCollapsed ? label : undefined}
++                      >
++                        <Link
++                          href={item.url}
++                          className={cn(
++                            "flex items-center w-full",
++                            isSidebarCollapsed
++                              ? "justify-center mx-auto"
++                              : "gap-1.5",
++                          )}
++                        >
++                          <item.icon className="size-4 shrink-0" />
++                          {!isSidebarCollapsed && <span>{label}</span>}
++                        </Link>
++                      </SidebarMenuButton>
++                    </SidebarMenuItem>
++                  );
++                })}
++              </div>
++
+               <div className="flex flex-col gap-0">
+                 {!isSidebarCollapsed && (
+                   <SidebarGroupLabel className="mb-0">
+                     ACTIVITY
+                   </SidebarGroupLabel>
+                 )}
+                 {[
++                  {
++                    title: "Dashboard",
++                    url: "/dashboard/overview",
++                    icon: ChartLine,
++                    active: pathname === "/dashboard/overview",
++                  },
+                   {
+                     title: "Requests",
+                     url: "/dashboard/requests",
+                     icon: Activity,
+                     active: pathname === "/dashboard/requests",
+                   },
++                  {
++                    title: "Entities",
++                    url: "/dashboard/entities",
++                    icon: Tags,
++                    active: pathname === "/dashboard/entities",
++                  },
+                   {
+                     title: "Memories",
+                     url: "/dashboard/memories",
+                     icon: GalleryVerticalEnd,
+                     active: pathname === "/dashboard/memories",
+                   },
+                   {
+-                    title: "Entities",
+-                    url: "/dashboard/entities",
+-                    icon: Users,
+-                    active: pathname === "/dashboard/entities",
++                    title: "Webhooks",
++                    url: "/dashboard/webhooks",
++                    icon: Webhook,
++                    active: pathname === "/dashboard/webhooks",
++                  },
++                  {
++                    title: "Exports",
++                    url: "/dashboard/memory-exports",
++                    icon: FolderInput,
++                    active: pathname === "/dashboard/memory-exports",
+                   },
+-                ].map((item) => (
+-                  <SidebarMenuItem key={item.title}>
+-                    <SidebarMenuButton
+-                      asChild
+-                      collapsed={isSidebarCollapsed}
+-                      active={item.active}
+-                      tooltip={isSidebarCollapsed ? item.title : undefined}
+-                    >
+-                      <Link
+-                        href={item.url}
+-                        className={cn(
+-                          "flex items-center w-full",
+-                          isSidebarCollapsed
+-                            ? "justify-center mx-auto"
+-                            : "gap-1.5",
+-                        )}
++                ].map((item) => {
++                  const label = t(NAV_KEYS[item.title] ?? item.title);
++                  return (
++                    <SidebarMenuItem key={item.title}>
++                      <SidebarMenuButton
++                        asChild
++                        collapsed={isSidebarCollapsed}
++                        active={item.active}
++                        tooltip={isSidebarCollapsed ? label : undefined}
+                       >
+-                        <item.icon className="size-4 shrink-0" />
+-                        {!isSidebarCollapsed && (
+-                          <span>{t(NAV_KEYS[item.title] ?? item.title)}</span>
+-                        )}
+-                      </Link>
+-                    </SidebarMenuButton>
+-                  </SidebarMenuItem>
+-                ))}
++                        <Link
++                          href={item.url}
++                          className={cn(
++                            "flex items-center w-full",
++                            isSidebarCollapsed
++                              ? "justify-center mx-auto"
++                              : "gap-1.5",
++                          )}
++                        >
++                          <item.icon className="size-4 shrink-0" />
++                          {!isSidebarCollapsed && <span>{label}</span>}
++                        </Link>
++                      </SidebarMenuButton>
++                    </SidebarMenuItem>
++                  );
++                })}
+               </div>
+ 
+               <div className="flex flex-col gap-0">
+                 {!isSidebarCollapsed && (
+                   <SidebarGroupLabel className="mb-0">
+                     TENANT
+                   </SidebarGroupLabel>
+                 )}
+                 {[
+                   {
+@@ -146,180 +238,122 @@ export function MainNav({
+                     url: "/dashboard/departments",
+                     icon: Building2,
+                     active: pathname === "/dashboard/departments",
+                   },
+                   {
+                     title: "Projects",
+                     url: "/dashboard/projects",
+                     icon: Folder,
+                     active: pathname === "/dashboard/projects",
+                   },
+-                ].map((item) => (
+-                  <SidebarMenuItem key={item.title}>
+-                    <SidebarMenuButton
+-                      asChild
+-                      collapsed={isSidebarCollapsed}
+-                      active={item.active}
+-                      tooltip={isSidebarCollapsed ? item.title : undefined}
+-                    >
+-                      <Link
+-                        href={item.url}
+-                        className={cn(
+-                          "flex items-center w-full",
+-                          isSidebarCollapsed
+-                            ? "justify-center mx-auto"
+-                            : "gap-1.5",
+-                        )}
+-                      >
+-                        <item.icon className="size-4 shrink-0" />
+-                        {!isSidebarCollapsed && (
+-                          <span>{t(NAV_KEYS[item.title] ?? item.title)}</span>
+-                        )}
+-                      </Link>
+-                    </SidebarMenuButton>
+-                  </SidebarMenuItem>
+-                ))}
+-              </div>
+-
+-              {isSidebarCollapsed && (
+-                <div className="h-[1px] w-full bg-memBorder-primary my-2" />
+-              )}
+-
+-              <Collapsible
+-                open={isCloudOpen}
+-                onOpenChange={setIsCloudOpen}
+-                className="flex flex-col gap-0"
+-              >
+-                {!isSidebarCollapsed && (
+-                  <CollapsibleTrigger asChild>
+-                    <SidebarGroupLabel className="cursor-pointer mb-0">
+-                      CLOUD FEATURES
+-                      <ChevronDown
+-                        className={cn(
+-                          "size-3 transition-transform duration-200",
+-                          isCloudOpen ? "" : "-rotate-90",
+-                        )}
+-                      />
+-                    </SidebarGroupLabel>
+-                  </CollapsibleTrigger>
+-                )}
+-                <CollapsibleContent className="flex flex-col gap-0">
+-                  {[
+-                    {
+-                      title: "Categories",
+-                      url: "/dashboard/categories",
+-                      icon: Tags,
+-                    },
+-                    {
+-                      title: "Webhooks",
+-                      url: "/dashboard/webhooks",
+-                      icon: WebhookIcon,
+-                    },
+-                    {
+-                      title: "Analytics",
+-                      url: "/dashboard/analytics",
+-                      icon: ChartLine,
+-                    },
+-                    {
+-                      title: "Export",
+-                      url: "/dashboard/export",
+-                      icon: FolderInput,
+-                    },
+-                  ].map((item) => (
++                ].map((item) => {
++                  const label = t(NAV_KEYS[item.title] ?? item.title);
++                  return (
+                     <SidebarMenuItem key={item.title}>
+                       <SidebarMenuButton
+                         asChild
+                         collapsed={isSidebarCollapsed}
+-                        active={pathname === item.url}
+-                        tooltip={isSidebarCollapsed ? item.title : undefined}
++                        active={item.active}
++                        tooltip={isSidebarCollapsed ? label : undefined}
+                       >
+                         <Link
+                           href={item.url}
+                           className={cn(
+                             "flex items-center w-full",
+                             isSidebarCollapsed
+                               ? "justify-center mx-auto"
+                               : "gap-1.5",
+                           )}
+                         >
+                           <item.icon className="size-4 shrink-0" />
+-                          {!isSidebarCollapsed && (
+-                            <>
+-                              <span>{t(NAV_KEYS[item.title] ?? item.title)}</span>
+-                              <Badge
+-                                variant="outline"
+-                                className="ml-auto text-memGold-600 border-memGold-300 typo-caption-sm px-1.5 py-0"
+-                              >
+-                                PRO
+-                              </Badge>
+-                            </>
+-                          )}
++                          {!isSidebarCollapsed && <span>{label}</span>}
+                         </Link>
+                       </SidebarMenuButton>
+                     </SidebarMenuItem>
+-                  ))}
+-                </CollapsibleContent>
+-              </Collapsible>
++                  );
++                })}
++              </div>
+ 
+               {isSidebarCollapsed && (
+                 <div className="h-[1px] w-full bg-memBorder-primary my-2" />
+               )}
+ 
+               <div className="flex flex-col gap-0">
+                 {!isSidebarCollapsed && (
+                   <SidebarGroupLabel className="mb-0">
+                     ACCOUNT
+                   </SidebarGroupLabel>
+                 )}
+                 {[
+-                  {
+-                    title: "API Keys",
+-                    url: "/dashboard/api-keys",
+-                    icon: KeyRound,
+-                    active: pathname === "/dashboard/api-keys",
+-                  },
+                   {
+                     title: "Configuration",
+                     url: "/dashboard/configuration",
+                     icon: Wrench,
+                     active: pathname === "/dashboard/configuration",
+                   },
+                   {
+                     title: "Settings",
+                     url: "/dashboard/settings",
+                     icon: Settings,
+                     active: pathname === "/dashboard/settings",
+                   },
+-                ].map((item) => (
+-                  <SidebarMenuItem key={item.title}>
+-                    <SidebarMenuButton
+-                      asChild
+-                      collapsed={isSidebarCollapsed}
+-                      active={item.active}
+-                      tooltip={isSidebarCollapsed ? item.title : undefined}
+-                    >
+-                      <Link
+-                        href={item.url}
+-                        className={cn(
+-                          "flex items-center w-full",
+-                          isSidebarCollapsed
+-                            ? "justify-center mx-auto"
+-                            : "gap-1.5",
+-                        )}
++                ].map((item) => {
++                  const label = t(NAV_KEYS[item.title] ?? item.title);
++                  return (
++                    <SidebarMenuItem key={item.title}>
++                      <SidebarMenuButton
++                        asChild
++                        collapsed={isSidebarCollapsed}
++                        active={item.active}
++                        tooltip={isSidebarCollapsed ? label : undefined}
+                       >
+-                        <item.icon className="size-4 shrink-0" />
+-                        {!isSidebarCollapsed && (
+-                          <span>{t(NAV_KEYS[item.title] ?? item.title)}</span>
+-                        )}
+-                      </Link>
+-                    </SidebarMenuButton>
+-                  </SidebarMenuItem>
+-                ))}
++                        <Link
++                          href={item.url}
++                          className={cn(
++                            "flex items-center w-full",
++                            isSidebarCollapsed
++                              ? "justify-center mx-auto"
++                              : "gap-1.5",
++                          )}
++                        >
++                          <item.icon className="size-4 shrink-0" />
++                          {!isSidebarCollapsed && <span>{label}</span>}
++                        </Link>
++                      </SidebarMenuButton>
++                    </SidebarMenuItem>
++                  );
++                })}
+               </div>
+             </div>
+           </SidebarMenu>
+         </SidebarGroup>
++
++        {!isSidebarCollapsed && (
++          <div className="px-2 py-2">
++            <select
++              className="w-full border border-memBorder-primary rounded-md px-2 py-1.5 text-xs bg-transparent"
++              value={projectContext}
++              onChange={(e) => {
++                const value = e.target.value;
++                setProjectContext(value);
++                try {
++                  localStorage.setItem(PROJECT_CONTEXT_KEY, value);
++                } catch {
++                  // ignore
++                }
++                window.location.href = "/dashboard/memories";
++              }}
++            >
++              <option value="">All projects</option>
++              {projects.map((p) => (
++                <option key={p.id} value={p.project_id}>
++                  {p.project_id}
++                </option>
++              ))}
++            </select>
++          </div>
++        )}
+       </SidebarContent>
+       <SidebarRail />
+     </Sidebar>
+   );
+ }
+diff --git a/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx b/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx
+index e4acffa1..0260e83d 100644
+--- a/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/configuration/page.tsx
+@@ -6,21 +6,20 @@ import { Input } from "@/components/ui/input";
+ import { Label } from "@/components/ui/label";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+ } from "@/components/ui/select";
+ import { toast } from "@/components/ui/use-toast";
+-import { UpgradeBanner } from "@/components/self-hosted/upgrade-banner";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { cn } from "@/lib/utils";
+ import { useTranslation } from "@/i18n";
+ import { api } from "@/utils/api";
+ import { MEMORY_ENDPOINTS } from "@/utils/api-endpoints";
+ import {
+   buildProviderConfig,
+   getEffectiveConfig,
+   getProviderPresets,
+ } from "@/utils/self-hosted-config";
+@@ -360,21 +359,13 @@ export default function ConfigurationPage() {
+             </p>
+           )}
+         </div>
+       )}
+ 
+       {isAdmin && (
+         <Button onClick={handleSave} disabled={isSaving}>
+           {isSaving ? "Saving..." : `${t("common.save")} Configuration`}
+         </Button>
+       )}
+-
+-      <UpgradeBanner
+-        id="config-sso"
+-        message="Looking for SSO / SAML? Available in Enterprise."
+-        ctaLabel="Contact sales"
+-        ctaUrl="https://app.mem0.ai/enterprise?utm_source=oss&utm_medium=dashboard-configuration-sso"
+-        variant="enterprise"
+-      />
+     </div>
+   );
+ }
+diff --git a/server/dashboard/src/app/(root)/dashboard/export/page.tsx b/server/dashboard/src/app/(root)/dashboard/export/page.tsx
+deleted file mode 100644
+index 26f8423c..00000000
+--- a/server/dashboard/src/app/(root)/dashboard/export/page.tsx
++++ /dev/null
+@@ -1,65 +0,0 @@
+-"use client";
+-
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent } from "@/components/ui/card";
+-import { Label } from "@/components/ui/label";
+-import { Button } from "@/components/ui/button";
+-
+-function ExportMockup() {
+-  return (
+-    <div className="space-y-4">
+-      <Card className="border-memBorder-primary">
+-        <CardContent className="p-6 space-y-4">
+-          <div className="space-y-2">
+-            <Label>Format</Label>
+-            <div className="flex gap-2">
+-              {["JSON", "CSV", "Pydantic Schema"].map((fmt) => (
+-                <Button
+-                  key={fmt}
+-                  variant="outline"
+-                  size="sm"
+-                  disabled
+-                  className={fmt === "JSON" ? "border-memPurple-300" : ""}
+-                >
+-                  {fmt}
+-                </Button>
+-              ))}
+-            </div>
+-          </div>
+-          <div className="space-y-2">
+-            <Label>Sample output</Label>
+-            <Card className="border-memBorder-primary bg-surface-default-secondary">
+-              <CardContent className="p-3">
+-                <pre className="text-xs text-onSurface-default-secondary font-mono whitespace-pre-wrap">
+-                  {`{
+-  "memories": [
+-    {
+-      "id": "mem_abc123",
+-      "content": "User prefers dark mode",
+-      "user_id": "user_1",
+-      "created_at": "2026-04-10T12:00:00Z"
+-    }
+-  ],
+-  "total": 1247
+-}`}
+-                </pre>
+-              </CardContent>
+-            </Card>
+-          </div>
+-          <Button disabled>Export Memories</Button>
+-        </CardContent>
+-      </Card>
+-    </div>
+-  );
+-}
+-
+-export default function ExportPage() {
+-  return (
+-    <LockedPage
+-      title="Export"
+-      description="Export your memories in JSON, CSV, or Pydantic schema format."
+-      previewContent={<ExportMockup />}
+-      utmMedium="dashboard-locked-export"
+-    />
+-  );
+-}
+diff --git a/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx b/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx
+new file mode 100644
+index 00000000..2a960f28
+--- /dev/null
++++ b/server/dashboard/src/app/(root)/dashboard/get-started/page.tsx
+@@ -0,0 +1,189 @@
++"use client";
++
++import { useState } from "react";
++import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
++import Link from "next/link";
++
++// MCP 服务：mem0/server/mcp_server.py —— FastMCP("mem0-local")，streamable-http，
++// 监听 MEM0_MCP_PORT（默认 8080），挂载路径 /mcp。
++const MCP_JSON = `{
++  "mcpServers": {
++    "mem0-local": {
++      "url": "http://<your-server>:8080/mcp"
++    }
++  }
++}`;
++
++// 工具清单与入参以 mcp_server.py 源码为准（共 7 个 @mcp.tool()）：
++//   api_key     —— 你的个人 API Key（/dashboard/api-keys 创建）
++//   git_remote  —— 本地工程 `git remote -v` 输出的地址，服务端自动解析 project_id
++//   ? = 可省略；带默认值的参数（top_k=5 / limit=100）按源码写默认值
++const MCP_TOOLS = [
++  { name: "add_memory", args: "text, api_key, git_remote?, project_id?, metadata?, user_id?" },
++  { name: "search_memories", args: "query, api_key, git_remote?, project_id?, top_k=5" },
++  { name: "get_memories", args: "api_key, git_remote?, project_id?, limit=100" },
++  { name: "get_memory", args: "memory_id, api_key?" },
++  { name: "update_memory", args: "memory_id, text, api_key?" },
++  { name: "delete_memory", args: "memory_id, api_key?" },
++  { name: "match_project", args: "git_remote, api_key?" },
++];
++
++// REST：mem0-api，容器内 8000 / 宿主机 8888；鉴权 X-API-Key。
++const PYTHON = `import requests
++
++BASE = "http://<your-server>:8888"          # mem0-api REST 端口
++KEY = "YOUR_API_KEY"                         # /dashboard/api-keys 创建
++GIT_REMOTE = "git@github.com:org/repo.git"   # 本地 git remote -v
++
++# 1) 添加记忆（git_remote 自动解析 project_id 并写入 metadata）
++r = requests.post(
++    f"{BASE}/memories",
++    headers={"X-API-Key": KEY},
++    json={
++        "messages": [{"role": "user", "content": "本项目使用 FastAPI + pgvector"}],
++        "git_remote": GIT_REMOTE,
++    },
++    timeout=30,
++)
++r.raise_for_status()   # 4xx/5xx 直接抛错，避免静默吞掉失败
++print(r.status_code, r.json())
++
++# 2) 检索记忆（带 git_remote 即检索该项目的共享池，跨用户）
++r = requests.post(
++    f"{BASE}/search",
++    headers={"X-API-Key": KEY},
++    json={"query": "本项目用什么数据库？", "git_remote": GIT_REMOTE},
++    timeout=30,
++)
++r.raise_for_status()
++print(r.json())`;
++
++const CURL = `# 1) 添加记忆
++curl -X POST http://<your-server>:8888/memories \\
++  -H "X-API-Key: YOUR_API_KEY" \\
++  -H "Content-Type: application/json" \\
++  -d '{"messages":[{"role":"user","content":"我喜欢深色主题"}],"git_remote":"git@github.com:org/repo.git"}'
++
++# 2) 检索记忆（带 git_remote 即检索该项目的共享池，跨用户）
++curl -X POST http://<your-server>:8888/search \\
++  -H "X-API-Key: YOUR_API_KEY" \\
++  -H "Content-Type: application/json" \\
++  -d '{"query":"主题偏好","git_remote":"git@github.com:org/repo.git"}'`;
++
++const TABS = [
++  { id: "mcp", label: "MCP（CodeBuddy / Qoder）", code: MCP_JSON },
++  { id: "python", label: "Python", code: PYTHON },
++  { id: "curl", label: "cURL", code: CURL },
++] as const;
++
++export default function GetStartedPage() {
++  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("mcp");
++  const active = TABS.find((t) => t.id === tab)!;
++
++  return (
++    <div className="space-y-6">
++      <h1 className="text-xl font-semibold font-fustat">Get Started</h1>
++
++      <Card className="border-memBorder-primary">
++        <CardHeader>
++          <CardTitle className="text-sm">Step 1 · 创建 API Key</CardTitle>
++        </CardHeader>
++        <CardContent className="text-sm">
++          在{" "}
++          <Link className="underline" href="/dashboard/api-keys">
++            API Keys
++          </Link>{" "}
++          页创建个人密钥（仅创建时可见）。所有接入方式都通过{" "}
++          <code className="font-mono">X-API-Key</code> 请求头识别你的身份。
++        </CardContent>
++      </Card>
++
++      <Card className="border-memBorder-primary">
++        <CardHeader>
++          <CardTitle className="text-sm">Step 2 · 选择接入方式</CardTitle>
++        </CardHeader>
++        <CardContent className="space-y-3">
++          <div className="flex flex-wrap gap-2">
++            {TABS.map((t) => (
++              <button
++                key={t.id}
++                onClick={() => setTab(t.id)}
++                className={`px-3 py-1.5 text-sm rounded border ${
++                  t.id === tab
++                    ? "bg-surface-default-brand text-onSurface-default-primary border-memBorder-primary"
++                    : "border-memBorder-primary hover:bg-surface-default-secondary"
++                }`}
++              >
++                {t.label}
++              </button>
++            ))}
++          </div>
++          <pre className="text-xs bg-surface-default-secondary p-3 rounded font-mono overflow-x-auto max-h-96">
++            {active.code}
++          </pre>
++          <p className="text-xs text-onSurface-default-secondary">
++            把 <code className="font-mono">&lt;your-server&gt;</code> 换成部署 mem0 的主机地址（MCP 默认
++            8080 / REST 默认 8888），<code className="font-mono">YOUR_API_KEY</code> 换成 Step 1
++            创建的密钥，<code className="font-mono">git_remote</code> 换成你本地工程的 remote 地址。
++          </p>
++          {tab === "curl" && (
++            <p className="text-xs text-onSurface-default-tertiary">
++              Windows 注意：示例使用 POSIX 单引号。cmd.exe 需改用双引号并把 JSON 内的双引号转义为 \&quot; ；
++              PowerShell 5.1 的 curl 是 Invoke-WebRequest 的别名，请用 curl.exe 或改走 Git Bash / WSL。
++            </p>
++          )}
++          {tab === "mcp" && (
++            <div className="text-xs text-onSurface-default-secondary space-y-1">
++              <p>
++                配置文件填入上述 JSON 即可（transport：
++                <code className="font-mono">streamable-http</code>，默认端口 8080）。可用工具（共{" "}
++                {MCP_TOOLS.length} 个）：
++              </p>
++              <ul className="space-y-0.5">
++                {MCP_TOOLS.map((tool) => (
++                  <li key={tool.name}>
++                    <code className="font-mono">{tool.name}</code>（{tool.args}）
++                  </li>
++                ))}
++              </ul>
++              <p>
++                其中 <code className="font-mono">api_key</code> 为 Step 1 创建的密钥，
++                <code className="font-mono">git_remote</code> 为本地 <code className="font-mono">git remote -v</code>{" "}
++                输出的地址，服务端自动匹配项目。
++              </p>
++            </div>
++          )}
++        </CardContent>
++      </Card>
++
++      <Card className="border-memBorder-primary">
++        <CardHeader>
++          <CardTitle className="text-sm">Step 3 · 验证记忆写入</CardTitle>
++        </CardHeader>
++        <CardContent className="text-sm">
++          运行上方“添加记忆”代码，然后到{" "}
++          <Link className="underline" href="/dashboard/memories">
++            Memories
++          </Link>{" "}
++          查看（metadata 中应包含 <code className="font-mono">git_remote</code> 与解析出的{" "}
++          <code className="font-mono">project_id</code>）。
++        </CardContent>
++      </Card>
++
++      <Card className="border-memBorder-primary">
++        <CardHeader>
++          <CardTitle className="text-sm">Step 4 · 检索与共享池</CardTitle>
++        </CardHeader>
++        <CardContent className="text-sm">
++          检索默认只返回你自己的记忆；带 <code className="font-mono">git_remote</code>/
++          <code className="font-mono">project_id</code> 的检索/拉取会返回该项目的共享池（跨用户）。
++          可先在{" "}
++          <Link className="underline" href="/dashboard/playground">
++            Playground
++          </Link>{" "}
++          无代码试玩。
++        </CardContent>
++      </Card>
++    </div>
++  );
++}
+diff --git a/server/dashboard/src/app/(root)/dashboard/memories/page.tsx b/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
+index 23cce7dd..b903781a 100644
+--- a/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/memories/page.tsx
+@@ -1,76 +1,97 @@
+ "use client";
+ 
+-import { useState } from "react";
++import { useEffect, useState } from "react";
+ import { Trash2 } from "lucide-react";
+ import { format } from "date-fns";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+ import { Label } from "@/components/ui/label";
+ import { Card } from "@/components/ui/card";
+ import { DataTable } from "@/components/shared/data-table";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
+ import {
+   Sheet,
+   SheetContent,
+   SheetHeader,
+   SheetTitle,
+   SheetDescription,
+ } from "@/components/ui/sheet";
+-import { UpgradeBanner } from "@/components/self-hosted/upgrade-banner";
+ import { toast } from "@/components/ui/use-toast";
+ import { getErrorMessage } from "@/lib/error-message";
+ import { api } from "@/utils/api";
+ import { MEMORY_ENDPOINTS, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
+ import { useApiQuery } from "@/hooks/use-api-query";
+ import { Memory, Project } from "@/types/api";
+ 
+ const PAGE_SIZE = 20;
+ // Keep in sync with ALL_MEMORIES_LIMIT in server/main.py.
+ const MEMORY_FETCH_LIMIT = 1000;
+ 
++const PROJECT_CONTEXT_KEY = "mem0-project-context";
++
+ export default function MemoriesPage() {
+   const [userId, setUserId] = useState("");
+   const [projectId, setProjectId] = useState("");
++  const [projectContextLoaded, setProjectContextLoaded] = useState(false);
+   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+   const [memoryToDelete, setMemoryToDelete] = useState<Memory | null>(null);
+   const [page, setPage] = useState(0);
+   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+ 
++  useEffect(() => {
++    // localStorage is only available in the browser; read it after mount to
++    // avoid SSR/hydration mismatches.
++    try {
++      const stored = localStorage.getItem(PROJECT_CONTEXT_KEY);
++      if (stored) setProjectId(stored);
++    } catch {
++      // ignore
++    }
++    setProjectContextLoaded(true);
++  }, []);
++
+   const { data: projects = [] } = useApiQuery<Project[]>(
+     async () => {
+       const res = await api.get(PROJECT_ENDPOINTS.BASE);
+       return res.data ?? [];
+     },
+     { errorToast: "Failed to load projects", initialData: [] },
+   );
+ 
+   const {
+     data: memories = [],
+-    isLoading,
++    isLoading: memoriesLoading,
+     refetch,
+   } = useApiQuery<Memory[]>(
+     async () => {
+       const params: Record<string, unknown> = { top_k: MEMORY_FETCH_LIMIT };
+       if (userId.trim()) params.user_id = userId.trim();
+       if (projectId) params.project_id = projectId;
+       const res = await api.get(MEMORY_ENDPOINTS.BASE, { params });
+       const raw = res.data?.results ?? res.data ?? [];
+       return (Array.isArray(raw) ? raw : []).map((m: any) => ({
+         ...m,
+         project_id: m.project_id ?? m.metadata?.project_id,
+       }));
+     },
+-    { errorToast: "Failed to load memories", initialData: [] },
++    {
++      errorToast: "Failed to load memories",
++      initialData: [],
++      // Wait for the project context to be restored from localStorage so the
++      // first fetch is already pre-filtered instead of using the default "".
++      enabled: projectContextLoaded,
++    },
+   );
++  const isLoading = memoriesLoading || !projectContextLoaded;
+ 
+   const totalPages = Math.ceil(memories.length / PAGE_SIZE);
+   const paginatedMemories = memories.slice(
+     page * PAGE_SIZE,
+     (page + 1) * PAGE_SIZE,
+   );
+ 
+   const handleDelete = async () => {
+     if (!memoryToDelete) return;
+     try {
+@@ -111,30 +132,20 @@ export default function MemoriesPage() {
+       width: 120,
+       render: (value: string) =>
+         value ? format(new Date(value), "MMM d, yyyy") : "--",
+     },
+   ];
+ 
+   return (
+     <div className="space-y-4">
+       <h1 className="text-xl font-semibold font-fustat">Memories</h1>
+ 
+-      {memories.length >= MEMORY_FETCH_LIMIT && (
+-        <UpgradeBanner
+-          id="memories-1k"
+-          message="1,000+ memories stored. Categories can help organize them."
+-          ctaLabel="Explore Cloud"
+-          ctaUrl="https://app.mem0.ai?utm_source=oss&utm_medium=dashboard-memories"
+-          variant="cloud"
+-        />
+-      )}
+-
+       <div className="flex gap-3">
+         <Input
+           placeholder="Filter by User ID (optional)"
+           value={userId}
+           onChange={(e) => setUserId(e.target.value)}
+           onKeyDown={(e) => {
+             if (e.key === "Enter") {
+               setPage(0);
+               refetch();
+             }
+diff --git a/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx b/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
+new file mode 100644
+index 00000000..0730ee22
+--- /dev/null
++++ b/server/dashboard/src/app/(root)/dashboard/memory-exports/page.tsx
+@@ -0,0 +1,189 @@
++"use client";
++
++import React, { useEffect, useState } from "react";
++import { Download, FileDown } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { Input } from "@/components/ui/input";
++import { Label } from "@/components/ui/label";
++import { Card } from "@/components/ui/card";
++import {
++  Select,
++  SelectContent,
++  SelectItem,
++  SelectTrigger,
++  SelectValue,
++} from "@/components/ui/select";
++import { toast } from "@/components/ui/use-toast";
++import { TableSkeleton } from "@/components/shared/table-skeleton";
++import { EmptyState } from "@/components/self-hosted/empty-state";
++import { api } from "@/utils/api";
++import { EXPORT_ENDPOINTS, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
++import { Project } from "@/types/api";
++import { useTranslation } from "@/i18n";
++
++export default function MemoryExportsPage() {
++  const { t } = useTranslation();
++  const [projects, setProjects] = useState<Project[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++
++  const [projectId, setProjectId] = useState("all");
++  const [userId, setUserId] = useState("");
++  const [start, setStart] = useState("");
++  const [end, setEnd] = useState("");
++  const [exporting, setExporting] = useState(false);
++
++  async function load() {
++    setLoading(true);
++    try {
++      const res = await api.get(PROJECT_ENDPOINTS.BASE);
++      setProjects(res.data ?? []);
++      setError(null);
++    } catch (e: any) {
++      setError(e?.response?.data?.detail ?? e?.message ?? "Failed to load projects");
++    } finally {
++      setLoading(false);
++    }
++  }
++
++  useEffect(() => {
++    load();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  async function exportMemories() {
++    const params: Record<string, string> = { format: "jsonl" };
++    if (projectId && projectId !== "all") params.project_id = projectId;
++    if (userId.trim()) params.user_id = userId.trim();
++    if (start) params.start = start;
++    if (end) params.end = end;
++
++    setExporting(true);
++    try {
++      // Blob download instead of window.open: the endpoint requires an admin
++      // JWT, which window.open cannot attach in authenticated mode.
++      const res = await api.get(EXPORT_ENDPOINTS.MEMORIES, {
++        params,
++        responseType: "blob",
++      });
++      const url = URL.createObjectURL(res.data as Blob);
++      const a = document.createElement("a");
++      a.href = url;
++      a.download = "memories-export.jsonl";
++      a.click();
++      URL.revokeObjectURL(url);
++      setError(null);
++      toast({ title: "Export downloaded", variant: "success" });
++    } catch (e: unknown) {
++      let detail =
++        typeof e === "string"
++          ? e
++          : ((e as { message?: string })?.message ?? "Export failed");
++      const data =
++        typeof e === "object" && e !== null
++          ? (e as { response?: { data?: unknown } }).response?.data
++          : undefined;
++      if (data instanceof Blob) {
++        try {
++          const parsed = JSON.parse(await data.text()) as { detail?: unknown };
++          if (typeof parsed.detail === "string") detail = parsed.detail;
++        } catch {
++          /* keep fallback detail */
++        }
++      } else if (
++        typeof data === "object" &&
++        data !== null &&
++        typeof (data as { detail?: unknown }).detail === "string"
++      ) {
++        detail = (data as { detail: string }).detail;
++      }
++      setError(detail);
++      toast({ title: detail, variant: "warning" });
++    } finally {
++      setExporting(false);
++    }
++  }
++
++  return (
++    <div className="p-6 space-y-6">
++      <div>
++        <h1 className="text-2xl font-semibold">{t("exports.title")}</h1>
++        <p className="text-memText-secondary text-sm">{t("exports.desc")}</p>
++      </div>
++      {error && <div className="text-red-500 text-sm">{error}</div>}
++
++      {loading ? (
++        <TableSkeleton rows={3} columns={3} />
++      ) : (
++        <Card className="border-memBorder-primary p-6 max-w-2xl space-y-4">
++          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
++            <div className="space-y-2">
++              <Label htmlFor="export-project">{t("tenant.projects")}</Label>
++              <Select value={projectId} onValueChange={setProjectId}>
++                <SelectTrigger id="export-project" className="w-full">
++                  <SelectValue placeholder={t("exports.allProjects")} />
++                </SelectTrigger>
++                <SelectContent>
++                  <SelectItem value="all">{t("exports.allProjects")}</SelectItem>
++                  {projects.map((p) => (
++                    <SelectItem key={p.id} value={p.project_id}>
++                      {p.name || p.project_id}
++                    </SelectItem>
++                  ))}
++                </SelectContent>
++              </Select>
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="export-user">{t("exports.userId")}</Label>
++              <Input
++                id="export-user"
++                placeholder={t("exports.userIdPlaceholder")}
++                value={userId}
++                onChange={(e) => setUserId(e.target.value)}
++              />
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="export-start">{t("exports.start")}</Label>
++              <Input
++                id="export-start"
++                type="date"
++                value={start}
++                onChange={(e) => setStart(e.target.value)}
++              />
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="export-end">{t("exports.end")}</Label>
++              <Input
++                id="export-end"
++                type="date"
++                value={end}
++                onChange={(e) => setEnd(e.target.value)}
++              />
++            </div>
++          </div>
++
++          <div className="flex items-center gap-3 pt-2">
++            <Button onClick={exportMemories} disabled={exporting}>
++              {exporting ? (
++                <FileDown className="size-4 mr-1 animate-pulse" />
++              ) : (
++                <Download className="size-4 mr-1" />
++              )}
++              {t("exports.button")}
++            </Button>
++            <span className="text-xs text-memText-secondary">
++              {t("exports.formatHint")}
++            </span>
++          </div>
++        </Card>
++      )}
++
++      {!loading && projects.length === 0 && (
++        <EmptyState
++          title={t("exports.noProjectsTitle")}
++          description={t("exports.noProjectsDesc")}
++        />
++      )}
++    </div>
++  );
++}
+diff --git a/server/dashboard/src/app/(root)/dashboard/overview/page.tsx b/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
+new file mode 100644
+index 00000000..18eb8a10
+--- /dev/null
++++ b/server/dashboard/src/app/(root)/dashboard/overview/page.tsx
+@@ -0,0 +1,87 @@
++"use client";
++
++import { useEffect, useRef, useState } from "react";
++import Link from "next/link";
++import { Button } from "@/components/ui/button";
++import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
++import { TableSkeleton } from "@/components/shared/table-skeleton";
++import { api } from "@/utils/api";
++import { STATS_ENDPOINT } from "@/utils/api-endpoints";
++import { useApiQuery } from "@/hooks/use-api-query";
++import type { Stats } from "@/types/api";
++
++const RANGES = ["24h", "7d", "30d", "90d", "all"] as const;
++
++export default function OverviewPage() {
++  const [range, setRange] = useState<(typeof RANGES)[number]>("7d");
++  const { data: stats, isLoading, error, refetch } = useApiQuery<Stats | null>(
++    async () => {
++      const res = await api.get<Stats>(STATS_ENDPOINT.BASE, { params: { range } });
++      return res.data ?? null;
++    },
++    { errorToast: "Failed to load stats", initialData: null },
++  );
++
++  // useApiQuery only fetches on mount, but the fetcher closure reads `range`, so
++  // re-run it whenever the selected range changes.
++  const prevRange = useRef(range);
++  useEffect(() => {
++    // Compare values rather than an "already mounted" flag: on StrictMode's double
++    // mount both runs see prevRange.current === range and bail out early, so no
++    // duplicate request is fired.
++    if (prevRange.current === range) return;
++    prevRange.current = range;
++    void refetch();
++  }, [range, refetch]);
++
++  // `range` only filters the request counters; memories_total and entities are
++  // always all-time, so those cards are labelled accordingly.
++  const cards = [
++    { title: "Total Memories (All time)", value: stats?.memories_total ?? 0, href: "/dashboard/memories" },
++    { title: "Add Requests", value: stats?.requests?.add ?? 0, href: "/dashboard/requests" },
++    { title: "Search Requests", value: stats?.requests?.search ?? 0, href: "/dashboard/requests" },
++    { title: "Get All Requests", value: stats?.requests?.get_all ?? 0, href: "/dashboard/requests" },
++    { title: "Users (All time)", value: stats?.entities?.users ?? 0, href: "/dashboard/entities" },
++    { title: "Agents (All time)", value: stats?.entities?.agents ?? 0, href: "/dashboard/entities" },
++  ];
++
++  return (
++    <div className="space-y-6">
++      <div className="flex items-center justify-between">
++        <h1 className="text-xl font-semibold font-fustat">Dashboard</h1>
++        <div className="flex gap-1">
++          {RANGES.map((r) => (
++            <Button
++              key={r}
++              size="sm"
++              variant={r === range ? "default" : "outline"}
++              aria-pressed={r === range}
++              disabled={isLoading}
++              onClick={() => setRange(r)}
++            >
++              {r}
++            </Button>
++          ))}
++        </div>
++      </div>
++      {error ? (
++        <p className="text-sm text-destructive">Failed to load stats.</p>
++      ) : isLoading ? (
++        <TableSkeleton rows={2} columns={3} />
++      ) : (
++        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
++          {cards.map((c) => (
++            <Link key={c.title} href={c.href}>
++              <Card className="border-memBorder-primary hover:bg-surface-default-secondary">
++                <CardHeader>
++                  <CardTitle className="text-xs text-onSurface-default-tertiary">{c.title}</CardTitle>
++                </CardHeader>
++                <CardContent className="text-2xl font-semibold">{c.value.toLocaleString()}</CardContent>
++              </Card>
++            </Link>
++          ))}
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/server/dashboard/src/app/(root)/dashboard/playground/page.tsx b/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
+new file mode 100644
+index 00000000..314821df
+--- /dev/null
++++ b/server/dashboard/src/app/(root)/dashboard/playground/page.tsx
+@@ -0,0 +1,271 @@
++"use client";
++
++import { useState } from "react";
++import { Button } from "@/components/ui/button";
++import { Input } from "@/components/ui/input";
++import { Label } from "@/components/ui/label";
++import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
++import { Textarea } from "@/components/ui/textarea";
++import { toast } from "@/components/ui/use-toast";
++import { getErrorMessage } from "@/lib/error-message";
++import { useAuth } from "@/hooks/use-auth";
++import { api } from "@/utils/api";
++import { MEMORY_ENDPOINTS, SEARCH_ENDPOINTS } from "@/utils/api-endpoints";
++
++type Msg = { role: "user" | "assistant"; content: string };
++
++const newId = () => `sandbox-${Math.random().toString(36).slice(2, 10)}`;
++
++// 用单引号包裹并转义内部的单引号，避免用户输入截断生成的 cURL 命令。
++const shq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
++
++const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
++
++export default function PlaygroundPage() {
++  // 非 admin 传入他人 user_id（沙盒 id 即“他人”）会被后端 403，这里做角色收敛。
++  const { isAdmin } = useAuth();
++  const [mode, setMode] = useState<"add" | "search">("add");
++  const [messages, setMessages] = useState<Msg[]>([
++    { role: "user", content: "" },
++  ]);
++  const [query, setQuery] = useState("");
++  const [infer, setInfer] = useState(true);
++  const [instructions, setInstructions] = useState("");
++  const [output, setOutput] = useState("");
++  const [running, setRunning] = useState(false);
++  // 整个会话共用一个沙盒 user_id：add 写入后 search 才能命中同一批数据。
++  const [sandboxUserId, setSandboxUserId] = useState<string>(newId);
++
++  const addBody = {
++    messages: messages.filter((m) => m.content.trim()),
++    infer,
++    user_id: sandboxUserId,
++    ...(instructions.trim() ? { prompt: instructions.trim() } : {}),
++  };
++  const searchBody = { query, user_id: sandboxUserId };
++
++  const codeSnippet =
++    mode === "add"
++      ? `curl -X POST ${API_BASE_URL}${MEMORY_ENDPOINTS.BASE} -H "X-API-Key: <你的 API Key>" -d ${shq(JSON.stringify(addBody))}`
++      : `curl -X POST ${API_BASE_URL}${SEARCH_ENDPOINTS.BASE} -H "X-API-Key: <你的 API Key>" -d ${shq(JSON.stringify(searchBody))}`;
++
++  const hasInput =
++    mode === "add"
++      ? messages.some((m) => m.content.trim())
++      : query.trim().length > 0;
++  const canRun = hasInput && isAdmin;
++
++  function switchMode(next: "add" | "search") {
++    setMode(next);
++    setOutput("");
++  }
++
++  function resetSandbox() {
++    setSandboxUserId(newId());
++    setOutput("");
++    setQuery("");
++  }
++
++  async function run() {
++    if (!canRun) return;
++    setRunning(true);
++    try {
++      if (mode === "add") {
++        const res = await api.post(MEMORY_ENDPOINTS.BASE, addBody);
++        setOutput(JSON.stringify(res.data, null, 2));
++      } else {
++        const res = await api.post(SEARCH_ENDPOINTS.BASE, searchBody);
++        setOutput(JSON.stringify(res.data, null, 2));
++      }
++    } catch (error) {
++      // 清空旧结果，避免上一次的成功输出与本次错误同屏。
++      setOutput("");
++      toast({
++        title: "Playground call failed",
++        description: getErrorMessage(error),
++        variant: "destructive",
++      });
++    } finally {
++      setRunning(false);
++    }
++  }
++
++  return (
++    <div className="space-y-4">
++      <h1 className="text-xl font-semibold font-fustat">Playground</h1>
++
++      <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs">
++        {isAdmin ? (
++          <>
++            沙盒数据会写入隔离的 user_id（
++            <code>{sandboxUserId}</code>，前缀 sandbox-），不会进入你的项目记忆。
++          </>
++        ) : (
++          <>
++            当前账号不是管理员，Playground 已停用：沙盒所用的独立 user_id
++            对非管理员会被后端拒绝（403）。
++            <br />
++            沙盒需要管理员权限才能运行（普通用户请改用自己项目的记忆写入）。当前沙盒
++            user_id：<code>{sandboxUserId}</code>。
++          </>
++        )}
++        <Button
++          variant="ghost"
++          size="xs"
++          className="ml-2 h-5 px-2"
++          onClick={resetSandbox}
++        >
++          换一个
++        </Button>
++      </div>
++
++      <div className="flex gap-2">
++        {(["add", "search"] as const).map((m) => (
++          <Button
++            key={m}
++            size="sm"
++            variant={m === mode ? "default" : "outline"}
++            onClick={() => switchMode(m)}
++          >
++            {m === "add" ? "Add Memories" : "Search Memories"}
++          </Button>
++        ))}
++      </div>
++
++      {mode === "add" ? (
++        <Card className="border-memBorder-primary">
++          <CardHeader>
++            <CardTitle className="text-sm">会话消息</CardTitle>
++          </CardHeader>
++          <CardContent className="space-y-3">
++            {messages.map((m, i) => (
++              <div key={i} className="flex gap-2 items-center">
++                <button
++                  type="button"
++                  className="px-2 py-1 text-xs border rounded border-memBorder-primary w-24"
++                  onClick={() =>
++                    setMessages((prev) =>
++                      prev.map((x, j) =>
++                        j === i
++                          ? {
++                              ...x,
++                              role: x.role === "user" ? "assistant" : "user",
++                            }
++                          : x,
++                      ),
++                    )
++                  }
++                >
++                  {m.role === "user" ? "USER" : "ASSISTANT"}
++                </button>
++                <Input
++                  value={m.content}
++                  onChange={(e) =>
++                    setMessages((prev) =>
++                      prev.map((x, j) =>
++                        j === i ? { ...x, content: e.target.value } : x,
++                      ),
++                    )
++                  }
++                  placeholder={m.role === "user" ? "用户输入…" : "助手回复…"}
++                />
++                <Button
++                  variant="ghost"
++                  size="sm"
++                  aria-label="删除该消息"
++                  onClick={() =>
++                    setMessages((prev) => prev.filter((_, j) => j !== i))
++                  }
++                >
++                  ✕
++                </Button>
++              </div>
++            ))}
++            <Button
++              variant="outline"
++              size="sm"
++              onClick={() =>
++                setMessages((prev) => [...prev, { role: "user", content: "" }])
++              }
++            >
++              + 添加消息
++            </Button>
++
++            <div className="flex items-center gap-2 pt-2">
++              <input
++                id="infer"
++                type="checkbox"
++                checked={infer}
++                onChange={(e) => setInfer(e.target.checked)}
++              />
++              <Label htmlFor="infer" className="text-xs">
++                Extraction（开 = 抽取事实，关 = 逐字存储）
++              </Label>
++            </div>
++
++            <div className="space-y-1">
++              <Label htmlFor="custom-instructions" className="text-xs">
++                Custom Instructions（试运行）
++              </Label>
++              <Textarea
++                id="custom-instructions"
++                value={instructions}
++                onChange={(e) => setInstructions(e.target.value)}
++                rows={2}
++                placeholder="例如：只存储技术偏好，忽略闲聊"
++              />
++            </div>
++          </CardContent>
++        </Card>
++      ) : (
++        <Card className="border-memBorder-primary">
++          <CardHeader>
++            <CardTitle className="text-sm">检索</CardTitle>
++          </CardHeader>
++          <CardContent className="space-y-3">
++            <Input
++              value={query}
++              onChange={(e) => setQuery(e.target.value)}
++              placeholder="搜索查询…"
++            />
++            <p className="text-xs text-onSurface-default-tertiary">
++              检索范围限定在同一个沙盒 user_id（
++              <code>{sandboxUserId}</code>）。
++            </p>
++          </CardContent>
++        </Card>
++      )}
++
++      <div className="flex items-center gap-3">
++        <Button onClick={run} disabled={running || !canRun}>
++          {running ? "Running…" : "Run"}
++        </Button>
++        {!isAdmin && (
++          <span className="text-xs text-onSurface-default-tertiary">
++            沙盒需要管理员权限才能运行（普通用户请改用自己项目的记忆写入）。
++          </span>
++        )}
++      </div>
++
++      {output && (
++        <Card className="border-memBorder-primary">
++          <CardHeader>
++            <CardTitle className="text-sm">Output</CardTitle>
++          </CardHeader>
++          <CardContent>
++            <pre className="text-xs bg-surface-default-secondary p-3 rounded font-mono overflow-x-auto max-h-80">
++              {output}
++            </pre>
++            <p className="text-xs text-onSurface-default-tertiary mt-2">
++              Code: <code>{codeSnippet}</code>
++            </p>
++            <p className="text-xs text-onSurface-default-tertiary">
++              以上为等效 cURL：页面实际走登录态 Bearer 令牌，<code>X-API-Key</code>{" "}
++              仅为命令行调用占位（替换为你的 API Key）。
++            </p>
++          </CardContent>
++        </Card>
++      )}
++    </div>
++  );
++}
+diff --git a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+index d5f0d96b..f297955f 100644
+--- a/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/projects/page.tsx
+@@ -8,45 +8,50 @@ import { Label } from "@/components/ui/label";
+ import { Card } from "@/components/ui/card";
+ import { Textarea } from "@/components/ui/textarea";
+ import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+ } from "@/components/ui/dialog";
+ import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
++import { toast } from "@/components/ui/use-toast";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import { api } from "@/utils/api";
+-import { PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
++import { MEMORY_ENDPOINTS, PROJECT_ENDPOINTS } from "@/utils/api-endpoints";
+ import { Project } from "@/types/api";
+ import { useTranslation } from "@/i18n";
+ 
+ const PAGE_SIZE = 10;
+ 
+ export default function ProjectsPage() {
+   const { t } = useTranslation();
+   const [items, setItems] = useState<Project[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+ 
+   const [q, setQ] = useState("");
+   const [page, setPage] = useState(0);
+ 
+   const [dialogOpen, setDialogOpen] = useState(false);
+   const [editing, setEditing] = useState<Project | null>(null);
+   const [projectId, setProjectId] = useState("");
+   const [name, setName] = useState("");
+   const [description, setDescription] = useState("");
+   const [gitRemotes, setGitRemotes] = useState("");
++  const [customInstructions, setCustomInstructions] = useState("");
++  const [expirationDate, setExpirationDate] = useState("");
+   const [toDelete, setToDelete] = useState<Project | null>(null);
++  const [toPurge, setToPurge] = useState<Project | null>(null);
++  const [purging, setPurging] = useState(false);
+ 
+   const [matchInput, setMatchInput] = useState("");
+   const [matchResult, setMatchResult] = useState<string | null>(null);
+ 
+   async function load(search: string = q) {
+     setLoading(true);
+     try {
+       const res = await api.get(PROJECT_ENDPOINTS.BASE, {
+         params: search.trim() ? { q: search.trim() } : undefined,
+       });
+@@ -63,69 +68,107 @@ export default function ProjectsPage() {
+     load();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []);
+ 
+   async function save(e: React.FormEvent) {
+     e.preventDefault();
+     if (!projectId.trim()) {
+       setError("project_id is required");
+       return;
+     }
++    if (!name.trim()) {
++      setError("name is required");
++      return;
++    }
+     try {
+       const body = {
+         project_id: projectId.trim(),
+-        name,
+-        description: description || null,
++        name: name.trim(),
++        description: description.trim() ? description.trim() : null,
+         git_remotes: gitRemotes.split("\n").map((s) => s.trim()).filter(Boolean),
++        // PUT /projects assigns every field that is explicitly sent, so `null`
++        // clears a previously stored value. Trim first so a whitespace-only
++        // value cannot be persisted as a prompt.
++        custom_instructions: customInstructions.trim() ? customInstructions.trim() : null,
++        memory_expiration_date: expirationDate || null,
+       };
+       if (editing) {
+         await api.put(PROJECT_ENDPOINTS.BY_ID(editing.project_id), body);
+       } else {
+         await api.post(PROJECT_ENDPOINTS.BASE, body);
+       }
+       setDialogOpen(false);
+       await load();
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Save failed");
+     }
+   }
+ 
+   function openCreate() {
+     setEditing(null);
+     setProjectId("");
+     setName("");
+     setDescription("");
+     setGitRemotes("");
++    setCustomInstructions("");
++    setExpirationDate("");
+     setDialogOpen(true);
+   }
+ 
+   function openEdit(p: Project) {
+     setEditing(p);
+     setProjectId(p.project_id);
+     setName(p.name);
+     setDescription(p.description ?? "");
+     setGitRemotes((p.git_remotes ?? []).join("\n"));
++    setCustomInstructions(p.custom_instructions ?? "");
++    setExpirationDate(p.memory_expiration_date ?? "");
+     setDialogOpen(true);
+   }
+ 
+   async function handleDelete() {
+     if (!toDelete) return;
+     try {
+       await api.delete(PROJECT_ENDPOINTS.BY_ID(toDelete.project_id));
+       setToDelete(null);
+       await load();
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Delete failed");
+       setToDelete(null);
+     }
+   }
+ 
++  async function deleteAllMemories() {
++    if (!toPurge || purging) return;
++    setPurging(true);
++    try {
++      const res = await api.delete(
++        `${MEMORY_ENDPOINTS.BASE}?project_id=${encodeURIComponent(toPurge.project_id)}`
++      );
++      const deleted = res.data?.deleted ?? 0;
++      if (res.data?.truncated) {
++        toast({
++          title: `Deleted ${deleted} memories (only the first ${res.data?.scanned ?? 0} were scanned — run again to finish)`,
++          variant: "warning",
++        });
++      } else {
++        toast({ title: `Deleted ${deleted} memories`, variant: "success" });
++      }
++      setError(null);
++    } catch (e: any) {
++      setError(e?.response?.data?.detail ?? "Delete failed");
++    } finally {
++      setPurging(false);
++      setToPurge(null);
++    }
++  }
++
+   async function testMatch() {
+     setMatchResult(null);
+     try {
+       const res = await api.post(PROJECT_ENDPOINTS.MATCH, {
+         git_remote: matchInput.split("\n").map((s) => s.trim()).filter(Boolean),
+       });
+       setMatchResult(res.data?.project_id ?? null);
+     } catch (e: any) {
+       setError(e?.response?.data?.detail ?? "Match failed");
+     }
+@@ -192,20 +235,29 @@ export default function ProjectsPage() {
+                     <td className="px-4">{p.name}</td>
+                     <td className="px-4 text-memText-secondary">
+                       {(p.git_remotes ?? []).map((r) => (
+                         <div key={r} className="font-mono text-xs flex items-center gap-1">
+                           <GitBranch className="size-3 shrink-0" />
+                           <span className="break-all">{r}</span>
+                         </div>
+                       ))}
+                     </td>
+                     <td className="px-4 text-right whitespace-nowrap">
++                      <Button
++                        variant="ghost"
++                        size="sm"
++                        className="text-onSurface-danger-primary text-xs"
++                        title="Delete every memory stored under this project_id"
++                        onClick={() => setToPurge(p)}
++                      >
++                        Delete All Memories
++                      </Button>
+                       <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
+                         <Pencil className="size-3.5" />
+                       </Button>
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         className="text-onSurface-danger-primary"
+                         onClick={() => setToDelete(p)}
+                       >
+                         <Trash2 className="size-3.5" />
+@@ -298,32 +350,64 @@ export default function ProjectsPage() {
+               <Label htmlFor="proj-remotes">{t("tenant.gitRemotes")}</Label>
+               <Textarea
+                 id="proj-remotes"
+                 className="font-mono text-xs"
+                 value={gitRemotes}
+                 onChange={(e) => setGitRemotes(e.target.value)}
+                 rows={4}
+               />
+               <p className="text-xs text-memText-secondary">{t("tenant.gitRemotesHint")}</p>
+             </div>
++            <div className="space-y-2">
++              <Label htmlFor="proj-instructions">Custom Instructions（记忆抽取规则）</Label>
++              <Textarea
++                id="proj-instructions"
++                value={customInstructions}
++                onChange={(e) => setCustomInstructions(e.target.value)}
++                rows={3}
++                placeholder="例如：只存储技术偏好与项目约定，忽略闲聊"
++              />
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="proj-expiration">
++                Memory Expiration Date（项目默认过期日，可选）
++              </Label>
++              <Input
++                id="proj-expiration"
++                type="date"
++                value={expirationDate}
++                onChange={(e) => setExpirationDate(e.target.value)}
++              />
++            </div>
+             <DialogFooter>
+               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                 {t("common.cancel")}
+               </Button>
+               <Button type="submit">{t("common.save")}</Button>
+             </DialogFooter>
+           </form>
+         </DialogContent>
+       </Dialog>
+ 
+       <DeleteConfirmationModal
+         isOpen={!!toDelete}
+         onClose={() => setToDelete(null)}
+         onConfirm={handleDelete}
+         title="Delete project"
+         description="This project will be removed. Memories keep their stored project_id."
+         itemName={toDelete?.project_id ?? ""}
+         confirmButtonText="Delete"
+       />
++
++      <DeleteConfirmationModal
++        isOpen={!!toPurge}
++        onClose={() => setToPurge(null)}
++        onConfirm={deleteAllMemories}
++        title="Delete all memories"
++        description="Every memory stored under this project_id will be permanently deleted. The project itself and its git remotes are kept. This cannot be undone."
++        itemName={toPurge?.project_id ?? ""}
++        confirmButtonText="Delete All Memories"
++        loading={purging}
++      />
+     </div>
+   );
+ }
+diff --git a/server/dashboard/src/app/(root)/dashboard/requests/page.tsx b/server/dashboard/src/app/(root)/dashboard/requests/page.tsx
+index 3198ac37..34e7b29b 100644
+--- a/server/dashboard/src/app/(root)/dashboard/requests/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/requests/page.tsx
+@@ -1,13 +1,13 @@
+ "use client";
+ 
+-import { useState } from "react";
++import { useEffect, useRef, useState } from "react";
+ import { format, formatDistanceToNow } from "date-fns";
+ import { RefreshCw } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { Card, CardContent } from "@/components/ui/card";
+ import { Badge } from "@/components/ui/badge";
+ import { DataTable } from "@/components/shared/data-table";
+ import { TableSkeleton } from "@/components/shared/table-skeleton";
+ import { EmptyState } from "@/components/self-hosted/empty-state";
+ import { api } from "@/utils/api";
+ import { REQUEST_ENDPOINTS } from "@/utils/api-endpoints";
+@@ -20,20 +20,38 @@ type RequestLog = {
+   method: string;
+   path: string;
+   statusCode: number;
+   latencyMs: number;
+   authType: string;
+ };
+ 
+ const REQUEST_LOG_LIMIT = 200;
+ const PAGE_SIZE = 20;
+ 
++const ACTION_OPTIONS = [
++  { value: "", label: "All actions" },
++  { value: "add", label: "add" },
++  { value: "search", label: "search" },
++  { value: "get_all", label: "get_all" },
++];
++
++const RANGE_OPTIONS = [
++  { value: "all", label: "All time" },
++  { value: "24h", label: "Last 24h" },
++  { value: "7d", label: "Last 7d" },
++  { value: "30d", label: "Last 30d" },
++  { value: "90d", label: "Last 90d" },
++];
++
++const FILTER_SELECT_CLASSNAME =
++  "border border-memBorder-primary rounded-md px-3 py-2 text-sm bg-transparent";
++
+ const getStatusClassName = (statusCode: number) => {
+   if (statusCode >= 500) {
+     return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300";
+   }
+ 
+   if (statusCode >= 400) {
+     return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300";
+   }
+ 
+   return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300";
+@@ -76,37 +94,58 @@ const normalizeLog = (entry: ApiRequestLog): RequestLog => {
+     path: entry.path,
+     statusCode: entry.status_code,
+     latencyMs: entry.latency_ms,
+     authType: entry.auth_type,
+   };
+ };
+ 
+ export default function RequestsPage() {
+   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+   const [page, setPage] = useState(0);
++  const [action, setAction] = useState("");
++  const [range, setRange] = useState("all");
+ 
+   const {
+     data: logs = [],
+     isLoading,
+     error,
+     refetch,
+   } = useApiQuery<RequestLog[]>(
+     async () => {
++      const params: Record<string, unknown> = { limit: REQUEST_LOG_LIMIT };
++      if (action) params.action = action;
++      if (range !== "all") params.range = range;
+       const res = await api.get<ApiRequestLog[]>(REQUEST_ENDPOINTS.BASE, {
+-        params: { limit: REQUEST_LOG_LIMIT },
++        params,
+       });
+       setLastUpdated(new Date().toISOString());
+       return (res.data ?? []).map(normalizeLog);
+     },
+     { errorToast: "Failed to load request logs", initialData: [] },
+   );
+ 
++  // The fetcher is read through a ref inside useApiQuery, so calling refetch()
++  // from the select's onChange handler would still use the previous filter.
++  // Refetching from an effect guarantees the new action/range is applied.
++  const appliedFilters = useRef({ action, range });
++  useEffect(() => {
++    if (
++      appliedFilters.current.action === action &&
++      appliedFilters.current.range === range
++    ) {
++      return;
++    }
++    appliedFilters.current = { action, range };
++    setPage(0);
++    void refetch();
++  }, [action, range, refetch]);
++
+   const totalRequests = logs.length;
+   const successfulRequests = logs.filter((log) => log.statusCode < 400).length;
+   const successRate =
+     totalRequests > 0
+       ? Math.round((successfulRequests / totalRequests) * 100)
+       : 0;
+   const averageLatency =
+     totalRequests > 0
+       ? Math.round(
+           logs.reduce((sum, log) => sum + log.latencyMs, 0) / totalRequests,
+@@ -176,31 +215,57 @@ export default function RequestsPage() {
+           <p className="text-sm text-onSurface-default-secondary">
+             Recent request logs from your self-hosted instance.
+           </p>
+           {lastUpdated && (
+             <p className="text-xs text-onSurface-default-tertiary">
+               Last updated{" "}
+               {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
+             </p>
+           )}
+         </div>
+-        <Button
+-          variant="outline"
+-          onClick={() => {
+-            setPage(0);
+-            void refetch();
+-          }}
+-          disabled={isLoading}
+-        >
+-          <RefreshCw className="size-4 mr-2" />
+-          Refresh
+-        </Button>
++        <div className="flex flex-wrap items-center gap-2">
++          <select
++            value={action}
++            onChange={(e) => setAction(e.target.value)}
++            className={FILTER_SELECT_CLASSNAME}
++            aria-label="Filter by action"
++          >
++            {ACTION_OPTIONS.map((option) => (
++              <option key={option.value || "all-actions"} value={option.value}>
++                {option.label}
++              </option>
++            ))}
++          </select>
++          <select
++            value={range}
++            onChange={(e) => setRange(e.target.value)}
++            className={FILTER_SELECT_CLASSNAME}
++            aria-label="Filter by time range"
++          >
++            {RANGE_OPTIONS.map((option) => (
++              <option key={option.value} value={option.value}>
++                {option.label}
++              </option>
++            ))}
++          </select>
++          <Button
++            variant="outline"
++            onClick={() => {
++              setPage(0);
++              void refetch();
++            }}
++            disabled={isLoading}
++          >
++            <RefreshCw className="size-4 mr-2" />
++            Refresh
++          </Button>
++        </div>
+       </div>
+ 
+       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+         {[
+           { label: "Total Requests", value: totalRequests },
+           {
+             label: "Success Rate",
+             value: totalRequests > 0 ? `${successRate}%` : "--",
+           },
+           {
+diff --git a/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx b/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx
+index 25ce6aa5..eb2999af 100644
+--- a/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx
++++ b/server/dashboard/src/app/(root)/dashboard/webhooks/page.tsx
+@@ -1,53 +1,316 @@
+ "use client";
+ 
+-import { LockedPage } from "@/components/self-hosted/locked-page";
+-import { Card, CardContent } from "@/components/ui/card";
++import React, { useEffect, useState } from "react";
++import { Plus, Trash2, Webhook as WebhookIcon } from "lucide-react";
++import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+-import { Checkbox } from "@/components/ui/checkbox";
+ import { Label } from "@/components/ui/label";
+-import { Button } from "@/components/ui/button";
++import { Card } from "@/components/ui/card";
++import { Checkbox } from "@/components/ui/checkbox";
++import {
++  Dialog,
++  DialogContent,
++  DialogFooter,
++  DialogHeader,
++  DialogTitle,
++} from "@/components/ui/dialog";
++import DeleteConfirmationModal from "@/components/ui/delete-confirmation-modal";
++import { TableSkeleton } from "@/components/shared/table-skeleton";
++import { EmptyState } from "@/components/self-hosted/empty-state";
++import { api } from "@/utils/api";
++import { WEBHOOK_ENDPOINTS } from "@/utils/api-endpoints";
++import { Webhook } from "@/types/api";
+ 
+-function WebhooksMockup() {
++const PAGE_SIZE = 10;
++
++const WEBHOOK_EVENTS = [
++  { value: "memory_added", label: "Memory added" },
++  { value: "memory_updated", label: "Memory updated" },
++  { value: "memory_deleted", label: "Memory deleted" },
++] as const;
++
++function formatEvents(events: string[]): string {
+   return (
+-    <Card className="border-memBorder-primary">
+-      <CardContent className="p-6 space-y-4">
+-        <div className="space-y-2">
+-          <Label>Endpoint URL</Label>
+-          <Input placeholder="https://your-app.com/webhooks/mem0" disabled />
+-        </div>
+-        <div className="space-y-2">
+-          <Label>Events</Label>
+-          <div className="flex flex-col gap-2">
+-            {[
+-              "memory.created",
+-              "memory.updated",
+-              "memory.deleted",
+-              "search.performed",
+-            ].map((event) => (
+-              <div key={event} className="flex items-center gap-2">
+-                <Checkbox disabled checked={event === "memory.created"} />
+-                <Label className="text-sm font-normal">{event}</Label>
+-              </div>
+-            ))}
+-          </div>
+-        </div>
+-        <div className="space-y-2">
+-          <Label>Signing Secret</Label>
+-          <Input placeholder="whsec_..." disabled type="password" />
+-        </div>
+-        <Button disabled>Create Webhook</Button>
+-      </CardContent>
+-    </Card>
++    events
++      .map((e) => WEBHOOK_EVENTS.find((w) => w.value === e)?.label ?? e)
++      .join(", ") || "-"
+   );
+ }
+ 
+ export default function WebhooksPage() {
++  const [items, setItems] = useState<Webhook[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++
++  const [page, setPage] = useState(0);
++
++  const [dialogOpen, setDialogOpen] = useState(false);
++  const [name, setName] = useState("");
++  const [url, setUrl] = useState("");
++  const [secret, setSecret] = useState("");
++  const [events, setEvents] = useState<string[]>([]);
++  const [formError, setFormError] = useState<string | null>(null);
++  const [saving, setSaving] = useState(false);
++
++  const [toDelete, setToDelete] = useState<Webhook | null>(null);
++
++  async function load() {
++    setLoading(true);
++    try {
++      const res = await api.get(WEBHOOK_ENDPOINTS.BASE);
++      setItems(res.data ?? []);
++      setError(null);
++    } catch (e: any) {
++      setError(e?.response?.data?.detail ?? "Failed to load webhooks");
++    } finally {
++      setLoading(false);
++    }
++  }
++
++  useEffect(() => {
++    load();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  function toggleEvent(value: string) {
++    setEvents((prev) =>
++      prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value],
++    );
++  }
++
++  function openCreate() {
++    setName("");
++    setUrl("");
++    setSecret("");
++    setEvents([]);
++    setFormError(null);
++    setDialogOpen(true);
++  }
++
++  async function save(e: React.FormEvent) {
++    e.preventDefault();
++    setFormError(null);
++
++    if (events.length === 0) {
++      setFormError("Select at least one event to subscribe to.");
++      return;
++    }
++    let parsed: URL;
++    try {
++      parsed = new URL(url.trim());
++    } catch {
++      setFormError("Enter a valid URL.");
++      return;
++    }
++    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
++      setFormError("URL must use http or https.");
++      return;
++    }
++
++    setSaving(true);
++    try {
++      await api.post(WEBHOOK_ENDPOINTS.BASE, {
++        name: name.trim(),
++        url: url.trim(),
++        events,
++        ...(secret.trim() ? { secret: secret.trim() } : {}),
++      });
++      setDialogOpen(false);
++      await load();
++    } catch (e: any) {
++      setFormError(e?.response?.data?.detail ?? "Failed to create webhook");
++    } finally {
++      setSaving(false);
++    }
++  }
++
++  async function handleDelete() {
++    if (!toDelete) return;
++    try {
++      await api.delete(WEBHOOK_ENDPOINTS.BY_ID(toDelete.id));
++      setToDelete(null);
++      await load();
++    } catch (e: any) {
++      setError(e?.response?.data?.detail ?? "Delete failed");
++      setToDelete(null);
++    }
++  }
++
++  const totalPages = Math.ceil(items.length / PAGE_SIZE);
++  const paginated = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
++
+   return (
+-    <LockedPage
+-      title="Webhooks"
+-      description="Get notified when memories are created, updated, or deleted."
+-      previewContent={<WebhooksMockup />}
+-      utmMedium="dashboard-locked-webhooks"
+-    />
++    <div className="p-6 space-y-6">
++      <div className="flex items-start justify-between">
++        <div>
++          <h1 className="text-2xl font-semibold">Webhooks</h1>
++          <p className="text-memText-secondary text-sm">
++            Get notified when memories are created, updated, or deleted.
++          </p>
++        </div>
++        <Button onClick={openCreate}>
++          <Plus className="size-4 mr-1" />
++          New webhook
++        </Button>
++      </div>
++      {error && <div className="text-red-500 text-sm">{error}</div>}
++
++      {loading ? (
++        <TableSkeleton rows={4} columns={4} />
++      ) : items.length === 0 ? (
++        <EmptyState
++          title="No webhooks yet"
++          description="Create a webhook to receive memory events at your endpoint."
++        />
++      ) : (
++        <>
++          <Card className="border-memBorder-primary overflow-hidden">
++            <table className="w-full text-sm">
++              <thead>
++                <tr className="text-left border-b bg-surface-default-secondary">
++                  <th className="py-3 px-4">Name</th>
++                  <th className="px-4">URL</th>
++                  <th className="px-4">Events</th>
++                  <th className="px-4">Created</th>
++                  <th className="px-4 text-right">Actions</th>
++                </tr>
++              </thead>
++              <tbody>
++                {paginated.map((w) => (
++                  <tr key={w.id} className="border-b last:border-b-0">
++                    <td className="py-3 px-4 font-medium">{w.name}</td>
++                    <td className="px-4 text-memText-secondary max-w-72 truncate">
++                      {w.url}
++                    </td>
++                    <td className="px-4 text-memText-secondary">
++                      {formatEvents(w.events ?? [])}
++                    </td>
++                    <td className="px-4 text-memText-secondary">
++                      {w.created_at ? w.created_at.slice(0, 10) : "-"}
++                    </td>
++                    <td className="px-4 text-right whitespace-nowrap">
++                      <Button
++                        variant="ghost"
++                        size="sm"
++                        className="text-onSurface-danger-primary"
++                        onClick={() => setToDelete(w)}
++                      >
++                        <Trash2 className="size-3.5" />
++                      </Button>
++                    </td>
++                  </tr>
++                ))}
++              </tbody>
++            </table>
++          </Card>
++          {totalPages > 1 && (
++            <div className="flex items-center justify-between text-sm text-onSurface-default-tertiary">
++              <span>
++                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, items.length)} of{" "}
++                {items.length}
++              </span>
++              <div className="flex gap-2">
++                <Button
++                  variant="outline"
++                  size="sm"
++                  disabled={page === 0}
++                  onClick={() => setPage((p) => p - 1)}
++                >
++                  Previous
++                </Button>
++                <Button
++                  variant="outline"
++                  size="sm"
++                  disabled={page >= totalPages - 1}
++                  onClick={() => setPage((p) => p + 1)}
++                >
++                  Next
++                </Button>
++              </div>
++            </div>
++          )}
++        </>
++      )}
++
++      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
++        <DialogContent className="sm:max-w-md">
++          <DialogHeader>
++            <DialogTitle>New webhook</DialogTitle>
++          </DialogHeader>
++          <form onSubmit={save} className="space-y-4">
++            <div className="space-y-2">
++              <Label htmlFor="webhook-name">Name</Label>
++              <Input
++                id="webhook-name"
++                value={name}
++                onChange={(e) => setName(e.target.value)}
++                placeholder="My integration"
++                required
++              />
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="webhook-url">Endpoint URL</Label>
++              <Input
++                id="webhook-url"
++                value={url}
++                onChange={(e) => setUrl(e.target.value)}
++                placeholder="https://your-app.com/webhooks/mem0"
++                type="url"
++                required
++              />
++            </div>
++            <div className="space-y-2">
++              <Label>Events</Label>
++              <div className="flex flex-col gap-2">
++                {WEBHOOK_EVENTS.map((event) => (
++                  <div key={event.value} className="flex items-center gap-2">
++                    <Checkbox
++                      id={`webhook-event-${event.value}`}
++                      checked={events.includes(event.value)}
++                      onCheckedChange={() => toggleEvent(event.value)}
++                    />
++                    <Label
++                      htmlFor={`webhook-event-${event.value}`}
++                      className="text-sm font-normal"
++                    >
++                      {event.label}
++                    </Label>
++                  </div>
++                ))}
++              </div>
++              {formError && <div className="text-red-500 text-xs">{formError}</div>}
++            </div>
++            <div className="space-y-2">
++              <Label htmlFor="webhook-secret">Signing Secret (optional)</Label>
++              <Input
++                id="webhook-secret"
++                value={secret}
++                onChange={(e) => setSecret(e.target.value)}
++                placeholder="whsec_..."
++                type="password"
++              />
++            </div>
++            <DialogFooter>
++              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
++                Cancel
++              </Button>
++              <Button type="submit" disabled={saving}>
++                Create webhook
++              </Button>
++            </DialogFooter>
++          </form>
++        </DialogContent>
++      </Dialog>
++
++      <DeleteConfirmationModal
++        isOpen={!!toDelete}
++        onClose={() => setToDelete(null)}
++        onConfirm={handleDelete}
++        title="Delete webhook"
++        description="This webhook will be removed and events will no longer be delivered to its endpoint."
++        itemName={toDelete?.name ?? ""}
++        confirmButtonText="Delete"
++      />
++    </div>
+   );
+ }
+diff --git a/server/dashboard/src/components/self-hosted/upgrade-banner.tsx b/server/dashboard/src/components/self-hosted/upgrade-banner.tsx
+deleted file mode 100644
+index a8d76343..00000000
+--- a/server/dashboard/src/components/self-hosted/upgrade-banner.tsx
++++ /dev/null
+@@ -1,70 +0,0 @@
+-"use client";
+-
+-import { useEffect, useState } from "react";
+-import { X } from "lucide-react";
+-import { cn } from "@/lib/utils";
+-
+-interface UpgradeBannerProps {
+-  id: string;
+-  message: string;
+-  ctaLabel: string;
+-  ctaUrl: string;
+-  variant: "cloud" | "enterprise";
+-  dismissible?: boolean;
+-}
+-
+-export function UpgradeBanner({
+-  id,
+-  message,
+-  ctaLabel,
+-  ctaUrl,
+-  variant,
+-  dismissible = true,
+-}: UpgradeBannerProps) {
+-  const [mounted, setMounted] = useState(false);
+-  const [dismissed, setDismissed] = useState(false);
+-
+-  useEffect(() => {
+-    setDismissed(localStorage.getItem(`nudge_${id}_dismissed`) === "true");
+-    setMounted(true);
+-  }, [id]);
+-
+-  if (!mounted || dismissed) return null;
+-
+-  const handleDismiss = () => {
+-    localStorage.setItem(`nudge_${id}_dismissed`, "true");
+-    setDismissed(true);
+-  };
+-
+-  return (
+-    <div
+-      className={cn(
+-        "flex items-center gap-3 px-4 py-2.5 rounded-md typo-body-xs font-fustat",
+-        variant === "cloud"
+-          ? "bg-memGold-100 border-l-2 border-memGold-500"
+-          : "bg-memRed-100 border-l-2 border-memRed-400",
+-      )}
+-    >
+-      <p className="flex-1 text-onSurface-default-secondary">{message}</p>
+-      <a
+-        href={ctaUrl}
+-        target="_blank"
+-        rel="noopener noreferrer"
+-        className={cn(
+-          "text-xs font-medium whitespace-nowrap underline",
+-          variant === "cloud" ? "text-memGold-700" : "text-memRed-600",
+-        )}
+-      >
+-        {ctaLabel}
+-      </a>
+-      {dismissible && (
+-        <button
+-          onClick={handleDismiss}
+-          className="p-0.5 rounded hover:bg-surface-default-secondary-hover text-onSurface-default-tertiary"
+-        >
+-          <X className="size-3.5" />
+-        </button>
+-      )}
+-    </div>
+-  );
+-}
+diff --git a/server/dashboard/src/components/ui/delete-confirmation-modal.tsx b/server/dashboard/src/components/ui/delete-confirmation-modal.tsx
+index 65e7c2ba..d16762fe 100644
+--- a/server/dashboard/src/components/ui/delete-confirmation-modal.tsx
++++ b/server/dashboard/src/components/ui/delete-confirmation-modal.tsx
+@@ -9,39 +9,42 @@ import {
+ } from "@/components/ui/dialog";
+ 
+ interface DeleteConfirmationModalProps {
+   isOpen: boolean;
+   onClose: () => void;
+   onConfirm: () => void;
+   title: string;
+   description: string;
+   itemName: string;
+   confirmButtonText?: string;
++  loading?: boolean;
+ }
+ 
+ const DeleteConfirmationModal = ({
+   isOpen,
+   onClose,
+   onConfirm,
+   title,
+   description,
+   itemName,
+   confirmButtonText = "Delete",
++  loading = false,
+ }: DeleteConfirmationModalProps) => {
+   const [confirmationText, setConfirmationText] = useState("");
+ 
+   const handleClose = () => {
+     setConfirmationText("");
+     onClose();
+   };
+ 
+   const handleConfirm = () => {
++    if (loading) return;
+     onConfirm();
+     setConfirmationText("");
+   };
+ 
+   const isDeleteEnabled = confirmationText === itemName;
+ 
+   return (
+     <Dialog open={isOpen} onOpenChange={handleClose}>
+       <DialogContent>
+         <DialogTitle>{title}</DialogTitle>
+@@ -61,21 +64,21 @@ const DeleteConfirmationModal = ({
+           />
+         </div>
+ 
+         <div className="flex justify-end gap-2 mt-6">
+           <Button onClick={handleClose} variant="outline">
+             Cancel
+           </Button>
+           <Button
+             onClick={handleConfirm}
+             variant="destructive"
+-            disabled={!isDeleteEnabled}
++            disabled={!isDeleteEnabled || loading}
+           >
+-            {confirmButtonText}
++            {loading ? "Deleting…" : confirmButtonText}
+           </Button>
+         </div>
+       </DialogContent>
+     </Dialog>
+   );
+ };
+ 
+ export default DeleteConfirmationModal;
+diff --git a/server/dashboard/src/components/ui/use-toast.ts b/server/dashboard/src/components/ui/use-toast.ts
+index db05e09d..536c88d5 100644
+--- a/server/dashboard/src/components/ui/use-toast.ts
++++ b/server/dashboard/src/components/ui/use-toast.ts
+@@ -1,18 +1,18 @@
+ "use client";
+ 
+ // Shadcn recommends Sonner for toasts. This module wraps Sonner so existing
+ // toast({ title, description, variant }) calls work and render via <Toaster /> from @/components/ui/sonner.
+ import * as React from "react";
+ import { toast as sonnerToast } from "sonner";
+ 
+-export type ToastVariant = "default" | "destructive" | "success";
++export type ToastVariant = "default" | "destructive" | "success" | "warning";
+ 
+ export type ToastOptions = {
+   title?: React.ReactNode;
+   description?: React.ReactNode;
+   variant?: ToastVariant;
+ };
+ 
+ function toast(options: ToastOptions) {
+   const { title, description, variant = "default" } = options;
+   const message =
+@@ -23,20 +23,22 @@ function toast(options: ToastOptions) {
+         : "Notification";
+   const opts =
+     title != null && description != null
+       ? { description: String(description) }
+       : {};
+ 
+   if (variant === "destructive") {
+     sonnerToast.error(message, opts);
+   } else if (variant === "success") {
+     sonnerToast.success(message, opts);
++  } else if (variant === "warning") {
++    sonnerToast.warning(message, opts);
+   } else {
+     sonnerToast(message, opts);
+   }
+ 
+   return {
+     id: "",
+     dismiss: () => {},
+     update: () => {},
+   };
+ }
+diff --git a/server/dashboard/src/i18n/en.ts b/server/dashboard/src/i18n/en.ts
+index 2ad8a8d4..92c4cfa4 100644
+--- a/server/dashboard/src/i18n/en.ts
++++ b/server/dashboard/src/i18n/en.ts
+@@ -25,33 +25,48 @@ export const en = {
+     testOk: "Connection OK",
+     testFail: "Connection failed",
+   },
+   auth: {
+     login: "Sign in",
+     email: "Email",
+     password: "Password",
+   },
+   nav: {
+     dashboard: "Dashboard",
++    dashboardOverview: "Dashboard",
++    getStarted: "Get Started",
++    playground: "Playground",
+     requests: "Requests",
+     memories: "Memories",
+     entities: "Entities",
+-    categories: "Categories",
+     webhooks: "Webhooks",
+-    analytics: "Analytics",
+-    export: "Export",
+     apiKeys: "API Keys",
+     configuration: "Configuration",
+     settings: "Settings",
+     users: "Users",
+     departments: "Departments",
+     projects: "Projects",
++    exports: "Exports",
++  },
++  exports: {
++    title: "Memory Exports",
++    desc: "Download memories as a JSONL file. Admin only.",
++    allProjects: "All projects",
++    userId: "User ID",
++    userIdPlaceholder: "Filter by user_id (optional)",
++    start: "Start date",
++    end: "End date",
++    button: "Export JSONL",
++    formatHint: "Format: JSONL (one memory per line)",
++    noProjectsTitle: "No projects yet",
++    noProjectsDesc:
++      "Create a project first to filter exports by project, or export all memories without a project filter.",
+   },
+   tenant: {
+     usersTitle: "Users",
+     usersDesc: "Manage user accounts and their API access.",
+     departmentsTitle: "Departments",
+     departmentsDesc: "Group users into departments (one department → many users).",
+     projectsTitle: "Projects",
+     projectsDesc: "Scoped by a project ID and one or more git remotes.",
+     name: "Name",
+     description: "Description",
+diff --git a/server/dashboard/src/i18n/zh.ts b/server/dashboard/src/i18n/zh.ts
+index 631593e4..ab1699f9 100644
+--- a/server/dashboard/src/i18n/zh.ts
++++ b/server/dashboard/src/i18n/zh.ts
+@@ -18,33 +18,47 @@ export const zh: Dict = {
+     embedderModel: "模型",
+     embedderBaseUrl: "嵌入接口地址",
+     embedderApiKey: "嵌入密钥",
+     noKeyNeeded: "本地部署：无需密钥",
+     testOk: "连接成功",
+     testFail: "连接失败",
+   },
+   auth: { login: "登录", email: "邮箱", password: "密码" },
+   nav: {
+     dashboard: "仪表盘",
++    dashboardOverview: "总览",
++    getStarted: "接入",
++    playground: "调试沙盒",
+     requests: "请求",
+     memories: "记忆",
+     entities: "实体",
+-    categories: "分类",
+     webhooks: "Webhook",
+-    analytics: "分析",
+-    export: "导出",
+     apiKeys: "API 密钥",
+     configuration: "配置",
+     settings: "设置",
+     users: "用户",
+     departments: "部门",
+     projects: "项目",
++    exports: "导出",
++  },
++  exports: {
++    title: "记忆导出",
++    desc: "将记忆下载为 JSONL 文件（仅管理员）。",
++    allProjects: "全部项目",
++    userId: "用户 ID",
++    userIdPlaceholder: "按 user_id 过滤（可选）",
++    start: "开始日期",
++    end: "结束日期",
++    button: "导出 JSONL",
++    formatHint: "格式：JSONL（每行一条记忆）",
++    noProjectsTitle: "暂无项目",
++    noProjectsDesc: "先创建项目即可按项目过滤导出，或不选项目直接导出全部记忆。",
+   },
+   tenant: {
+     usersTitle: "用户",
+     usersDesc: "管理用户账号及其 API 访问。",
+     departmentsTitle: "部门",
+     departmentsDesc: "将用户归入部门（一个部门可关联多个用户）。",
+     projectsTitle: "项目",
+     projectsDesc: "由项目 ID 与一个或多个 Git 远程地址进行隔离。",
+     name: "名称",
+     description: "描述",
+diff --git a/server/dashboard/src/types/api.ts b/server/dashboard/src/types/api.ts
+index eb2b653c..bb9539d4 100644
+--- a/server/dashboard/src/types/api.ts
++++ b/server/dashboard/src/types/api.ts
+@@ -53,29 +53,53 @@ export interface DepartmentMember {
+ 
+ export interface Department {
+   id: string;
+   name: string;
+   description: string | null;
+   created_at: string;
+   user_count: number;
+   users: DepartmentMember[];
+ }
+ 
++export interface Webhook {
++  id: string;
++  name: string;
++  url: string;
++  events: string[];
++  secret: string | null;
++  created_at: string;
++}
++
+ export interface Project {
+   id: string;
+   project_id: string;
+   name: string;
+   description: string | null;
+   git_remotes: string[];
++  /** Prompt appended when extracting memories for this project. Null = unset. */
++  custom_instructions: string | null;
++  /** Default expiration for memories in this project, "YYYY-MM-DD". Null = never. */
++  memory_expiration_date: string | null;
+   created_by: string;
+   created_at: string;
+   updated_at: string;
+ }
+ 
+ export interface DashboardUser {
+   id: string;
+   name: string;
+   email: string;
+   role: string;
+   department_id: string | null;
+   created_at: string;
+ }
++
++/**
++ * GET /stats response. Fields are optional on purpose: the endpoint is proxied
++ * from the mem0 server and a partial/unexpected payload must not crash the page.
++ * `range` only filters `requests` — `memories_total` and `entities` are all-time.
++ */
++export interface Stats {
++  requests?: { add?: number; search?: number; get_all?: number; total?: number };
++  memories_total?: number;
++  entities?: { users?: number; agents?: number; runs?: number };
++}
+diff --git a/server/dashboard/src/utils/api-endpoints.ts b/server/dashboard/src/utils/api-endpoints.ts
+index d6b9fb52..2ef9a0aa 100644
+--- a/server/dashboard/src/utils/api-endpoints.ts
++++ b/server/dashboard/src/utils/api-endpoints.ts
+@@ -12,20 +12,24 @@ export const MEMORY_ENDPOINTS = {
+   BASE: "/memories",
+   BY_ID: (memoryId: string) => `/memories/${memoryId}`,
+   HISTORY: (memoryId: string) => `/memories/${memoryId}/history`,
+   CONFIGURE: "/configure",
+   CONFIGURE_PROVIDERS: "/configure/providers",
+   CONFIGURE_TEST: "/configure/test",
+   RESET: "/reset",
+   GENERATE_INSTRUCTIONS: "/generate-instructions",
+ } as const;
+ 
++export const SEARCH_ENDPOINTS = {
++  BASE: "/search",
++} as const;
++
+ export const API_KEY_ENDPOINTS = {
+   BASE: "/api-keys",
+   BY_ID: (keyId: string) => `/api-keys/${keyId}`,
+ } as const;
+ 
+ export const USER_ENDPOINTS = {
+   BASE: "/users",
+   BY_ID: (id: string) => `/users/${id}`,
+ } as const;
+ 
+@@ -37,15 +41,28 @@ export const DEPARTMENT_ENDPOINTS = {
+ export const PROJECT_ENDPOINTS = {
+   BASE: "/projects",
+   BY_ID: (id: string) => `/projects/${id}`,
+   MATCH: "/projects/match",
+ } as const;
+ 
+ export const REQUEST_ENDPOINTS = {
+   BASE: "/requests",
+ } as const;
+ 
++export const STATS_ENDPOINT = {
++  BASE: "/stats",
++} as const;
++
++export const WEBHOOK_ENDPOINTS = {
++  BASE: "/webhooks",
++  BY_ID: (id: string) => `/webhooks/${id}`,
++} as const;
++
++export const EXPORT_ENDPOINTS = {
++  MEMORIES: "/exports/memories",
++} as const;
++
+ export const ENTITY_ENDPOINTS = {
+   BASE: "/entities",
+   BY_ID: (type: string, id: string) =>
+     `/entities/${type}/${encodeURIComponent(id)}`,
+ } as const;
