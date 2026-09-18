@@ -7,6 +7,7 @@
 param(
     [string]$Ide = "",
     [string]$Url = "http://127.0.0.1:8080/mcp",
+    [string]$RestUrl = "",
     [string]$ApiKey = "",
     [string]$Repo = (Get-Location).Path,
     [switch]$DryRun,
@@ -177,7 +178,7 @@ function Test-EndToEnd([string]$key) {
     if ($code -eq 406) { Write-Ok "MCP 端点存活 ($Url, HTTP 406 = streamable-http 正常)" }
     else { Write-Err "MCP 端点异常（HTTP $code）。服务未启动？→ deploy/mem0 或 install-all" }
     if ($DryRun) { Write-Info "[DryRun] 跳过 REST 写读往返（DryRun 不落盘、不写入记忆）"; return }
-    $rest = ($Url -replace ":\d+/", ":$RestPort/") -replace "/mcp$", ""
+    $rest = if ($RestUrl -ne "") { $RestUrl.TrimEnd("/") } else { ($Url -replace ":\d+/", ":$RestPort/") -replace "/mcp$", "" }
     $headers = @{ "X-API-Key" = $key; "Content-Type" = "application/json" }
     $payload = @{ text = "mem0-setup validation $(Get-Date -Format o)"; infer = $false } | ConvertTo-Json
     try {
@@ -190,7 +191,7 @@ function Test-EndToEnd([string]$key) {
         if ($id) { Invoke-RestMethod -Method Delete -Uri "$rest/memories/$id" -Headers $headers -TimeoutSec 30 | Out-Null; Write-Info "测试记忆已清理" }
     } catch {
         Write-Err "REST 往返失败: $($_.Exception.Message)"
-        Write-Info "修复：密钥无效→Dashboard 重建；端口不通→确认 8888 可达"
+        Write-Info "修复：密钥无效→Dashboard 重建；端口不通→用 -RestUrl 指定实际 REST 地址（本机如 http://127.0.0.1:8002）"
     }
 }
 

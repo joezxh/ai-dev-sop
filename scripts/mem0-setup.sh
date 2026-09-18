@@ -4,9 +4,9 @@
 set -euo pipefail
 SERVICE="mem0"; REST_PORT=8888; DASH_PORT=3001
 IDE=""; URL="http://127.0.0.1:8080/mcp"; APIKEY="${MEM0_API_KEY:-}"; REPO="$(pwd)"; DRYRUN=0
-while getopts "i:u:k:r:nh" o; do
+while getopts "i:u:s:k:r:nh" o; do
   case "$o" in
-    i) IDE="$OPTARG";; u) URL="$OPTARG";; k) APIKEY="$OPTARG";; r) REPO="$OPTARG";;
+    i) IDE="$OPTARG";; u) URL="$OPTARG";; s) REST_URL_OPT="$OPTARG";; k) APIKEY="$OPTARG";; r) REPO="$OPTARG";;
     n) DRYRUN=1;; h) echo "用法: $0 [-i ide列表] [-u mcp-url] [-k apikey] [-r repo] [-n]"; exit 0;;
   esac
 done
@@ -59,7 +59,11 @@ if [ -z "$APIKEY" ]; then
   [[ "$APIKEY" =~ ^m0sk_.{10,} ]] || die "密钥格式不合法（应为 m0sk_ 开头）"
 fi
 
-REST_URL="$(echo "$URL" | sed -E "s|:[0-9]+/|:$REST_PORT/|; s|/mcp\$||")"
+if [ -n "${REST_URL_OPT:-}" ]; then
+  REST_URL="${REST_URL_OPT%/}"
+else
+  REST_URL="$(echo "$URL" | sed -E "s|:[0-9]+/|:$REST_PORT/|; s|/mcp\$||")"
+fi
 GIT_REMOTE="$(git -C "$REPO" remote get-url origin 2>/dev/null || true)"
 if [ -z "$GIT_REMOTE" ]; then
   GIT_REMOTE="$(basename "$REPO" | tr ' ' '-')"
@@ -196,12 +200,19 @@ if [ "$CODE" = "406" ]; then ok "MCP 端点存活 ($URL, HTTP 406)"; else err "M
 if [ "$DRYRUN" = 1 ]; then
   info "[DryRun] 跳过 REST 写读往返（DryRun 不落盘、不写入记忆）"
 else
-  RESP="$(curl -s --max-time 30 -X POST "$REST_URL/memories" \
+  RESPFILE="$(mktemp)"
+  STATUS="$(curl -s -o "$RESPFILE" -w "%{http_code}" --max-time 30 -X POST "$REST_URL/memories" \
     -H "X-API-Key: $APIKEY" -H "Content-Type: application/json" \
-    -d "{\"text\":\"mem0-setup validation $(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"infer\":false}" || echo '{"error":true}')"
-  if echo "$RESP" | grep -q '"error"[[:space:]]*:[[:space:]]*true'; then
-    err "REST 写入失败 → 密钥无效或 8888 不可达。到 Dashboard 重建密钥后重跑。"
-  else
+    -d "{\"text\":\"mem0-setup validation $(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"infer\":false}" || echo 000)"
+  case "$STATUS" in
+    200|201) ;;
+    *)
+      err "REST 写入失败（HTTP $STATUS）→ 密钥无效或 8888 不可达。到 Dashboard 重建密钥后重跑。"
+      [ -s "$RESPFILE" ] && head -c 200 "$RESPFILE" && echo
+      rm -f "$RESPFILE"; exit 0;;
+  esac
+  rm -f "$RESPFILE"
+  if true; then
     ok "REST 写入成功 ($REST_URL/memories)"
     if curl -s --max-time 30 "$REST_URL/memories?limit=5" -H "X-API-Key: $APIKEY" | grep -q "mem0-setup validation"; then
       ok "REST 查回成功——密钥有效、链路闭环"
