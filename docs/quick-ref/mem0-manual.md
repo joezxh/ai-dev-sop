@@ -10,7 +10,7 @@
 - 第一部分 系统概览与部署：[1.1 定位](#11-定位与核心能力) · [1.2 架构与端点](#12-系统架构与端点) · [1.3 部署](#13-部署) · [1.4 凭证与鉴权](#14-凭证与鉴权)
 - 第二部分 AI 工具接入：[2.1 工具矩阵](#21-支持的-ai-开发工具) · [2.2 各工具配置](#22-各工具接入配置) · [2.3 MCP 工具清单](#23-mcp-工具清单与关键参数) · [2.4 跨工具共享](#24-跨工具共享记忆)
 - 第三部分 控制台使用：[3.1 登录与导航](#31-登录与界面导航) · [3.2 功能页详解](#32-核心功能页详解)
-- 第四部分 会话自动提交：[4.1 机制总览](#41-机制总览) · [4.2 CodeBuddy 落地](#42-codebuddy-落地配置5-步) · [4.3 Qoder 落地](#43-qoder-落地配置5-步) · [4.4 Cursor 落地](#44-cursor-落地配置5-步) · [4.5 Codex CLI 与 IDE 落地](#45-codex-cli-与-ide-落地配置5-步) · [4.6 Claude Code 落地](#46-claude-code-落地配置5-步) · [4.7 其他工具 Rule 对照](#47-其他开发工具的-rule-文件对照) · [4.8 数据格式规范](#48-数据格式规范) · [4.9 触发时序与传输](#49-触发时序与传输链路)
+- 第四部分 会话自动提交：[4.1 机制总览](#41-机制总览) · [4.2 一键落地（脚本）](#42-一键落地配置推荐mem0-setup-脚本) · [4.3 CodeBuddy 落地](#43-codebuddy-落地配置5-步) · [4.4 Qoder 落地](#44-qoder-落地配置5-步) · [4.5 Cursor 落地](#45-cursor-落地配置5-步) · [4.6 Codex CLI 与 IDE 落地](#46-codex-cli-与-ide-落地配置5-步) · [4.7 Claude Code 落地](#47-claude-code-落地配置5-步) · [4.8 其他工具 Rule 对照](#48-其他开发工具的-rule-文件对照) · [4.9 数据格式规范](#49-数据格式规范) · [4.10 触发时序与传输](#410-触发时序与传输链路)
 - 第五部分 场景与运维：[5.1 典型场景](#51-典型使用场景) · [5.2 速查表](#52-工具与参数速查) · [5.3 验证与排错](#53-配置验证与故障排查) · [5.4 安全](#54-安全与权限注意事项) · [5.5 深入研究](#55-深入研究指引)
 - [附录 A 最小配置速拷](#附录-a各工具最小可用配置速拷) · [附录 B 参数速取命令](#附录-b参数速取命令) · [附录 C 参考链接](#附录-c参考链接)
 
@@ -463,7 +463,64 @@ sequenceDiagram
 | ② | **每轮回复完成时**（固定触发，寒暄也入库） | `add_memory` 提交本轮完整执行转录 | `conversation` |
 | ③ | **出现持久事实时**（决策/偏好/约束/人员） | `add_memory` 提炼事实 | `fact` / `decision` / `preference` / `note` |
 
-## 4.2 CodeBuddy 落地配置（5 步）
+## 4.2 一键落地配置（推荐：mem0-setup 脚本）
+
+本章是**默认推荐路径**：§4.3–§4.7 的手工 5 步流程，均可用一条命令完成，并内置端到端校验。
+
+### 4.2.1 一条命令
+
+Windows（PowerShell）：
+
+```powershell
+cd <仓库根目录>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mem0-setup.ps1
+```
+
+macOS / Linux / WSL：
+
+```bash
+cd <仓库根目录>
+bash scripts/mem0-setup.sh
+```
+
+### 4.2.2 参数
+
+| 作用 | PowerShell | bash | 说明 |
+|------|-----------|------|------|
+| 指定 IDE | `-Ide codebuddy,cursor,qoder,codex,claude` | `-i ...` | 缺省自动探测已安装 IDE |
+| MCP 端点 | `-Url http://host:8080/mcp` | `-u ...` | 本地/远程**只用 URL 区分**，服务名恒为 `mem0` |
+| REST 地址 | `-RestUrl http://host:8888` | `-s ...` | 校验用；缺省由 MCP URL 换端口为 8888 |
+| API 密钥 | `-ApiKey m0sk_xxx` | `-k m0sk_xxx` | 缺省读环境变量 `MEM0_API_KEY`，再缺省自动打开 Dashboard 密钥页交互粘贴 |
+| 目标仓库 | `-Repo <path>` | `-r <path>` | 缺省当前目录 |
+| 预演 | `-DryRun` | `-n` | 只打印将写入的内容，不落盘、不写 REST |
+
+### 4.2.3 脚本做了什么（对应手工 5 步）
+
+1. **探测并写 MCP 配置**：扫描 `~/.codebuddy`、`~/.cursor`、`~/.qoder`、`~/.codex`、`~/.claude`；JSON 走**合并写**（保留你已有的其他 MCP 服务，如 Playwright/sqlbot），Codex 走 `config.toml` 的 `[mcp_servers.mem0]`；服务名统一 `mem0`，含 `transport: streamable-http`
+2. **写规则文件**：读取 `scripts/templates/mem0-rules.md`，按 IDE 替换占位符后写入 `CODEBUDDY.md` / `.cursor/rules/mem0.mdc` / `.qoder/rules/mem0.md` / `AGENTS.md` / `CLAUDE.md`；已存在 `<!-- mem0:rules:begin -->` / `<!-- mem0:rules:end -->` 标记时**只替换区间**（重复运行安全）
+3. **生成凭证文件** `<repo>/.mem0/mem0.config.json`：写入 api_key，并自动执行 `git remote get-url origin` 得到 `git_remote` / `project_id`（无 remote 时由目录名派生并提示）
+4. **端到端校验**：MCP 端点存活（GET `/mcp` 返回 406）→ REST 写读往返（`:8888/memories`，`X-API-Key` 头）→ 测试记忆自动清理
+5. **输出报告**：逐项 ✓/✗ + 失败项的精确修复指引
+
+### 4.2.4 校验输出解读
+
+| 输出 | 含义 | 处理 |
+|------|------|------|
+| `MCP 端点存活 … HTTP 406` | 端点正常（streamable-http 对 GET 的正常响应） | 无需处理 |
+| `MCP 端点异常（HTTP 000 或其他）` | 服务未启动或 URL 错 | 启动 mem0（`install-all` / `deploy/mem0`）；远程确认 IP 与端口 |
+| `REST 写入成功` + `REST 查回成功` | 密钥有效、链路闭环 | 无需处理 |
+| `REST 写入失败（HTTP 401）` | 密钥无效或不属于该实例 | 到 Dashboard 重建密钥后重跑 |
+| `REST 往返失败（无法连接）` | REST 端口不是 8888 | 用 `-RestUrl` / `-s` 指定实际 REST 地址 |
+
+### 4.2.5 与手工流程的关系
+
+- **新机器接入**：只用本章命令，然后重启 IDE
+- **需要理解原理、IDE 装在非默认路径、或需特殊定制**：阅读 §4.3–§4.7 对应章节
+- **配完仍不确定**：按 §5.3.1 校验清单 + §5.3.3 常见配置错误表逐项核对
+## 4.3 CodeBuddy 落地配置（5 步）
+> ⚡ **一键完成**：以上 5 步可由 `scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux）
+> 一键完成，服务名自动约定为 `mem0` 并内置端到端校验（MCP 端点存活 + REST 密钥往返 + 配置语法回读）。
+> 手工流程保留用于理解原理与特殊场景（一键用法见 §4.2）。
 
 ### Step 1：MCP 连接 —— `~/.codebuddy/mcp.json`（用户级）
 
@@ -736,9 +793,12 @@ Set-Content -Path ".codebuddy\.session_id" -Value $id -Encoding UTF8
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
-## 4.3 Qoder 落地配置（5 步）
+## 4.4 Qoder 落地配置（5 步）
+> ⚡ **一键完成**：以上 5 步可由 `scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux）
+> 一键完成，服务名自动约定为 `mem0` 并内置端到端校验（MCP 端点存活 + REST 密钥往返 + 配置语法回读）。
+> 手工流程保留用于理解原理与特殊场景（一键用法见 §4.2）。
 
-> MCP 连接细节已在 §2.2.2 详述，此处聚焦"会话自动提交"的完整落地，结构对齐 §4.2。
+> MCP 连接细节已在 §2.2.2 详述，此处聚焦"会话自动提交"的完整落地，结构对齐 §4.3。
 
 ### Step 1：MCP 连接 —— 个人设置 → MCP 服务（用户级全局）
 
@@ -1002,7 +1062,10 @@ Set-Content -Path ".qoder\.session_id" -Value $id -Encoding UTF8
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
-## 4.4 Cursor 落地配置（5 步）
+## 4.5 Cursor 落地配置（5 步）
+> ⚡ **一键完成**：以上 5 步可由 `scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux）
+> 一键完成，服务名自动约定为 `mem0` 并内置端到端校验（MCP 端点存活 + REST 密钥往返 + 配置语法回读）。
+> 手工流程保留用于理解原理与特殊场景（一键用法见 §4.2）。
 
 ### Step 1：MCP 连接 —— `~/.cursor/mcp.json`（用户级）
 
@@ -1269,7 +1332,10 @@ Set-Content -Path ".cursor\.session_id" -Value $id -Encoding UTF8
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
-## 4.5 Codex CLI 与 IDE 落地配置（5 步）
+## 4.6 Codex CLI 与 IDE 落地配置（5 步）
+> ⚡ **一键完成**：以上 5 步可由 `scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux）
+> 一键完成，服务名自动约定为 `mem0` 并内置端到端校验（MCP 端点存活 + REST 密钥往返 + 配置语法回读）。
+> 手工流程保留用于理解原理与特殊场景（一键用法见 §4.2）。
 
 ### Step 1：MCP 连接 —— `~/.codex/config.toml`（CLI 与 IDE 共用）
 
@@ -1528,7 +1594,10 @@ Set-Content -Path ".codex\.session_id" -Value $id -Encoding UTF8
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
-## 4.6 Claude Code 落地配置（5 步）
+## 4.7 Claude Code 落地配置（5 步）
+> ⚡ **一键完成**：以上 5 步可由 `scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux）
+> 一键完成，服务名自动约定为 `mem0` 并内置端到端校验（MCP 端点存活 + REST 密钥往返 + 配置语法回读）。
+> 手工流程保留用于理解原理与特殊场景（一键用法见 §4.2）。
 
 ### Step 1：MCP 连接 —— 项目级 `.mcp.json` 或 `claude mcp add`
 
@@ -1801,18 +1870,18 @@ Set-Content -Path ".claude\.session_id" -Value $id -Encoding UTF8
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
-## 4.7 其他开发工具的 Rule 文件对照
+## 4.8 其他开发工具的 Rule 文件对照
 
 同一份规则内容，按各工具的"项目级规则文件"机制放置。推荐**单源维护**：以 `CODEBUDDY.md` 为母本，其他工具一行引用。
 
 | 工具 | 规则文件 | 配置方式 |
 |------|----------|----------|
-| **CodeBuddy IDE** | 仓库根 `CODEBUDDY.md` | 直接放置（每会话自动注入），完整落地见 §4.2 |
-| **Qoder IDE** | `.qoder/rules/mem0.md` | 直接放置母本内容，完整落地见 §4.3 |
-| **Qoder CLI** | 仓库根 `AGENTS.md` | 同 Codex，完整落地见 §4.5 |
-| **Cursor** | `.cursor/rules/mem0.mdc` | 带 frontmatter：`---\ndescription: mem0 auto memory\nglobs:\nalwaysApply: true\n---` 后接母本内容，完整落地见 §4.4 |
-| **Codex（CLI 与 IDE）** | 仓库根 `AGENTS.md` | 内容复制，或写一行 `See CODEBUDDY.md for memory rules.`，完整落地见 §4.5 |
-| **Claude Code** | 仓库根 `CLAUDE.md` | 内容为 `@CODEBUDDY.md`（官方 import 语法），完整落地见 §4.6 |
+| **CodeBuddy IDE** | 仓库根 `CODEBUDDY.md` | 直接放置（每会话自动注入），完整落地见 §4.3 |
+| **Qoder IDE** | `.qoder/rules/mem0.md` | 直接放置母本内容，完整落地见 §4.4 |
+| **Qoder CLI** | 仓库根 `AGENTS.md` | 同 Codex，完整落地见 §4.6 |
+| **Cursor** | `.cursor/rules/mem0.mdc` | 带 frontmatter：`---\ndescription: mem0 auto memory\nglobs:\nalwaysApply: true\n---` 后接母本内容，完整落地见 §4.5 |
+| **Codex（CLI 与 IDE）** | 仓库根 `AGENTS.md` | 内容复制，或写一行 `See CODEBUDDY.md for memory rules.`，完整落地见 §4.6 |
+| **Claude Code** | 仓库根 `CLAUDE.md` | 内容为 `@CODEBUDDY.md`（官方 import 语法），完整落地见 §4.7 |
 | **VS Code (Copilot)** | `.github/copilot-instructions.md` | 直接放置母本内容 |
 | **Windsurf** | `.windsurfrules` 或 `AGENTS.md` | 直接放置母本内容 |
 
@@ -1828,9 +1897,9 @@ Set-Content -Path ".claude\.session_id" -Value $id -Encoding UTF8
 - [ ] 有失败降级条款（配置缺失/服务不可达 → 停止并告知）
 - [ ] 其他工具通过 AGENTS.md/CLAUDE.md 引用同一份规则
 
-## 4.8 数据格式规范
+## 4.9 数据格式规范
 
-### 4.8.1 `text` 字段（会话留痕）
+### 4.9.1 `text` 字段（会话留痕）
 
 ```
 Q: <用户本轮原始提问，逐字保留>
@@ -1860,7 +1929,7 @@ A: <过程叙述行，逐字，按原顺序>
 | 包含推理过程与工具执行，不只写摘要 | 留痕目的是完整还原执行过程 |
 | 不写"今日无事可记"类占位 | 每轮必提交，但内容必须是该轮真实对话 |
 
-### 4.8.2 `metadata` 字段 schema
+### 4.9.2 `metadata` 字段 schema
 
 | 键 | 类型 | 约定 | 用途 |
 |----|------|------|------|
@@ -1872,13 +1941,13 @@ A: <过程叙述行，逐字，按原顺序>
 | `people` | string[] | 相关人员（对齐 roster） | 按人检索 |
 | `created_at` | string | 该轮完成时 ISO8601（如 `2026-09-18T06:00:01Z`） | 时间排序 |
 
-### 4.8.3 持久事实（type=fact 等）与留痕的关系
+### 4.9.3 持久事实（type=fact 等）与留痕的关系
 
 - 一轮对话**可产生两条**记录：1 条 `type=conversation`（转录）+ 0..1 条 `type=fact/decision/...`（提炼事实），互不替代
 - 事实类尽量合并（一轮内多个相关事实写一条），避免刷屏
 - mem0 服务端按内容哈希去重：重复提交、崩溃后补录均幂等安全
 
-## 4.9 触发时序与传输链路
+## 4.10 触发时序与传输链路
 
 **触发时序**：
 
@@ -2009,6 +2078,7 @@ Agent 工具调用（add_memory）
 
 ### 5.3.1 自动提交落地验证清单
 
+- [ ] 已运行 `mem0-setup`（`-DryRun` 预览 → 实跑）且全部输出 ✓
 - [ ] `~/.codebuddy/mcp.json` 含 `mem0` 且 `transport: "streamable-http"`，面板绿色
 - [ ] `.mem0/mem0.config.json` 存在且含 `api_key` / `git_remote` / `project_id`
 - [ ] `.gitignore` 覆盖 `.mem0/`（含 `mem0.config.json` 与 `.session_id-*`）
@@ -2018,7 +2088,7 @@ Agent 工具调用（add_memory）
 - [ ] `metadata.turn_seq` 随轮次递增、`type=conversation` 正确
 - [ ] 故意断开 MCP（改错端口）→ Agent 明确告知"服务不可达"而非编造记忆
 
-> 以上清单以 CodeBuddy 为例；Qoder / Cursor / Codex / Claude Code 按 §4.3–§4.6 将对应路径（MCP 配置、凭证文件、规则文件、session_id 文件）替换后逐项自查。
+> 以上清单以 CodeBuddy 为例；Qoder / Cursor / Codex / Claude Code 按 §4.4–§4.7 将对应路径（MCP 配置、凭证文件、规则文件、session_id 文件）替换后逐项自查。
 
 ### 5.3.2 常见故障
 
@@ -2038,7 +2108,7 @@ Agent 工具调用（add_memory）
 | Agent 从不调用记忆工具 | 规则文件不存在/未被加载；或工具未挂载 | 确认 `CODEBUDDY.md` 在仓库根；MCP 面板绿色 |
 | 同一会话在 dashboard 被拆成多组 | `.session_id` 被删除导致每轮重新生成 | 保留该文件；规则中"已存在则复用"条款不可删 |
 | 今天的内容出现在昨天的会话流里 | 跨天继续对话却复用了昨天的 `.session_id` | 重新生成当天日期的 session_id 并覆写（格式 `cb-<YYYYMMDD>-<6位hex>`） |
-| 留痕只有摘要没有执行过程 | 规则未强调四段转录 | 保留 §4.2 模板的"一致性红线"条款 |
+| 留痕只有摘要没有执行过程 | 规则未强调四段转录 | 保留 §4.3 模板的"一致性红线"条款 |
 | 图谱空白 | 属正常——需写入含实体的记忆且 `GRAPH_ENABLED=true` | 确认外部 Neo4j 可达 |
 | 检索结果不相关 | Embedder 供应商/模型变更后旧向量不匹配 | 必要时重建记忆或统一模型 |
 
@@ -2048,9 +2118,9 @@ Agent 工具调用（add_memory）
 
 | # | 错误现象 | 根因 | 修正方法 |
 |---|----------|------|----------|
-| **F1** | 服务名三种混用（`mem0` / `mem0` / `mem0`）；"本地=mem0@127.0.0.1、远程=mem0@192.168.110.169"的表述与实际 `mcp.json` 条目不符；规则文件里写的服务名与实际挂载条目不一致 → MCP 工具找不到、Agent 按降级条款停机 | 服务名被视为自由文本，需在 `mcp.json` 与规则文件**两处人工对齐**，任一处笔误即失效 | 全文统一**约定名 `mem0`**；**环境用 URL 区分，服务名恒定**。同步范围：头部适用范围、§1.1 服务端描述、§2.2 全部 JSON/TOML/命令示例、§2.4.3 差异表、§4.2–4.6 五份规则模板、§5.3.1 校验清单、附录 A |
+| **F1** | 服务名三种混用（`mem0-local` / `mem0-remote` / `mem0`）；"本地=mem0-local@127.0.0.1、远程=mem0-remote@192.168.110.169"的表述与实际 `mcp.json` 条目不符；规则文件里写的服务名与实际挂载条目不一致 → MCP 工具找不到、Agent 按降级条款停机 | 服务名被视为自由文本，需在 `mcp.json` 与规则文件**两处人工对齐**，任一处笔误即失效 | 全文统一**约定名 `mem0`**；**环境用 URL 区分，服务名恒定**。同步范围：头部适用范围、§1.1 服务端描述、§2.2 全部 JSON/TOML/命令示例、§2.4.3 差异表、§4.3–4.7 五份规则模板、§5.3.1 校验清单、附录 A |
 | **F2** | 今天的内容出现在昨天的会话流里；或同一会话在 dashboard 被拆成多组 | session_id 规则只写"已存在则复用"，**未考虑跨天**——跨天继续对话复用了昨天的 id；另一种相反情形是 `.session_id` 被删除导致每轮重建 | 模板正文与 Step 5 表格补**跨天强制重生成**条款：id 日期与当天不一致、或用户明确开启新会话 → 重新生成并覆写。同时保留 `.session_id` 文件不得删除 |
-| **F3** | 凭证文件两套约定并存（§4.2 用 `.mem0/mem0.config.json`，§4.3–4.6 用仓库根 `.mem0/mem0.config.json`），多工具各存一份、密钥不一致 | 凭证路径约定未统一，随章节演进产生分叉 | 统一为 **`.mem0/mem0.config.json`**（工具无关，多工具天然共享）；CodeBuddy 兼容回退读取旧路径；全文约 40 处同步，并确认 `.gitignore` 覆盖 `.mem0/` |
+| **F3** | 凭证文件两套约定并存（CodeBuddy 章用 `.codebuddy/mem0.config.json`，其余工具章用仓库根 `.mem0.config.json`），多工具各存一份、密钥不一致 | 凭证路径约定未统一，随章节演进产生分叉 | 统一为 **`.mem0/mem0.config.json`**（工具无关，多工具天然共享）；CodeBuddy 兼容回退读取旧路径；全文约 40 处同步，并确认 `.gitignore` 覆盖 `.mem0/` |
 | **F4** | 手工 5 步流程配错/漏步：`transport` 字段漏写导致工具不挂载、规则文件位置或格式写错、JSON 语法错 | 全流程依赖人肉查手册执行，各 IDE 差异（8 种放置方式）无沉淀 | 改用 **一键脚本**：`scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux），服务名自动为 `mem0`、合并写不覆盖既有 MCP 条目、标记区间幂等更新规则文件。手工流程保留用于理解原理与特殊场景 |
 | **F5** | 配完不确定是否正确，只能到 IDE 里反复试错 | 缺少端到端校验环节 | 运行一键脚本的校验段：**MCP 端点存活（GET `/mcp` 返回 406）** + **REST 写读往返（`:8888/memories`，`X-API-Key`）** + **配置语法回读**；§5.3.1 清单增加"已运行 mem0-setup 且全部 ✓"项 |
 
