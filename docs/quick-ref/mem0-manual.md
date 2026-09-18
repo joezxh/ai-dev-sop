@@ -2,7 +2,7 @@
 
 > **版本**: v1.1（由四份文档合并而成：接入手册 / 控制台用户文档 / 会话自动提交配置 / 工具速查表）
 > **最后更新**: 2026-09-18
-> **适用范围**: 本仓库二开自托管 mem0（本地 `mem0-local` @ `127.0.0.1:8080/mcp`；远程 `mem0-remote` @ `192.168.110.169:8080/mcp`）
+> **适用范围**: 本仓库二开自托管 mem0（本地 `127.0.0.1:8080/mcp`；远程 `192.168.110.169:8080/mcp`）。环境用 URL 区分，**MCP 服务名约定为 `mem0`**（以各 IDE 配置文件实际条目为准）
 > **目标读者**: 快速上手的普通用户 → 深入配置/二次研究的管理员
 
 **目录**
@@ -22,7 +22,7 @@
 
 本仓库 `mem0/`（子模块）是**二次开发版** mem0，在官方开源版基础上扩展（官方开源版不含 MCP server，本仓库自研）：
 
-- **自研 MCP server**：`mem0/server/mcp_server.py`（服务名 `mem0-local`，9 个工具，Streamable HTTP）
+- **自研 MCP server**：`mem0/server/mcp_server.py`（服务名 `mem0`，9 个工具，Streamable HTTP）
 - **项目共享池**：`git_remote` 服务端解析为 `project_id`，团队记忆跨用户共享
 - **原文留痕 / 会话转录**：`add_memory` 默认 `infer=False`，跳过 LLM 抽取；支持按轮提交与界面一致的完整执行转录（Deep Thinking + 工具调用 + 完成结果）
 - **多租户鉴权**：`m0sk_` 按用户密钥 + `ADMIN_API_KEY` 引导管理员 + JWT 三通道
@@ -90,7 +90,7 @@ docker compose up -d          # mem0-api(8888/8080) + mem0-dashboard(3001)
 | 变量 | 说明 |
 |------|------|
 | `POSTGRES_HOST` / `NEO4J_URI` | 外部库地址 |
-| `ADMIN_API_KEY` | 引导管理员密钥；**与本地 `.codebuddy/mem0.config.json` 的 `api_key` 设为同一把**，客户端即可免差异读写远程 |
+| `ADMIN_API_KEY` | 引导管理员密钥；**与本地 `.mem0/mem0.config.json` 的 `api_key` 设为同一把**，客户端即可免差异读写远程 |
 | `AUTH_DISABLED=false` + `JWT_SECRET` | Dashboard 登录态；禁止对公网放开 |
 | `DASHBOARD_URL`（compose 中 dashboard 服务） | **必须设为实际访问地址**，否则会话 cookie 带 `Secure` 被浏览器丢弃、登录后不跳转（§5.3） |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` | LLM/Embedder 兜底配置；实际供应商优先读共享库 `config_overrides`（Dashboard 配置页写入） |
@@ -111,7 +111,7 @@ docker compose up -d          # mem0-api(8888/8080) + mem0-dashboard(3001)
 - 格式：`m0sk_<43位随机串>`（服务端 `auth.py: generate_api_key()` 生成），按**用户**存储（bcrypt 哈希 + 前 12 位前缀索引）
 - ⚠️ **密钥仅创建时完整可见一次**，立即哈希化存储；丢失只能重建并更新集成
 - 密钥按**用户**隔离；项目范围由调用参数 `git_remote` / `project_id` 决定（非密钥决定）
-- 密钥只放 git-ignored 的本地配置（本工程为 `.codebuddy/mem0.config.json`），禁止写进提交到仓库的文件
+- 密钥只放 git-ignored 的本地配置（本工程为 `.mem0/mem0.config.json`），禁止写进提交到仓库的文件
 
 ### 1.4.3 鉴权三通道（`mem0/server/auth.py`）
 
@@ -152,7 +152,7 @@ docker compose up -d          # mem0-api(8888/8080) + mem0-dashboard(3001)
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http",
       "disabled": false
@@ -161,7 +161,7 @@ docker compose up -d          # mem0-api(8888/8080) + mem0-dashboard(3001)
 }
 ```
 
-远程部署把 `url` 换为 `http://192.168.110.169:8080/mcp`（本工程实际配置，服务名 `mem0-remote`）。
+远程部署把 `url` 换为 `http://192.168.110.169:8080/mcp`（本工程实际配置，服务名 `mem0`）。
 
 **验证**：MCP 列表绿色 → 让 Agent 说"记住我偏好 TypeScript"→ 再问"我的偏好是什么"能读回即通过。
 
@@ -174,7 +174,7 @@ docker compose up -d          # mem0-api(8888/8080) + mem0-dashboard(3001)
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http"
     }
@@ -189,7 +189,7 @@ docker compose up -d          # mem0-api(8888/8080) + mem0-dashboard(3001)
 **方式一：一键配置（需 Node.js 18+）**
 
 ```bash
-npx mcp-add --name mem0-local --type http \
+npx mcp-add --name mem0 --type http \
   --url "http://127.0.0.1:8080/mcp" --clients "cursor"
 ```
 
@@ -198,7 +198,7 @@ npx mcp-add --name mem0-local --type http \
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "type": "http",
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http"
@@ -222,13 +222,13 @@ url = "http://127.0.0.1:8080/mcp"
 
 ```bash
 npx mcp-add \
-  --name mem0-local \
+  --name mem0 \
   --type http \
   --url "http://127.0.0.1:8080/mcp" \
   --clients "claude code,cursor,windsurf,vscode,opencode"
 ```
 
-Claude Desktop 无 `mcp-add`：Settings → Connectors → Add custom connector → 名称 `mem0-local`、URL 填端点，保存重启。
+Claude Desktop 无 `mcp-add`：Settings → Connectors → Add custom connector → 名称 `mem0`、URL 填端点，保存重启。
 
 ## 2.3 MCP 工具清单与关键参数
 
@@ -285,7 +285,7 @@ Claude Desktop 无 `mcp-add`：Settings → Connectors → Add custom connector 
 | 传输声明 | `"transport": "streamable-http"` | 同左（或表单选 SSE） | `"type": "http"` | 仅 `url` 键 |
 | 密钥传递 | 工具调用参数（连接层零配置） | 同左 | 同左 | 同左 |
 | 配置生效范围 | 用户级 | 用户级全局 | 用户级 | 用户级 |
-| 服务命名建议 | `mem0-local` / `mem0-remote` | `mem0-local` | `mem0-local` | `mem0` |
+| 服务命名建议 | `mem0` / `mem0` | `mem0` | `mem0` | `mem0` |
 
 ---
 
@@ -470,7 +470,7 @@ sequenceDiagram
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http",
       "disabled": false
@@ -481,18 +481,18 @@ sequenceDiagram
 
 | 键 | 必填 | 说明 |
 |----|------|------|
-| `url` | ✅ | 二开 MCP 端点；远程换 `http://192.168.110.169:8080/mcp`（服务名可用 `mem0-remote`） |
+| `url` | ✅ | 二开 MCP 端点；远程换 `http://192.168.110.169:8080/mcp`（服务名可用 `mem0`） |
 | `transport` | ✅ | **必须显式写 `streamable-http`**——缺失此字段会导致连接失败、工具不挂载（高频踩坑） |
 | `disabled` | - | `false` 启用 |
 
-### Step 2：凭证文件 —— `.codebuddy/mem0.config.json`（项目级，git-ignored）
+### Step 2：凭证文件 —— `.mem0/mem0.config.json`（项目级，git-ignored）
 
 规则文件要求 Agent"永远从配置读，不硬编码"，此文件是唯一凭证来源：
 
 ```json
 {
   "_comment": "Local-only config for the mem0 MCP memory integration. GIT-IGNORED — do not commit (contains api_key).",
-  "mcp_server": "mem0-local",
+  "mcp_server": "mem0",
   "api_url_via_mcp": "http://127.0.0.1:8080/mcp",
   "api_key": "m0sk_你的完整密钥",
   "admin_user_id": "admin@mem0.dev",
@@ -525,8 +525,8 @@ sequenceDiagram
 
 ```gitignore
 # mem0 本地凭证与会话标识（含密钥，禁止入库）
-.codebuddy/mem0.config.json
-.codebuddy/.session_id
+.mem0/mem0.config.json
+.mem0/.session_id-cb
 ```
 
 ### Step 4：规则文件 —— 仓库根 `CODEBUDDY.md`（核心）
@@ -534,20 +534,20 @@ sequenceDiagram
 CodeBuddy 每次会话自动把仓库根 `CODEBUDDY.md` 注入 Agent 上下文。以下为完整可粘贴模板（本工程实际在用版本）：
 
 ````markdown
-# 通过 mem0 MCP 的项目记忆（mem0-remote）
+# 通过 mem0 MCP 的项目记忆（mem0）
 
-本项目使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-remote` MCP 服务访问
+本项目使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0` MCP 服务访问
 （在 `~/.codebuddy/mcp.json` 中配置，streamable-http）。实际端点由该配置文件决定
 ——此处切勿硬编码。下列规则让 Agent **在每轮会话中自动**加载与保存记忆。
 
 > 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中，并镜像保存在
-> 本地、已被 git 忽略的 `.codebuddy/mem0.config.json`。请始终从那里读取，
+> 本地、已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，
 > 切勿在代码中硬编码。
 
 ## 1. 加载记忆（自动，会话开始时）
 
-在本仓库的每轮会话首次开始时，通过 `mem0-remote` MCP 服务加载项目记忆池。
-从 `.codebuddy/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
+在本仓库的每轮会话首次开始时，通过 `mem0` MCP 服务加载项目记忆池。
+从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`
@@ -561,7 +561,7 @@ CodeBuddy 每次会话自动把仓库根 `CODEBUDDY.md` 注入 Agent 上下文�
 ## 2. 保存记忆（自动——通过 MCP，无需脚本）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，保存。
-不要保存临时性的任务状态。每次都从 `.codebuddy/mem0.config.json` 读取
+不要保存临时性的任务状态。每次都从 `.mem0/mem0.config.json` 读取
 `api_key` / `git_remote` / `user_id`。
 
 ```python
@@ -597,9 +597,9 @@ Markdown 渲染的端都能还原同样的画面。
 
 会话 ID（session_id）：
 - 每个 Agent 会话使用唯一 `session_id`，格式 `cb-<YYYYMMDD>-<6位hex>`。
-- 会话开始时生成，持久化到本地 `.codebuddy/.session_id`（已 git-ignore）；同会话
+- 会话开始时生成，持久化到本地 `.mem0/.session_id-cb`（已 git-ignore）；同会话
   所有轮次复用同一 id；新会话重新生成。
-- 若 `.codebuddy/.session_id` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
+- 若 `.mem0/.session_id-cb` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
 
 提交内容（原文，非摘要，且为 Markdown）：
 - **提问与回答都要入库**：每条 memory 的 `text` 写入该轮原始对话，固定格式为
@@ -698,7 +698,7 @@ add_memory(
 
 - 项目共享池：所有 `project_id="ai-dev-sop"` 的记忆，任何成员可经
   `get_memories(project_id=...)` 读取——admin 密钥即返回完整跨用户池
-- 花名册：`.codebuddy/mem0.config.json` 的 `roster`；相关人员首次出现时补入
+- 花名册：`.mem0/mem0.config.json` 的 `roster`；相关人员首次出现时补入
 
 ## 4. 权限与同步
 
@@ -720,7 +720,7 @@ add_memory(
 | §2.1 会话留痕 | 触发条件②：**自动提交会话内容的核心条款**（四段转录 + 一致性红线） | 不可（需求主体） |
 | §3–§5 共享池/权限/降级 | 幂等、权限边界、失败行为 | 建议保留 |
 
-### Step 5：会话 ID 机制 —— `.codebuddy/.session_id`
+### Step 5：会话 ID 机制 —— `.mem0/.session_id-cb`
 
 规则文件 §2.1 约定 Agent 在会话开始时生成并持久化 `session_id`（Agent 自主执行；如需手工生成）：
 
@@ -732,7 +732,7 @@ Set-Content -Path ".codebuddy\.session_id" -Value $id -Encoding UTF8
 | 规则 | 说明 |
 |------|------|
 | 格式 | `cb-<YYYYMMDD>-<6位hex>`，如 `cb-20260918-e5d21a` |
-| 生命周期 | 会话开始生成 → 写入 `.codebuddy/.session_id` → 同会话所有轮次复用 → 新会话重新生成 |
+| 生命周期 | 会话开始生成 → 写入 `.mem0/.session_id-cb` → 同会话所有轮次复用 → 新会话重新生成 |
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
@@ -745,7 +745,7 @@ Set-Content -Path ".codebuddy\.session_id" -Value $id -Encoding UTF8
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http"
     }
@@ -757,14 +757,14 @@ Set-Content -Path ".codebuddy\.session_id" -Value $id -Encoding UTF8
 - **前提**：插件 ≥ v2.5.0，且处于**智能体模式**（问答模式无法调用 MCP）
 - Qoder 配置为用户级全局，跨工程跨 IDE 生效；连接层无需任何密钥
 
-### Step 2：凭证文件 —— 仓库根 `.mem0.config.json`（项目级，git-ignored）
+### Step 2：凭证文件 —— 仓库根 `.mem0/mem0.config.json`（项目级，git-ignored）
 
 规则文件要求 Agent"永远从配置读，不硬编码"，此文件是唯一凭证来源：
 
 ```json
 {
   "_comment": "Local-only config for the mem0 MCP memory integration. GIT-IGNORED — do not commit (contains api_key).",
-  "mcp_server": "mem0-local",
+  "mcp_server": "mem0",
   "api_url_via_mcp": "http://127.0.0.1:8080/mcp",
   "api_key": "m0sk_你的完整密钥",
   "admin_user_id": "admin@mem0.dev",
@@ -793,13 +793,13 @@ Set-Content -Path ".codebuddy\.session_id" -Value $id -Encoding UTF8
 | `load_on_session_start` | 声明"会话开始自动拉取" |
 | `save_policy` | `auto-on-durable-fact`：持久事实出现即自动提交 |
 
-> 同一仓库多工具并用时，可直接共用 CodeBuddy 的 `.codebuddy/mem0.config.json`，避免同一把密钥维护多份。
+> 凭证文件位于工具无关的 `.mem0/mem0.config.json`，多工具并用时天然共享，无需各 IDE 各存一份。
 
 ### Step 3：.gitignore —— 防止密钥与会话 ID 入库
 
 ```gitignore
-.mem0.config.json
-.qoder/.session_id
+.mem0/mem0.config.json
+.mem0/.session_id-qd
 ```
 
 ### Step 4：规则文件（核心）
@@ -807,20 +807,20 @@ Set-Content -Path ".codebuddy\.session_id" -Value $id -Encoding UTF8
 Qoder 每次会话自动读取 `.qoder/rules/mem0.md`（IDE）/ 仓库根 `AGENTS.md`（CLI）。以下为完整可粘贴内容（Qoder 版）：
 
 ````markdown
-# 通过 mem0 MCP 的项目记忆（mem0-local）
+# 通过 mem0 MCP 的项目记忆（mem0）
 
-Qoder 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-local` MCP 服务访问
+Qoder 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0` MCP 服务访问
 （在 Qoder 个人设置 → MCP 服务中配置，streamable-http）。实际端点由该配置文件决定
 ——此处切勿硬编码。下列规则让 Agent **在每轮会话中自动**加载与保存记忆。
 
 > 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中，并镜像保存在
-> 本地、已被 git 忽略的 `.mem0.config.json`。请始终从那里读取，
+> 本地、已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，
 > 切勿在代码中硬编码。
 
 ## 1. 加载记忆（自动，会话开始时）
 
-在本仓库的每轮会话首次开始时，通过 `mem0-local` MCP 服务加载项目记忆池。
-从 `.mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
+在本仓库的每轮会话首次开始时，通过 `mem0` MCP 服务加载项目记忆池。
+从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`
@@ -834,7 +834,7 @@ Qoder 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-local`
 ## 2. 保存记忆（自动——通过 MCP，无需脚本）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，保存。
-不要保存临时性的任务状态。每次都从 `.mem0.config.json` 读取
+不要保存临时性的任务状态。每次都从 `.mem0/mem0.config.json` 读取
 `api_key` / `git_remote` / `user_id`。
 
 ```python
@@ -870,9 +870,9 @@ Markdown 渲染的端都能还原同样的画面。
 
 会话 ID（session_id）：
 - 每个 Agent 会话使用唯一 `session_id`，格式 `qd-<YYYYMMDD>-<6位hex>`。
-- 会话开始时生成，持久化到本地 `.qoder/.session_id`（已 git-ignore）；同会话
+- 会话开始时生成，持久化到本地 `.mem0/.session_id-qd`（已 git-ignore）；同会话
   所有轮次复用同一 id；新会话重新生成。
-- 若 `.qoder/.session_id` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
+- 若 `.mem0/.session_id-qd` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
 
 提交内容（原文，非摘要，且为 Markdown）：
 - **提问与回答都要入库**：每条 memory 的 `text` 写入该轮原始对话，固定格式为
@@ -971,7 +971,7 @@ add_memory(
 
 - 项目共享池：所有 `project_id="ai-dev-sop"` 的记忆，任何成员可经
   `get_memories(project_id=...)` 读取——admin 密钥即返回完整跨用户池
-- 花名册：`.mem0.config.json` 的 `roster`；相关人员首次出现时补入
+- 花名册：`.mem0/mem0.config.json` 的 `roster`；相关人员首次出现时补入
 
 ## 4. 权限与同步
 
@@ -980,12 +980,12 @@ add_memory(
 
 ## 5. 降级
 
-如果 `.mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
+如果 `.mem0/mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
 ````
 
 **放置位置**：Qoder IDE 放 `.qoder/rules/mem0.md`；Qoder CLI 放仓库根 `AGENTS.md`（内容同上，`agent` 建议改为 `"Qoder CLI"` 以便 dashboard 区分来源）。
 
-### Step 5：会话 ID 机制 —— `.qoder/.session_id`
+### Step 5：会话 ID 机制 —— `.mem0/.session_id-qd`
 
 规则文件 §2.1 约定 Agent 在会话开始时生成并持久化 `session_id`（Agent 自主执行；如需手工生成）：
 
@@ -998,7 +998,7 @@ Set-Content -Path ".qoder\.session_id" -Value $id -Encoding UTF8
 | 规则 | 说明 |
 |------|------|
 | 格式 | `qd-<YYYYMMDD>-<6位hex>`，如 `qd-20260918-e5d21a` |
-| 生命周期 | 会话开始生成 → 写入 `.qoder/.session_id` → 同会话所有轮次复用 → 新会话重新生成 |
+| 生命周期 | 会话开始生成 → 写入 `.mem0/.session_id-qd` → 同会话所有轮次复用 → 新会话重新生成 |
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
@@ -1009,7 +1009,7 @@ Set-Content -Path ".qoder\.session_id" -Value $id -Encoding UTF8
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "type": "http",
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http"
@@ -1018,16 +1018,16 @@ Set-Content -Path ".qoder\.session_id" -Value $id -Encoding UTF8
 }
 ```
 
-一键方式（需 Node.js 18+）：`npx mcp-add --name mem0-local --type http --url "http://127.0.0.1:8080/mcp" --clients "cursor"`（详见 §2.2.3）。
+一键方式（需 Node.js 18+）：`npx mcp-add --name mem0 --type http --url "http://127.0.0.1:8080/mcp" --clients "cursor"`（详见 §2.2.3）。
 
-### Step 2：凭证文件 —— 仓库根 `.mem0.config.json`（项目级，git-ignored）
+### Step 2：凭证文件 —— 仓库根 `.mem0/mem0.config.json`（项目级，git-ignored）
 
 规则文件要求 Agent"永远从配置读，不硬编码"，此文件是唯一凭证来源：
 
 ```json
 {
   "_comment": "Local-only config for the mem0 MCP memory integration. GIT-IGNORED — do not commit (contains api_key).",
-  "mcp_server": "mem0-local",
+  "mcp_server": "mem0",
   "api_url_via_mcp": "http://127.0.0.1:8080/mcp",
   "api_key": "m0sk_你的完整密钥",
   "admin_user_id": "admin@mem0.dev",
@@ -1056,13 +1056,13 @@ Set-Content -Path ".qoder\.session_id" -Value $id -Encoding UTF8
 | `load_on_session_start` | 声明"会话开始自动拉取" |
 | `save_policy` | `auto-on-durable-fact`：持久事实出现即自动提交 |
 
-> 同一仓库多工具并用时，可直接共用 CodeBuddy 的 `.codebuddy/mem0.config.json`，避免同一把密钥维护多份。
+> 凭证文件位于工具无关的 `.mem0/mem0.config.json`，多工具并用时天然共享，无需各 IDE 各存一份。
 
 ### Step 3：.gitignore —— 防止密钥与会话 ID 入库
 
 ```gitignore
-.mem0.config.json
-.cursor/.session_id
+.mem0/mem0.config.json
+.mem0/.session_id-cu
 ```
 
 ### Step 4：规则文件（核心）—— `.cursor/rules/mem0.mdc`
@@ -1076,20 +1076,20 @@ globs:
 alwaysApply: true
 ---
 
-# 通过 mem0 MCP 的项目记忆（mem0-local）
+# 通过 mem0 MCP 的项目记忆（mem0）
 
-Cursor 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-local` MCP 服务访问
+Cursor 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0` MCP 服务访问
 （在 Cursor 的 `~/.cursor/mcp.json` 中配置，streamable-http）。实际端点由该配置文件决定
 ——此处切勿硬编码。下列规则让 Agent **在每轮会话中自动**加载与保存记忆。
 
 > 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中，并镜像保存在
-> 本地、已被 git 忽略的 `.mem0.config.json`。请始终从那里读取，
+> 本地、已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，
 > 切勿在代码中硬编码。
 
 ## 1. 加载记忆（自动，会话开始时）
 
-在本仓库的每轮会话首次开始时，通过 `mem0-local` MCP 服务加载项目记忆池。
-从 `.mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
+在本仓库的每轮会话首次开始时，通过 `mem0` MCP 服务加载项目记忆池。
+从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`
@@ -1103,7 +1103,7 @@ Cursor 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-local
 ## 2. 保存记忆（自动——通过 MCP，无需脚本）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，保存。
-不要保存临时性的任务状态。每次都从 `.mem0.config.json` 读取
+不要保存临时性的任务状态。每次都从 `.mem0/mem0.config.json` 读取
 `api_key` / `git_remote` / `user_id`。
 
 ```python
@@ -1139,9 +1139,9 @@ Markdown 渲染的端都能还原同样的画面。
 
 会话 ID（session_id）：
 - 每个 Agent 会话使用唯一 `session_id`，格式 `cu-<YYYYMMDD>-<6位hex>`。
-- 会话开始时生成，持久化到本地 `.cursor/.session_id`（已 git-ignore）；同会话
+- 会话开始时生成，持久化到本地 `.mem0/.session_id-cu`（已 git-ignore）；同会话
   所有轮次复用同一 id；新会话重新生成。
-- 若 `.cursor/.session_id` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
+- 若 `.mem0/.session_id-cu` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
 
 提交内容（原文，非摘要，且为 Markdown）：
 - **提问与回答都要入库**：每条 memory 的 `text` 写入该轮原始对话，固定格式为
@@ -1240,7 +1240,7 @@ add_memory(
 
 - 项目共享池：所有 `project_id="ai-dev-sop"` 的记忆，任何成员可经
   `get_memories(project_id=...)` 读取——admin 密钥即返回完整跨用户池
-- 花名册：`.mem0.config.json` 的 `roster`；相关人员首次出现时补入
+- 花名册：`.mem0/mem0.config.json` 的 `roster`；相关人员首次出现时补入
 
 ## 4. 权限与同步
 
@@ -1249,10 +1249,10 @@ add_memory(
 
 ## 5. 降级
 
-如果 `.mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
+如果 `.mem0/mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
 ````
 
-### Step 5：会话 ID 机制 —— `.cursor/.session_id`
+### Step 5：会话 ID 机制 —— `.mem0/.session_id-cu`
 
 规则文件 §2.1 约定 Agent 在会话开始时生成并持久化 `session_id`（Agent 自主执行；如需手工生成）：
 
@@ -1265,7 +1265,7 @@ Set-Content -Path ".cursor\.session_id" -Value $id -Encoding UTF8
 | 规则 | 说明 |
 |------|------|
 | 格式 | `cu-<YYYYMMDD>-<6位hex>`，如 `cu-20260918-e5d21a` |
-| 生命周期 | 会话开始生成 → 写入 `.cursor/.session_id` → 同会话所有轮次复用 → 新会话重新生成 |
+| 生命周期 | 会话开始生成 → 写入 `.mem0/.session_id-cu` → 同会话所有轮次复用 → 新会话重新生成 |
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
@@ -1284,14 +1284,14 @@ url = "http://127.0.0.1:8080/mcp"
 - **Codex IDE**（VS Code 扩展）：**与 CLI 共用同一份 `~/.codex/config.toml`**，配置一次两端生效；扩展内启动 Codex 后在 MCP 服务列表确认 `mem0` 已挂载
 - 服务名建议用 `mem0`（TOML 键名即服务名）；连接层零密钥配置（详见 §2.2.4）
 
-### Step 2：凭证文件 —— 仓库根 `.mem0.config.json`（项目级，git-ignored）
+### Step 2：凭证文件 —— 仓库根 `.mem0/mem0.config.json`（项目级，git-ignored）
 
 规则文件要求 Agent"永远从配置读，不硬编码"，此文件是唯一凭证来源：
 
 ```json
 {
   "_comment": "Local-only config for the mem0 MCP memory integration. GIT-IGNORED — do not commit (contains api_key).",
-  "mcp_server": "mem0-local",
+  "mcp_server": "mem0",
   "api_url_via_mcp": "http://127.0.0.1:8080/mcp",
   "api_key": "m0sk_你的完整密钥",
   "admin_user_id": "admin@mem0.dev",
@@ -1320,13 +1320,13 @@ url = "http://127.0.0.1:8080/mcp"
 | `load_on_session_start` | 声明"会话开始自动拉取" |
 | `save_policy` | `auto-on-durable-fact`：持久事实出现即自动提交 |
 
-> 同一仓库多工具并用时，可直接共用 CodeBuddy 的 `.codebuddy/mem0.config.json`，避免同一把密钥维护多份。
+> 凭证文件位于工具无关的 `.mem0/mem0.config.json`，多工具并用时天然共享，无需各 IDE 各存一份。
 
 ### Step 3：.gitignore —— 防止密钥与会话 ID 入库
 
 ```gitignore
-.mem0.config.json
-.codex/.session_id
+.mem0/mem0.config.json
+.mem0/.session_id-cx
 ```
 
 ### Step 4：规则文件（核心）—— 仓库根 `AGENTS.md`
@@ -1342,13 +1342,13 @@ Codex 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0` MCP �
 下列规则让 Agent **在每轮会话中自动**加载与保存记忆。
 
 > 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中，并镜像保存在
-> 本地、已被 git 忽略的 `.mem0.config.json`。请始终从那里读取，
+> 本地、已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，
 > 切勿在代码中硬编码。
 
 ## 1. 加载记忆（自动，会话开始时）
 
 在本仓库的每轮会话首次开始时，通过 `mem0` MCP 服务加载项目记忆池。
-从 `.mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
+从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`
@@ -1362,7 +1362,7 @@ Codex 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0` MCP �
 ## 2. 保存记忆（自动——通过 MCP，无需脚本）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，保存。
-不要保存临时性的任务状态。每次都从 `.mem0.config.json` 读取
+不要保存临时性的任务状态。每次都从 `.mem0/mem0.config.json` 读取
 `api_key` / `git_remote` / `user_id`。
 
 ```python
@@ -1398,9 +1398,9 @@ Markdown 渲染的端都能还原同样的画面。
 
 会话 ID（session_id）：
 - 每个 Agent 会话使用唯一 `session_id`，格式 `cx-<YYYYMMDD>-<6位hex>`。
-- 会话开始时生成，持久化到本地 `.codex/.session_id`（已 git-ignore）；同会话
+- 会话开始时生成，持久化到本地 `.mem0/.session_id-cx`（已 git-ignore）；同会话
   所有轮次复用同一 id；新会话重新生成。
-- 若 `.codex/.session_id` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
+- 若 `.mem0/.session_id-cx` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
 
 提交内容（原文，非摘要，且为 Markdown）：
 - **提问与回答都要入库**：每条 memory 的 `text` 写入该轮原始对话，固定格式为
@@ -1499,7 +1499,7 @@ add_memory(
 
 - 项目共享池：所有 `project_id="ai-dev-sop"` 的记忆，任何成员可经
   `get_memories(project_id=...)` 读取——admin 密钥即返回完整跨用户池
-- 花名册：`.mem0.config.json` 的 `roster`；相关人员首次出现时补入
+- 花名册：`.mem0/mem0.config.json` 的 `roster`；相关人员首次出现时补入
 
 ## 4. 权限与同步
 
@@ -1508,10 +1508,10 @@ add_memory(
 
 ## 5. 降级
 
-如果 `.mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
+如果 `.mem0/mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
 ````
 
-### Step 5：会话 ID 机制 —— `.codex/.session_id`
+### Step 5：会话 ID 机制 —— `.mem0/.session_id-cx`
 
 规则文件 §2.1 约定 Agent 在会话开始时生成并持久化 `session_id`（Agent 自主执行；如需手工生成）：
 
@@ -1524,7 +1524,7 @@ Set-Content -Path ".codex\.session_id" -Value $id -Encoding UTF8
 | 规则 | 说明 |
 |------|------|
 | 格式 | `cx-<YYYYMMDD>-<6位hex>`，如 `cx-20260918-e5d21a` |
-| 生命周期 | 会话开始生成 → 写入 `.codex/.session_id` → 同会话所有轮次复用 → 新会话重新生成 |
+| 生命周期 | 会话开始生成 → 写入 `.mem0/.session_id-cx` → 同会话所有轮次复用 → 新会话重新生成 |
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
@@ -1537,7 +1537,7 @@ Set-Content -Path ".codex\.session_id" -Value $id -Encoding UTF8
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "type": "http",
       "url": "http://127.0.0.1:8080/mcp"
     }
@@ -1548,24 +1548,24 @@ Set-Content -Path ".codex\.session_id" -Value $id -Encoding UTF8
 **方式二：CLI 命令**（用户级 `~/.claude.json`）：
 
 ```bash
-claude mcp add --transport http mem0-local http://127.0.0.1:8080/mcp
+claude mcp add --transport http mem0 http://127.0.0.1:8080/mcp
 ```
 
 **方式三：mcp-add 批量**（需 Node.js 18+，详见 §2.2.5）：
 
 ```bash
-npx mcp-add --name mem0-local --type http \
+npx mcp-add --name mem0 --type http \
   --url "http://127.0.0.1:8080/mcp" --clients "claude code"
 ```
 
-### Step 2：凭证文件 —— 仓库根 `.mem0.config.json`（项目级，git-ignored）
+### Step 2：凭证文件 —— 仓库根 `.mem0/mem0.config.json`（项目级，git-ignored）
 
 规则文件要求 Agent"永远从配置读，不硬编码"，此文件是唯一凭证来源：
 
 ```json
 {
   "_comment": "Local-only config for the mem0 MCP memory integration. GIT-IGNORED — do not commit (contains api_key).",
-  "mcp_server": "mem0-local",
+  "mcp_server": "mem0",
   "api_url_via_mcp": "http://127.0.0.1:8080/mcp",
   "api_key": "m0sk_你的完整密钥",
   "admin_user_id": "admin@mem0.dev",
@@ -1594,13 +1594,13 @@ npx mcp-add --name mem0-local --type http \
 | `load_on_session_start` | 声明"会话开始自动拉取" |
 | `save_policy` | `auto-on-durable-fact`：持久事实出现即自动提交 |
 
-> 同一仓库多工具并用时，可直接共用 CodeBuddy 的 `.codebuddy/mem0.config.json`，避免同一把密钥维护多份。
+> 凭证文件位于工具无关的 `.mem0/mem0.config.json`，多工具并用时天然共享，无需各 IDE 各存一份。
 
 ### Step 3：.gitignore —— 防止密钥与会话 ID 入库
 
 ```gitignore
-.mem0.config.json
-.claude/.session_id
+.mem0/mem0.config.json
+.mem0/.session_id-cc
 ```
 
 ### Step 4：规则文件（核心）—— 仓库根 `CLAUDE.md`
@@ -1608,20 +1608,20 @@ npx mcp-add --name mem0-local --type http \
 Claude Code 每会话自动读取仓库根 `CLAUDE.md`。以下为完整可粘贴内容（Claude Code 版）：
 
 ````markdown
-# 通过 mem0 MCP 的项目记忆（mem0-local）
+# 通过 mem0 MCP 的项目记忆（mem0）
 
-Claude Code 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-local` MCP 服务访问
+Claude Code 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0` MCP 服务访问
 （在 Claude Code 的 MCP 配置中配置，streamable-http）。实际端点由该配置文件决定
 ——此处切勿硬编码。下列规则让 Agent **在每轮会话中自动**加载与保存记忆。
 
 > 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中，并镜像保存在
-> 本地、已被 git 忽略的 `.mem0.config.json`。请始终从那里读取，
+> 本地、已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，
 > 切勿在代码中硬编码。
 
 ## 1. 加载记忆（自动，会话开始时）
 
-在本仓库的每轮会话首次开始时，通过 `mem0-local` MCP 服务加载项目记忆池。
-从 `.mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
+在本仓库的每轮会话首次开始时，通过 `mem0` MCP 服务加载项目记忆池。
+从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`。
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`
@@ -1635,7 +1635,7 @@ Claude Code 使用自托管的 **mem0** 服务作为长期记忆，通过 `mem0-
 ## 2. 保存记忆（自动——通过 MCP，无需脚本）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，保存。
-不要保存临时性的任务状态。每次都从 `.mem0.config.json` 读取
+不要保存临时性的任务状态。每次都从 `.mem0/mem0.config.json` 读取
 `api_key` / `git_remote` / `user_id`。
 
 ```python
@@ -1671,9 +1671,9 @@ Markdown 渲染的端都能还原同样的画面。
 
 会话 ID（session_id）：
 - 每个 Agent 会话使用唯一 `session_id`，格式 `cc-<YYYYMMDD>-<6位hex>`。
-- 会话开始时生成，持久化到本地 `.claude/.session_id`（已 git-ignore）；同会话
+- 会话开始时生成，持久化到本地 `.mem0/.session_id-cc`（已 git-ignore）；同会话
   所有轮次复用同一 id；新会话重新生成。
-- 若 `.claude/.session_id` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
+- 若 `.mem0/.session_id-cc` 已存在则直接复用，避免同会话产生多个 id；**但若 id 日期与当天不一致、或用户明确开启新会话，必须重新生成并覆写**（否则今天的内容会混入昨天的 dashboard 会话流）。
 
 提交内容（原文，非摘要，且为 Markdown）：
 - **提问与回答都要入库**：每条 memory 的 `text` 写入该轮原始对话，固定格式为
@@ -1772,7 +1772,7 @@ add_memory(
 
 - 项目共享池：所有 `project_id="ai-dev-sop"` 的记忆，任何成员可经
   `get_memories(project_id=...)` 读取——admin 密钥即返回完整跨用户池
-- 花名册：`.mem0.config.json` 的 `roster`；相关人员首次出现时补入
+- 花名册：`.mem0/mem0.config.json` 的 `roster`；相关人员首次出现时补入
 
 ## 4. 权限与同步
 
@@ -1781,10 +1781,10 @@ add_memory(
 
 ## 5. 降级
 
-如果 `.mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
+如果 `.mem0/mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
 ````
 
-### Step 5：会话 ID 机制 —— `.claude/.session_id`
+### Step 5：会话 ID 机制 —— `.mem0/.session_id-cc`
 
 规则文件 §2.1 约定 Agent 在会话开始时生成并持久化 `session_id`（Agent 自主执行；如需手工生成）：
 
@@ -1797,7 +1797,7 @@ Set-Content -Path ".claude\.session_id" -Value $id -Encoding UTF8
 | 规则 | 说明 |
 |------|------|
 | 格式 | `cc-<YYYYMMDD>-<6位hex>`，如 `cc-20260918-e5d21a` |
-| 生命周期 | 会话开始生成 → 写入 `.claude/.session_id` → 同会话所有轮次复用 → 新会话重新生成 |
+| 生命周期 | 会话开始生成 → 写入 `.mem0/.session_id-cc` → 同会话所有轮次复用 → 新会话重新生成 |
 | 已存在则复用 | 避免同一会话产生多个 id（dashboard 按 session_id 分组会失散）；**id 日期与当天不一致时须重新生成** |
 | git | 必须加入 `.gitignore`（Step 3） |
 
@@ -2009,9 +2009,9 @@ Agent 工具调用（add_memory）
 
 ### 5.3.1 自动提交落地验证清单
 
-- [ ] `~/.codebuddy/mcp.json` 含 `mem0-local` 且 `transport: "streamable-http"`，面板绿色
-- [ ] `.codebuddy/mem0.config.json` 存在且含 `api_key` / `git_remote` / `project_id`
-- [ ] `.gitignore` 覆盖 `mem0.config.json` 与 `.session_id`
+- [ ] `~/.codebuddy/mcp.json` 含 `mem0` 且 `transport: "streamable-http"`，面板绿色
+- [ ] `.mem0/mem0.config.json` 存在且含 `api_key` / `git_remote` / `project_id`
+- [ ] `.gitignore` 覆盖 `.mem0/`（含 `mem0.config.json` 与 `.session_id-*`）
 - [ ] 仓库根 `CODEBUDDY.md` 含 §1/§2/§2.1 三个触发段落
 - [ ] 新会话开场：Agent 主动输出"已加载本工程记忆 N 条"摘要
 - [ ] 任意一轮后：Dashboard → 记忆页 → 粘贴该会话 `session_id` 能看到 Q/A 转录流
@@ -2048,9 +2048,9 @@ Agent 工具调用（add_memory）
 
 | # | 错误现象 | 根因 | 修正方法 |
 |---|----------|------|----------|
-| **F1** | 服务名三种混用（`mem0-local` / `mem0-remote` / `mem0`）；"本地=mem0-local@127.0.0.1、远程=mem0-remote@192.168.110.169"的表述与实际 `mcp.json` 条目不符；规则文件里写的服务名与实际挂载条目不一致 → MCP 工具找不到、Agent 按降级条款停机 | 服务名被视为自由文本，需在 `mcp.json` 与规则文件**两处人工对齐**，任一处笔误即失效 | 全文统一**约定名 `mem0`**；**环境用 URL 区分，服务名恒定**。同步范围：头部适用范围、§1.1 服务端描述、§2.2 全部 JSON/TOML/命令示例、§2.4.3 差异表、§4.2–4.6 五份规则模板、§5.3.1 校验清单、附录 A |
+| **F1** | 服务名三种混用（`mem0` / `mem0` / `mem0`）；"本地=mem0@127.0.0.1、远程=mem0@192.168.110.169"的表述与实际 `mcp.json` 条目不符；规则文件里写的服务名与实际挂载条目不一致 → MCP 工具找不到、Agent 按降级条款停机 | 服务名被视为自由文本，需在 `mcp.json` 与规则文件**两处人工对齐**，任一处笔误即失效 | 全文统一**约定名 `mem0`**；**环境用 URL 区分，服务名恒定**。同步范围：头部适用范围、§1.1 服务端描述、§2.2 全部 JSON/TOML/命令示例、§2.4.3 差异表、§4.2–4.6 五份规则模板、§5.3.1 校验清单、附录 A |
 | **F2** | 今天的内容出现在昨天的会话流里；或同一会话在 dashboard 被拆成多组 | session_id 规则只写"已存在则复用"，**未考虑跨天**——跨天继续对话复用了昨天的 id；另一种相反情形是 `.session_id` 被删除导致每轮重建 | 模板正文与 Step 5 表格补**跨天强制重生成**条款：id 日期与当天不一致、或用户明确开启新会话 → 重新生成并覆写。同时保留 `.session_id` 文件不得删除 |
-| **F3** | 凭证文件两套约定并存（§4.2 用 `.codebuddy/mem0.config.json`，§4.3–4.6 用仓库根 `.mem0.config.json`），多工具各存一份、密钥不一致 | 凭证路径约定未统一，随章节演进产生分叉 | 统一为 **`.mem0/mem0.config.json`**（工具无关，多工具天然共享）；CodeBuddy 兼容回退读取旧路径；全文约 40 处同步，并确认 `.gitignore` 覆盖 `.mem0/` |
+| **F3** | 凭证文件两套约定并存（§4.2 用 `.mem0/mem0.config.json`，§4.3–4.6 用仓库根 `.mem0/mem0.config.json`），多工具各存一份、密钥不一致 | 凭证路径约定未统一，随章节演进产生分叉 | 统一为 **`.mem0/mem0.config.json`**（工具无关，多工具天然共享）；CodeBuddy 兼容回退读取旧路径；全文约 40 处同步，并确认 `.gitignore` 覆盖 `.mem0/` |
 | **F4** | 手工 5 步流程配错/漏步：`transport` 字段漏写导致工具不挂载、规则文件位置或格式写错、JSON 语法错 | 全流程依赖人肉查手册执行，各 IDE 差异（8 种放置方式）无沉淀 | 改用 **一键脚本**：`scripts/mem0-setup.ps1`（Windows）/ `scripts/mem0-setup.sh`（macOS·Linux），服务名自动为 `mem0`、合并写不覆盖既有 MCP 条目、标记区间幂等更新规则文件。手工流程保留用于理解原理与特殊场景 |
 | **F5** | 配完不确定是否正确，只能到 IDE 里反复试错 | 缺少端到端校验环节 | 运行一键脚本的校验段：**MCP 端点存活（GET `/mcp` 返回 406）** + **REST 写读往返（`:8888/memories`，`X-API-Key`）** + **配置语法回读**；§5.3.1 清单增加"已运行 mem0-setup 且全部 ✓"项 |
 
@@ -2059,7 +2059,7 @@ Agent 工具调用（add_memory）
 ## 5.4 安全与权限注意事项
 
 1. **密钥管理**
-   - `m0sk_` 密钥只放环境变量或 git-ignored 本地配置（`.codebuddy/mem0.config.json` / 服务端 `.env`），禁止硬编码进仓库文件
+   - `m0sk_` 密钥只放环境变量或 git-ignored 本地配置（`.mem0/mem0.config.json` / 服务端 `.env`），禁止硬编码进仓库文件
    - 密钥创建后即哈希化，列表不可回看；泄露立即在 Dashboard 重建
    - 不同工具/成员分配**不同密钥**，便于按人撤销与审计
 2. **作用域最小化**：普通用户密钥被钉在自己 `user_id`；共享池按 `git_remote` 聚合；`ADMIN_API_KEY` 仅放服务端 `.env`，不下发给客户端
@@ -2095,7 +2095,7 @@ Agent 工具调用（add_memory）
 ```json
 {
   "mcpServers": {
-    "mem0-local": {
+    "mem0": {
       "url": "http://127.0.0.1:8080/mcp",
       "transport": "streamable-http",
       "disabled": false
@@ -2106,7 +2106,7 @@ Agent 工具调用（add_memory）
 
 **Cursor / Claude Code / Windsurf（通用 HTTP）**
 ```json
-{ "mcpServers": { "mem0-local": { "type": "http", "url": "http://127.0.0.1:8080/mcp" } } }
+{ "mcpServers": { "mem0": { "type": "http", "url": "http://127.0.0.1:8080/mcp" } } }
 ```
 
 **Codex（`~/.codex/config.toml`）**
