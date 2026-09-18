@@ -42,7 +42,7 @@ add_memory(
     project_id="<来自凭证文件>",
     metadata={
         "type": "conversation",
-        "session_id": "{{SESSION_PREFIX}}-<YYYYMMDD>-<6hex>",
+        "session_id": "{{SESSION_PREFIX}}-<YYYYMMDD>-<6位hex>",
         "agent": "{{AGENT}}",
         "role": "turn",
         "turn_seq": "<会话内从 1 递增>",
