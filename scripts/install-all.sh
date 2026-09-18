@@ -182,7 +182,7 @@ main() {
     echo "  2. 设置环境变量 MEM0_API_KEY 或编辑 IDE mcp.json"
     echo "  3. 重启 IDE，验证 MCP 工具可用"
     echo ""
-    echo -e "${BLUE}详细文档: docs/quick-ref/mem0-ai-tools-config-guide.md${NC}"
+    echo -e "${BLUE}详细文档: docs/quick-ref/mem0-manual.md${NC}"
     echo ""
 }
 

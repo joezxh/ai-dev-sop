@@ -31,3 +31,7 @@ prev_dom
 skills
 /tools/codebase-memory-mcp/
 /tools/mempalace/
+skills
+
+# mem0 本地凭证与会话标识（含密钥，禁止入库）
+.mem0/

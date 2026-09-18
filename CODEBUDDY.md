@@ -1,58 +1,55 @@
-# Project Memory via mem0 MCP (mem0-local)
+# 通过 mem0 MCP 的项目记忆（mem0 MCP 服务 `mem0`）
 
-This project uses a self-hosted **mem0** server as long-term memory, accessed through
-the `mem0-local` MCP server (configured in `~/.codebuddy/mcp.json` →
-`http://127.0.0.1:8080/mcp`, streamable-http). The actual endpoint is driven by that
-config file — never hard-code it here. The connection is already established; the rules
-below make the agent load and save memories **automatically**
-on every session — no scripts, no manual commands.
+本项目使用自托管的 **mem0** 服务作为长期记忆，通过 `~/.codebuddy/mcp.json` 中配置的
+mem0 MCP 服务访问——**服务名遵循约定常量 `mem0`（由 `scripts/mem0-setup` 写入；环境差异只用 URL 区分，不改名）**。连接配置（`url` → `http://127.0.0.1:8080/mcp`，
+streamable-http）实际端点由该配置文件决定——此处切勿硬编码。连接已经建立，
+下列规则让 Agent **在每轮会话中自动**加载与保存记忆——无需脚本，无需手动命令。
 
-> Secret note: the mem0 `api_key` and admin `user_id` are stored in long-term memory
-> (knowledge: "本地 mem0 MCP 服务配置与凭据") and mirrored in the local, git-ignored
-> `.codebuddy/mem0.config.json`. Always read them from there; never hard-code in code.
+> 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中
+> （knowledge："本地 mem0 MCP 服务配置与凭据"），并镜像保存在本地、
+> 已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，切勿在代码中硬编码。
 
-## 1. Loading memories (automatic, on session start)
+## 1. 加载记忆（自动，会话开始时）
 
-On the first turn of every session in this repo, load the project memory pool via the
-`mem0-local` MCP server. Read `api_key`, `git_remote`, `project_id` from
-`.codebuddy/mem0.config.json` — never hard-code them.
+在本仓库的每轮会话首次开始时，通过 `~/.codebuddy/mcp.json` 中实际配置的 mem0 MCP
+服务（约定名 `mem0`）加载项目记忆池。
+从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`——切勿硬编码。（兼容：若 `.mem0/mem0.config.json` 不存在，回退读取 `.codebuddy/mem0.config.json`。）
 
-1. Pull the **whole project shared pool** (all users) with one MCP call:
-   `get_memories(api_key=..., git_remote="<git_remote>")` — the server resolves the
-   git remote to a `project_id` and returns the cross-user pool. Equivalent:
-   `get_memories(api_key=..., project_id="ai-dev-sop")`.
-2. If the task is specific, also run
-   `search_memories(api_key=..., query=<keywords>, project_id="ai-dev-sop", top_k=5)`.
-3. Give the user a 2–3 line summary of what was recalled (e.g. "已加载本工程记忆
-   12 条：涉及人员 A/B，关键决策 X").
+1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
+   `get_memories(api_key=..., git_remote="<git_remote>")`——服务端会将 git remote
+   解析为 `project_id` 并返回跨用户池。等价写法：
+   `get_memories(api_key=..., project_id="ai-dev-sop")`。
+2. 如果任务较为具体，再额外调用
+   `search_memories(api_key=..., query=<关键词>, project_id="ai-dev-sop", top_k=5)`。
+3. 给用户 2–3 行的召回摘要（例如："已加载本工程记忆
+   12 条：涉及人员 A/B，关键决策 X"）。
 
-Do this proactively; do not wait for the user to ask.
+请主动执行，不要等待用户询问。
 
-## 2. Saving memories (automatic — via MCP, no scripts, no manual commands)
+## 2. 保存记忆（自动——通过 MCP，无需脚本，无需手动命令）
 
-When the user reveals a **durable** fact, decision, preference, or constraint about a
-person, the project, or the team, save it through the `mem0-local` MCP server. Do NOT
-save ephemeral task state. Read `api_key` / `git_remote` / `user_id` from
-`.codebuddy/mem0.config.json` each time.
+当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，通过
+`~/.codebuddy/mcp.json` 中实际配置的 mem0 MCP 服务保存。不要保存临时性的任务状态。每次都从
+`.mem0/mem0.config.json` 读取 `api_key` / `git_remote` / `user_id`。
 
 ```python
 add_memory(
-    text="<natural-language statement of the fact>",
-    api_key="<from config>",
-    git_remote="<from config>",          # server resolves → project_id, written to metadata
-    user_id="<subject; default admin>",  # admin key only; who the memory is ABOUT
+    text="<对事实的自然语言描述>",
+    api_key="<来自配置>",
+    git_remote="<来自配置>",          # 服务端解析 → project_id，写入 metadata
+    user_id="<主体；默认 admin>",  # 仅 admin 密钥有效；记忆是关于谁的
     project_id="ai-dev-sop",
-    metadata={"type":"fact|decision|preference|note","people":["<name>"],"by":"<admin>","created_at":"<ISO8601>"}
+    metadata={"type":"fact|decision|preference|note","people":["<姓名>"],"by":"<admin>","created_at":"<ISO8601>"}
 )
 ```
 
-Rules:
-- **Always pass `git_remote`** — it ties the memory to this repo's shared pool (the
-  server converts it to `project_id` and records it in metadata).
-- `user_id` = the subject of the memory. Default to the admin user when the fact is
-  about the project/team generally. (Only meaningful under the admin key.)
-- Batch related facts into one memory where sensible; avoid 1-sentence spam.
-- mem0 dedupes by content hash, so re-saving / backfilling is safe.
+规则：
+- **始终传入 `git_remote`**——它将记忆绑定到本仓库的共享池（服务端会将其转换为
+  `project_id` 并记录在 metadata 中）。
+- `user_id` = 记忆的主体。当事实是关于项目/团队整体时，默认使用 admin 用户。
+  （仅在 admin 密钥下才有意义。）
+- 相关的多个事实应合理合并成一条记忆，避免逐句刷屏式存储。
+- mem0 按内容哈希去重，因此重新保存/回填是安全的。
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
 
@@ -60,28 +57,95 @@ Rules:
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
 回复**完成时固定触发** `add_memory`，不得跳过。
 
+**权威存档目标（本节最高准则）**：mem0 服务端是本会话的**权威完整存档**——
+在其他任何端（另一台机器的 CodeBuddy、dashboard、REST/MCP 客户端）拉取本会话记忆
+并按 Markdown 渲染后，所看到的内容必须与**本端 CodeBuddy 界面当前画面完全一致**。
+因此提交的标准不是"摘要够用"，而是"跨端无损还原"：画面上出现过的每一个元素
+（用户消息、思考过程、每次工具调用及其结果、最终回复）都必须在存档中有对应记录。
+**全部内容以 Markdown 格式为准**——`text` 是唯一权威载体，服务端不保存任何
+非 Markdown 的等价副本；Markdown 结构（标题/列表/代码块/表格）必须完整保留，
+使任何支持 Markdown 渲染的端都能还原同样的画面。
+
 会话 ID（session_id）：
 - 每个 Agent 会话使用唯一 `session_id`，格式 `cb-<YYYYMMDD>-<6位hex>`（如
   `cb-20260917-a1b2c3`）。
-- 会话开始时生成，持久化到本地 `.codebuddy/.session_id`（已 git-ignore）；同会话
+- 会话开始时生成，持久化到本地 `.mem0/.session_id-cb`（已 git-ignore）；同会话
   所有轮次复用同一 id；新会话重新生成。
-- 若 `.codebuddy/.session_id` 已存在则直接复用，避免同会话产生多个 id。
+- 若 `.mem0/.session_id-cb` 已存在则直接复用，避免同会话产生多个 id。
+  **但存在以下任一情形时必须重新生成**：
+  1. 文件中 id 的日期部分与**当天日期不一致**（跨天继续对话，旧 id 属于昨天的
+     会话分组，直接复用会把今天所有轮次混入昨天的 dashboard 会话流）；
+  2. 用户明确表示开启了新会话/新话题且旧 id 来自历史会话。
+  重新生成后用新 id 覆写 `.mem0/.session_id-cb`，本会话内恒定。
 
 提交内容（原文，非摘要，且为 Markdown）：
 - **提问与回答都要入库**：每条 memory 的 `text` 写入该轮原始对话，固定格式为
-  `Q: <用户原话>\n\nA: <Agent 本轮完整回复>`（Q 与 A 之间空一行，便于 dashboard
-  详情面板按 `Q:`/`A:` 切分两栏显示）。
-- **A（回答）部分必须包含完整信息**：覆盖整个执行过程，包括内部 `thinking` 推理内容
-  （需求分析、决策依据、关键步骤、踩坑与结论等）一并提交，**不得只写精简摘要**；文本
-  以 **Markdown 格式**组织（标题、列表、代码块、加粗等），dashboard 详情面板会以
-  Markdown 渲染 A 部分。
+  `Q: <用户原话>\n\nA: <本轮完整执行转录>`（Q 与 A 之间空一行，便于 dashboard
+  详情面板按 `Q:`/`A:` 切分两栏显示）。**Q 部分必须逐字保留用户本轮的完整消息**
+  （含用户在消息中引用的文件路径、附件说明、原文引用块）。
+- **A 部分 = "界面复制文本 + Thinking + Tool 执行"三层的完整转录**，按实际发生
+  顺序排列。其中第 1、2 层合起来必须与**从 CodeBuddy 界面全选复制得到的 Markdown
+  文本逐字节一致**（可直接 diff 校验）；第 3、4 层是在界面可见内容之上叠加的
+  完整执行细节；第 5 层收尾。
+  1. **过程叙述原文（界面可见）**：本轮 Agent 在每次工具调用前后写在界面上的
+     **全部过渡叙述行**，逐字保留、保持原顺序——例如"先读当前 `CODEBUDDY.md`
+     （上轮改过，需确认现状再改）："、"前三块各命中 5 处。继续自检条款与约束
+     追加："、"修改完成。`CODEBUDDY.md` §2.1 按两大目标升级，手册 5 份模板全部
+     同步："。不得省略、合并或改写；空行占位符（如单独一条 "-"）也按原样保留。
+  2. **最终回复原文（界面可见）**：本轮呈现在对话中的最终回答文本，逐字保留
+     完整 Markdown——标题层级（`##`/`###`）、表格（含对齐行）、代码块（含语言
+     标注）、加粗/行内代码/链接，一个字符都不许改。
+  3. **Deep Thinking（界面思考过程）**：内部推理完整提交——需求分析、方案取舍、
+     决策依据、风险预判、踩坑判断，按思考发生的时间顺序组织，不得提炼成一句话
+     摘要，不得事后重写。
+  4. **Tool 执行记录**：本轮**每一次**工具调用（含被取消的），逐条含三要素——
+     **工具名 + 关键参数 + 执行结果**。执行结果须保留**完整输出**（超长输出用
+     Markdown 代码块原样粘贴；确实极端超长时可截取首尾并注明 `... (N 行省略)`，
+     但关键数据、错误信息、结论行不得省略）；文件编辑类工具需注明目标文件与
+     改动摘要（old→new 要点）。失败/被取消的调用也要记录（含错误信息）。
+     调用顺序必须与第 1 层的叙述行一一对应（叙述了就要有对应调用记录）。
+  5. **完成结果**：任务最终状态（成功/部分完成/失败）、交付物清单（文件路径）、
+     验证结论（测试/检查输出）。
+  推荐的 A 部分结构（dashboard 按 Markdown 渲染）：
+
+  ```markdown
+  A: <过程叙述第 1 条，逐字>
+
+  <过程叙述第 2 条，逐字>
+
+  …（按原顺序保留全部叙述行）…
+
+  <过程叙述最后一条（通常引出最终回复），逐字>
+
+  <最终回复原文，逐字完整 Markdown>
+
+  ### Thinking
+  <深度思考全文，按时间顺序>
+
+  ### Tool 调用
+  1. `工具名(关键参数)` → 执行结果（完整输出；失败调用注明错误）
+  2. …（与叙述行一一对应，含被取消的调用）
+
+  ### 完成结果
+  <状态 + 交付物清单（文件路径） + 验证结论>
+  ```
+- **一致性红线**：以 CodeBuddy 界面本轮实际显示的内容为准——把界面会话区全选
+  复制为 Markdown，所得文本必须能在 A 部分中**原样找到**（叙述行 + 最终回复，
+  顺序、换行、格式完全一致）；禁止只提交精简摘要、或只提交最终回复而丢失
+  过程叙述与执行过程。
+- **提交前自检（跨端还原测试）**：提交前逐项核对——
+  ① 界面复制的 Markdown 文本（叙述行 + 最终回复）与 A 部分逐字节一致？
+  ② 每条叙述行背后对应的 Tool 调用都有记录（名称/参数/完整输出）？
+  ③ Deep Thinking 全文在场、未摘要化？
+  ④ 完成结果含状态/交付物/验证？
+  任何一项不满足必须补齐后再提交。
 - `agent` 固定为 `"CodeBuddy"`，`created_at` 为该轮完成时的 ISO8601 时间戳。
 
 ```python
 add_memory(
-    text="Q: <用户本轮原始提问>\n\nA: <Agent 本轮完整回复，含 thinking 推理，Markdown 格式>",
-    api_key="<from config>",
-    git_remote="<from config>",
+    text="Q: <用户本轮原始提问>\n\nA: <过程叙述行，逐字，按原顺序>\n\n<最终回复原文，逐字完整 Markdown>\n\n### Thinking\n<深度思考全文>\n\n### Tool 调用\n1. `工具名(参数)` → 完整结果\n\n### 完成结果\n<状态/交付物/验证>",
+    api_key="<来自配置>",
+    git_remote="<来自配置>",
     user_id="admin@mem0.dev",
     project_id="ai-dev-sop",
     metadata={
@@ -98,46 +162,46 @@ add_memory(
 
 约束：
 - **每轮固定触发**，不挑轮次（确认/寒暄也入库，保证会话流完整）。
+- **内容一致性（跨端）**：mem0 服务端内容必须与 CodeBuddy 本轮界面显示完全一致；
+  把界面会话区复制为 Markdown，所得文本（过程叙述行 + 最终回复）必须能在 A 部分
+  原样找到，再叠加 Deep Thinking 全文与每次工具调用的参数与完整结果；在其他端
+  拉取并渲染后应能还原同样画面。有工具调用的轮次不得只提交最终回复。
+- **Markdown 为准**：`text` 是唯一权威载体，全部内容以 Markdown 组织；标题层级、
+  列表、代码块、表格必须完整保留，不得退化为无格式纯文本。
 - 与 §2 的"持久事实"分开：事实用 `type=fact/decision/preference`，会话流用
   `type=conversation`，互不替代。
 - dashboard 分组：mem0 dashboard 按 `metadata.session_id` 过滤/分组即可分别显示同一
   工程的各会话；按 `created_at` 或 `turn_seq` 排序即得会话内顺序。
-- 记忆量会显著增长，属预期（用户明确要求原文入库）。
+- 记忆量会显著增长，属预期（用户明确要求原文完整入库）。
 
-## 3. Cross-user identification & extraction
+## 3. 跨用户识别与抽取
 
-- **Per-user isolation**: mem0 scopes by `user_id`. Each person's memories are
-  private to that id unless shared via a project pool.
-- **Project shared pool**: every memory tagged with `project_id="ai-dev-sop"` is
-  readable by anyone in the project through `get_memories(project_id=...)` or
-  `get_memories(git_remote=...)`. This is how "all relevant people's memories" are
-  extracted on open — no need to enumerate user_ids.
-- **Admin key**: the configured key is an admin key, so `get_memories(project_id=...)`
-  / `search_memories(project_id=...)` already return the **entire** cross-user pool —
-  no per-user enumeration needed. Personal (non-pool) memories are still only visible
-  under their own `user_id` when saved that way.
-- **Roster**: the set of relevant people lives in `.codebuddy/mem0.config.json`
-  (`roster`). Add a person there the first time they appear, so future loads can
-  scope to them.
+- **按用户隔离**：mem0 以 `user_id` 划定范围。每个人的记忆仅对该 id 私有，
+  除非通过项目共享池共享。
+- **项目共享池**：所有标记了 `project_id="ai-dev-sop"` 的记忆，任何项目成员都可通过
+  `get_memories(project_id=...)` 或 `get_memories(git_remote=...)` 读取。
+  这正是打开工程时"抽取所有相关人员记忆"的方式——无需枚举 user_id。
+- **管理员密钥**：配置的密钥为管理员密钥，因此 `get_memories(project_id=...)`
+  / `search_memories(project_id=...)` 已返回**完整**的跨用户池——
+  无需逐用户枚举。个人（非池）记忆在以其自身 `user_id` 保存时，仍仅在该用户下可见。
+- **花名册（Roster）**：相关人员的集合位于 `.mem0/mem0.config.json`
+  （`roster`）。相关人首次出现时即添加进去，以便后续加载时对其划定范围。
 
-## 4. Permissions & sync
+## 4. 权限与同步
 
-- Write isolation: a memory saved with `user_id=X` is owned by X and only surfaces
-  in X's personal list unless also in a project pool.
-- Read access: project pool = cross-user readable; personal lists = restricted to
-  that user (admin key can override).
-- Sync strategy: **pull on session start** (step 1), **push on durable facts**
-  (step 2). Memories are append/dedupe-by-hash, so re-loading and re-saving do not
-  create duplicates. No conflict resolution needed.
-- Delete only when the user explicitly asks (MCP `delete_memory`).
+- 写入隔离：以 `user_id=X` 保存的记忆归 X 所有，仅出现在 X 的个列表中，
+  除非同时也在项目共享池中。
+- 读取权限：项目池 = 跨用户可读；个列表 = 仅该用户可见（admin 密钥可覆盖）。
+- 同步策略：**会话开始时拉取**（步骤 1），**持久事实出现时推送**（步骤 2）。
+  记忆是追加式且按哈希去重，因此重新加载与重新保存不会产生重复。无需冲突解决。
+- 仅当用户明确要求时才删除（MCP `delete_memory`）。
 
-## 5. Configuration surface
+## 5. 配置面
 
-| Where | Declares |
+| 位置 | 声明内容 |
 |---|---|
-| `~/.codebuddy/mcp.json` → `mem0-local` | MCP connection (`url`, transport) |
-| `.codebuddy/mem0.config.json` | `git_remote`, `project_id`, admin `user_id`, `api_key`, `roster` (people + user_ids), metadata defaults |
-| long-term memory | mirrored `api_key` / `user_id` for sessions without the config file |
+| `~/.codebuddy/mcp.json` → mem0 MCP 条目（约定名 `mem0`） | MCP 连接（`url`、transport） |
+| `.mem0/mem0.config.json` | `git_remote`、`project_id`、admin `user_id`、`api_key`、`roster`（人员 + user_id）、metadata 默认值 |
+| 长期记忆 | 为没有配置文件的会话镜像保存的 `api_key` / `user_id` |
 
-If `mem0.config.json` is missing or the MCP server is unreachable, tell the user
-and stop — do not invent memories.
+如果 `mem0.config.json` 缺失或 MCP 服务不可达，请告知用户并停止——不要臆造记忆。
