@@ -1,3 +1,6 @@
+> [!WARNING]
+> **已废弃（2026-09-18）**：本文档描述的 cbmem-team 控制台/导航聚合方案基于已移除的旧记忆系统，仅作历史归档。
+
 # docs-site 顶栏"文档"聚合菜单 — 设计文档
 
 > **Status**: APPROVED — awaiting implementation

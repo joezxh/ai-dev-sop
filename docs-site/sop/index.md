@@ -1110,822 +1110,91 @@ Pipeline需要能够：
 [java-upgrade-pipeline.md](java-upgrade-pipeline.md)
 
 
-## 5. MemPalace 记忆共享
+## 5. mem0 记忆共享
 
-MemPalace 是一个本地优先（Local-first）的开源 AI 记忆系统，采用原文存储方式（verbatim storage），通过语义搜索实现记忆检索。它不进行总结、提取或改写，确保记忆的完整性和可追溯性。
+> **变更说明（2026-09）**：旧双轨记忆系统（MemPalace 本地优先记忆 × cbmem-team
+> 团队封装）已移除，统一替换为自托管 **mem0**（`deploy/mem0/`），通过 MCP 协议
+> 接入全部 AI IDE（CodeBuddy / Qoder / Cursor / Codex / Claude Code 等）。
 
-**核心特性：**
-- 原文存储：对话历史和代码内容以原始文本形式保存
-- 可插拔后端：支持 ChromaDB、SQLite exact、Qdrant、pgvector 等多种向量存储
-- MCP 协议集成：35 个 MCP 工具，支持 Claude Code、Codex、Cursor、Gemini 等主流 AI IDE
-- Auto-save Hooks：自动保存机制，无需手动操作
-- 性能优异：LongMemEval 基准测试 R@5 达到 96.6%（无需 LLM 调用）
-- 完全本地化：数据默认存储在本地，无需 API Key
+mem0 提供向量记忆（PostgreSQL + pgvector）与图记忆（Neo4j），采用原文留痕 +
+可选事实抽取两种写入模式，支持项目共享池跨成员检索与会话留痕回放。
 
-> **官方资源**：[GitHub 仓库](https://github.com/MemPalace/mempalace) | [官方文档](https://mempalaceofficial.com/) | [PyPI](https://pypi.org/project/mempalace/)
->
-> **注意**：请认准官方域名 mempalaceofficial.com，其他域名均为仿冒站点。
-
-### 5.1 MemPalace 安装与部署
-
-#### 5.1.1 环境要求
-
-| 组件 | 最低要求 | 推荐配置 |
-|------|---------|---------|
-| Python | 3.9+ | 3.11+ |
-| 向量存储 | ChromaDB (默认) | ChromaDB / Qdrant / pgvector |
-| 磁盘空间 | ~300 MB | ~500 MB (含缓存) |
-| 内存 | 2GB RAM | 4GB RAM |
-
-#### 5.1.2 安装方式
-
-**方式一：使用 uv（推荐）**
-
-`uv` 会在隔离环境中安装 CLI，避免依赖冲突：
-
-```bash
-# 安装
-uv tool install mempalace
-
-# 初始化项目
-mempalace init ~/projects/myapp
-```
-
-**方式二：使用 pip**
-
-```bash
-# 仅在激活的虚拟环境中使用
-python -m venv .venv && source .venv/bin/activate  # Linux/macOS
-# 或
-python -m venv .venv && .venv\Scripts\activate    # Windows
-
-pip install mempalace
-```
-
-**方式三：使用 pipx**
-
-```bash
-pipx install mempalace
-```
-
-**方式四：从源码安装**
-
-```bash
-git clone https://github.com/MemPalace/mempalace.git
-cd mempalace
-uv sync --extra dev   # 或 pip install -e ".[dev]"
-```
-
-#### 5.1.3 Docker 部署
-
-```bash
-# 构建镜像（CPU 版本）
-docker build -t mempalace .
-
-# 运行 MCP 服务器（stdio 模式）
-docker run -i --rm -v mempalace-data:/data mempalace
-
-# 运行 CLI 命令
-docker run --rm -v mempalace-data:/data -v /path/to/project:/work mempalace mine /work
-docker run --rm -v mempalace-data:/data mempalace search "查询内容"
-
-# GPU 加速版本
-docker build -f Dockerfile.gpu -t mempalace:gpu .
-docker run --gpus all -i --rm -v mempalace-data:/data mempalace:gpu
-```
-
-#### 5.1.4 存储后端配置
-
-| 后端 | 说明 | 配置方式 |
-|------|------|---------|
-| ChromaDB | 默认后端，开箱即用 | 无需配置 |
-| sqlite_exact | 本地精确向量，用于正确性验证 | `--backend sqlite_exact` |
-| Qdrant | REST API 外部向量服务 | `MEMPALACE_QDRANT_URL=http://localhost:6333` |
-| pgvector | PostgreSQL + pgvector 扩展 | `MEMPALACE_PGVECTOR_DSN=postgresql://localhost:5432/mempalace` |
-
-**配置示例：**
-
-```bash
-# 使用 Qdrant 后端
-export MEMPALACE_QDRANT_URL=http://localhost:6333
-export MEMPALACE_QDRANT_API_KEY=your_api_key
-mempalace mine ~/projects/myapp --backend qdrant
-
-# 使用 pgvector 后端
-export MEMPALACE_PGVECTOR_DSN=postgresql://localhost:5432/mempalace
-pip install mempalace[pgvector]
-mempalace mine ~/projects/myapp --backend pgvector
-```
-
-### 5.2 MemPalace 核心概念
-
-MemPalace 采用宫殿记忆法的结构化存储体系：
+### 5.1 架构与端点
 
 ```
-组织层级：Palace（宫殿）
-  ├── Wing（翅膀）→ 人员或项目
-  │     └── Room（房间）→ 主题
-  │           └── Drawer（抽屉）→ 原文内容块
-  │
-  ├── Hall（大厅）→ 分类标签
-  │     ├── hall_facts      → 决策、已锁定的选择
-  │     ├── hall_events     → 会议、里程碑、调试
-  │     ├── hall_discoveries → 突破、新发现
-  │     ├── hall_preferences → 习惯、偏好、观点
-  │     └── hall_advice     → 建议和解决方案
-  │
-  └── Tunnel（隧道）→ 跨 Wing 连接
+AI IDE ──MCP──► mem0-api :8080/mcp ──► PostgreSQL(pgvector) + Neo4j
+                  │ REST :8888
+                  └──► Dashboard :3001（管理/检索/回放）
 ```
 
-| 概念 | 说明 | 示例 |
+| 端点 | 地址 | 用途 |
 |------|------|------|
-| **Wing** | 顶层组织单元，代表人员或项目 | `wing_kai`、`wing_driftwood`、`project-api` |
-| **Room** | Wing 内的主题分类 | `auth-migration`、`graphql-switch`、`ci-pipeline` |
-| **Hall** | 记忆的内容类型 | `hall_facts`、`hall_events` 等 |
-| **Drawer** | 存储的原文文本块 | 完整的对话、代码片段、决策记录 |
-| **Tunnel** | 跨 Wing 的关联连接 | API 设计与数据库 Schema 的关联 |
+| MCP | `http://127.0.0.1:8080/mcp` | IDE 接入 |
+| REST API | `http://localhost:8888`（Docs `/docs`） | 脚本/SDK 批量读写 |
+| Dashboard | `http://localhost:3001` | 记忆浏览/验证/管理 |
 
-### 5.3 MemPalace 快速上手
-
-#### 5.3.1 初始化 Palace
+### 5.2 安装与部署
 
 ```bash
-# 初始化项目
-mempalace init ~/projects/myapp
-# 或在当前目录
-mempalace init .
+# 一键安装（服务 + IDE 配置）
+./scripts/install-all.sh          # Linux/macOS
+./scripts/install-all.ps1         # Windows
+
+# 或手动
+cd deploy/mem0 && docker compose up -d
+curl -s http://localhost:8888/docs > /dev/null && echo "API OK"
 ```
 
-初始化过程会：
-- 扫描项目目录结构
-- 检测人员和项目信息
-- 创建对应的 Wing 和 Room
-- 确保 `~/.mempalace/` 配置目录存在
+详细步骤见 [SOP-M1: mem0 记忆系统安装配置指南](../sop/SOP-M1-installation.md)。
 
-#### 5.3.2 挖掘数据（Mining）
+### 5.3 凭证与作用域
 
-```bash
-# 挖掘项目文件（代码、文档、笔记）
-mempalace mine ~/projects/myapp
-
-# 挖掘对话导出（Claude、ChatGPT、Slack 等）
-mempalace mine ~/chats/ --mode convos
-
-# 带自动分类的对话挖掘
-mempalace mine ~/chats/ --mode convos --extract general
-```
-
-**挖掘模式说明：**
-
-| 模式 | 说明 | 输出 |
+| 配置 | 位置 | 内容 |
 |------|------|------|
-| `projects` | 代码和文档，自动检测 Room | Wing → Room 结构化内容 |
-| `convos` | 对话导出，按交互对分块 | 原文对话记录 |
-| `extract general` | 额外分类为决策、偏好、里程碑、问题、情感 | 带标签的分类内容 |
-
-#### 5.3.3 搜索
-
-```bash
-# 语义搜索
-mempalace search "为什么我们切换到了 GraphQL"
-
-# 加载上下文（新会话启动）
-mempalace wake-up
-```
-
-#### 5.3.4 后续使用
-
-完成初始配置后，无需手动运行命令。AI 工具会通过 MCP 协议自动调用 MemPalace：
-
-- 提问："上个月我们关于认证做了什么决定？"
-- AI 自动调用 `mempalace_search`
-- 获取原文结果并回答
-
-### 5.4 Claude Code 中的 MCP 集成
-
-Claude Code 支持通过 Auto-save Hooks 实现自动保存功能。
-
-#### 5.4.1 安装 Auto-save Hooks
-
-**步骤 1：编辑配置文件**
-
-在 `.claude/settings.local.json` 中添加：
-
-```json
-{
-  "hooks": {
-    "Stop": [{
-      "matcher": "*",
-      "hooks": [{
-        "type": "command",
-        "command": "/absolute/path/to/hooks/mempal_save_hook.sh",
-        "timeout": 30
-      }]
-    }],
-    "PreCompact": [{
-      "hooks": [{
-        "type": "command",
-        "command": "/absolute/path/to/hooks/mempal_precompact_hook.sh",
-        "timeout": 30
-      }]
-    }]
-  }
-}
-```
-
-**步骤 2：赋予执行权限**
-
-```bash
-chmod +x hooks/mempal_save_hook.sh hooks/mempal_precompact_hook.sh
-```
-
-#### 5.4.2 Hook 工作机制
-
-| Hook | 触发时机 | 行为 |
-|------|---------|------|
-| **Save Hook** | 每 15 次人类消息 | 阻止 AI，指示其保存关键主题/决策/引用到 Palace |
-| **PreCompact Hook** | 上下文压缩前 | 紧急保存——强制 AI 在丢失上下文前保存一切 |
-
-#### 5.4.3 配置选项
-
-编辑 `mempal_save_hook.sh` 修改以下配置：
-
-```bash
-SAVE_INTERVAL=15      # 每次保存间隔的消息数
-STATE_DIR=~/.mempalace/hook_state/  # Hook 状态存储目录
-MEMPAL_DIR=           # 可选：设置为对话目录以自动运行 mempalace mine
-```
-
-### 5.5 Cursor IDE 中的 MCP 集成
-
-Cursor IDE 通过插件和 Auto-save Hooks 实现 MemPalace 集成。
-
-#### 5.5.1 安装 Cursor 插件
-
-1. 克隆 MemPalace 仓库
-2. 将 `.cursor-plugin/` 文件夹复制到 `~/.cursor/plugins/local/mempalace`
-
-#### 5.5.2 安装 Auto-save Hooks
-
-使用安装脚本（推荐）：
-
-```bash
-# 预览变更（不写入）
-hooks/cursor/install.sh --scope user --dry-run
-
-# 用户级安装（全局生效）
-hooks/cursor/install.sh --scope user
-
-# 项目级安装（仅当前项目）
-hooks/cursor/install.sh --scope project --target /path/to/your/repo
-```
-
-**手动安装（用户级）：**
-
-在 `~/.cursor/hooks.json` 中添加：
-
-```json
-{
-  "version": 1,
-  "hooks": {
-    "sessionStart": [
-      { "command": "/absolute/path/to/hooks/cursor/mempal_wake_hook_cursor.sh" }
-    ],
-    "stop": [
-      {
-        "command": "/absolute/path/to/hooks/cursor/mempal_save_hook_cursor.sh",
-        "loop_limit": 1
-      }
-    ],
-    "preCompact": [
-      { "command": "/absolute/path/to/hooks/cursor/mempal_precompact_hook_cursor.sh" }
-    ]
-  }
-}
-```
-
-赋予执行权限：
-
-```bash
-chmod +x hooks/cursor/mempal_save_hook_cursor.sh \
-         hooks/cursor/mempal_precompact_hook_cursor.sh \
-         hooks/cursor/mempal_wake_hook_cursor.sh
-```
-
-#### 5.5.3 Cursor Hooks 三层召回机制
-
-| 层级 | 触发时机 | 作用域 | 获取方式 |
-|------|---------|--------|---------|
-| `sessionStart` | 新对话打开时 | 注入 wing 范围的召回上下文 | Hook 页面 |
-| `mempalace-recall` skill | 请求匹配描述或手动附加 | 完整搜索-回答协议 | Cursor 插件 skills/ |
-| Recall rule | Cursor 匹配器判断为召回相关 | 简短提示先搜索 | 插件 rules/ |
-
-#### 5.5.4 Cursor Hook 配置选项
-
-| 环境变量 | 默认值 | 说明 |
-|---------|-------|------|
-| `MEMPAL_SAVE_INTERVAL` | 15 | Stop 事件间的保存间隔 |
-| `MEMPAL_CURSOR_SILENT` | 0 | 设为 1 可完全禁止 followup_message |
-| `MEMPAL_STATE_DIR` | `~/.mempalace/hook_state/` | Hook 计数器、日志目录 |
-| `MEMPAL_DISABLE_HOOK` | 0 | 紧急禁用开关，设为 1 禁用所有 hooks |
-
-### 5.6 Codex CLI 中的 MCP 集成
-
-Codex CLI 支持与 Claude Code 相同的 Auto-save Hooks 机制。
-
-#### 5.6.1 安装 Auto-save Hooks
-
-在 `.codex/hooks.json` 中添加：
-
-```json
-{
-  "Stop": [{
-    "type": "command",
-    "command": "/absolute/path/to/hooks/mempal_save_hook.sh",
-    "timeout": 30
-  }],
-  "PreCompact": [{
-    "type": "command",
-    "command": "/absolute/path/to/hooks/mempal_precompact_hook.sh",
-    "timeout": 30
-  }]
-}
-```
-
-赋予执行权限：
-
-```bash
-chmod +x hooks/mempal_save_hook.sh hooks/mempal_precompact_hook.sh
-```
-
-### 5.7 Qoder 中的 MCP 集成
-
-Qoder 是华为推出的 AI 代码开发工具，通过 MCP 协议集成 MemPalace 可实现跨项目记忆共享。
-
-#### 5.7.1 MCP 客户端配置
-
-Qoder 支持通过 MCP 协议连接外部服务。首先需要启用 Qoder 的 MCP 支持：
-
-1. 打开 Qoder 设置（`Ctrl + ,` 或 `Cmd + ,`）
-2. 导航至「扩展」或「Plugins」选项卡
-3. 搜索并安装「MCP Client」插件（如有）
-4. 重启 Qoder 使插件生效
-
-#### 5.7.2 添加 MemPalace MCP 服务器
-
-在 Qoder 的 MCP 配置文件中添加 MemPalace 配置：
-
-**Windows 配置文件路径：** `C:\Users\<用户名>\.qoder\mcp.json`
-
-**macOS/Linux 配置文件路径：** `~/.qoder/mcp.json`
-
-```json
-{
-  "mcpServers": {
-    "mempalace": {
-      "type": "stdio",
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "mempalace"],
-      "env": {}
-    }
-  }
-}
-```
-
-**使用本地 Python 版本：**
-
-```json
-{
-  "mcpServers": {
-    "mempalace": {
-      "type": "stdio",
-      "command": "mempalace",
-      "args": ["mcp", "run"],
-      "env": {}
-    }
-  }
-}
-```
-
-#### 5.7.3 Qoder 中使用 MemPalace
-
-**通过命令面板操作：**
-
-1. 按 `Ctrl + Shift + P` 打开命令面板
-2. 输入 `MCP: Search MemPalace` 进行语义搜索
-3. 输入 `MCP: Add Drawer` 添加记忆
-
-**常用 MCP 工具：**
-
-| 工具 | 功能 | 使用方式 |
-|------|------|---------|
-| `mempalace_search` | 语义搜索记忆 | 在命令面板输入搜索关键词 |
-| `mempalace_add_drawer` | 添加原文内容 | 选中代码后调用 |
-| `mempalace_mine` | 挖掘项目文件 | 在项目目录执行 |
-| `mempalace_status` | 查看 Palace 状态 | 查看记忆统计 |
-
-#### 5.7.4 Qoder 调试与日志
-
-```bash
-# 查看 MemPalace Docker 日志
-docker logs mempalace
-
-# 重新启动 MCP 服务器
-# 在 Qoder 中按 Ctrl + Shift + P，输入 "MCP: Restart Server"
-
-# 检查 MCP 连接状态
-# 在 Qoder 中按 Ctrl + Shift + P，输入 "MCP: Show Status"
-```
-
-### 5.8 CodeBuddy 中的 MCP 集成
-
-CodeBuddy 是腾讯推出的 AI 代码助手，支持通过 MCP 协议扩展功能。
-
-#### 5.8.1 启用 MCP 支持
-
-1. 打开 CodeBuddy 设置
-2. 导航至「高级设置」→「MCP 配置」
-3. 启用「MCP 客户端」选项
-4. 重启 CodeBuddy
-
-#### 5.8.2 配置 MemPalace 连接
-
-**配置文件路径：**
-
-**Windows：** `C:\Users\<用户名>\.codebuddy\mcp_config.json`
-
-**macOS/Linux：** `~/.codebuddy/mcp_config.json`
-
-```json
-{
-  "mcp": {
-    "enabled": true,
-    "servers": {
-      "mempalace": {
-        "type": "stdio",
-        "command": "docker",
-        "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "mempalace"],
-        "capabilities": [
-          "memory.store",
-          "memory.search",
-          "memory.mine",
-          "context.inject"
-        ]
-      }
-    }
-  }
-}
-```
-
-**使用本地 Python 版本：**
-
-```json
-{
-  "mcp": {
-    "enabled": true,
-    "servers": {
-      "mempalace": {
-        "type": "stdio",
-        "command": "mempalace",
-        "args": ["mcp", "run"],
-        "capabilities": [
-          "memory.store",
-          "memory.search",
-          "memory.mine",
-          "context.inject"
-        ]
-      }
-    }
-  }
-}
-```
-
-#### 5.8.3 CodeBuddy 中的 MemPalace 操作
-
-CodeBuddy 通过侧边栏面板提供 MemPalace 交互功能：
-
-| 功能 | 说明 |
-|------|------|
-| **记忆面板** | 显示当前项目的记忆列表 |
-| **快速搜索** | 在侧边栏顶部提供搜索框 |
-| **智能补全** | 基于记忆库提供代码补全建议 |
-| **上下文注入** | 自动将相关记忆注入到 AI 对话上下文 |
-
-**通过聊天命令使用：**
-
-```
-@mem search "API 设计规范"
-@mem add "选中的代码片段"
-@mem mine ./src
-@mem status
-```
-
-#### 5.8.4 CodeBuddy 高级配置
-
-**配置记忆可见性：**
-
-```json
-{
-  "mcp": {
-    "enabled": true,
-    "servers": {
-      "mempalace": {
-        "type": "stdio",
-        "command": "mempalace",
-        "args": ["mcp", "run"],
-        "settings": {
-          "default_wing": "codebuddy-project",
-          "auto_recall": true,
-          "recall_threshold": 0.7
-        }
-      }
-    }
-  }
-}
-```
-
-| 设置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `default_wing` | string | - | 默认使用的 Wing 名称 |
-| `auto_recall` | boolean | true | 自动注入相关记忆到上下文 |
-| `recall_threshold` | number | 0.7 | 记忆召回相似度阈值 |
-
-#### 5.8.5 故障排查
-
-| 问题 | 可能原因 | 解决方案 |
-|------|---------|---------|
-| MCP 连接失败 | Docker 未运行 | 启动 Docker Desktop |
-| 命令无响应 | MCP 服务器未加载 | 重启 CodeBuddy，检查配置文件 |
-| 搜索无结果 | 尚未挖掘数据 | 运行 `mempalace mine <path>` |
-| 权限错误 | 配置文件路径错误 | 确认配置文件存在且格式正确 |
-
-**验证 MCP 连接：**
-
-在 CodeBuddy 中打开终端，运行：
-
-```bash
-# 测试 MCP 服务器
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker run -i --rm -v mempalace-data:/data mempalace
-```
-
-### 5.9 MCP 服务器配置
-
-#### 5.9.1 MCP JSON 配置
-
-将以下配置添加到 MCP 客户端配置文件：
-
-**通用配置（Docker）：**
-
-```json
-{
-  "mcpServers": {
-    "mempalace": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mempalace-data:/data", "mempalace"]
-    }
-  }
-}
-```
-
-**本地 Python 版本：**
-
-```json
-{
-  "mcpServers": {
-    "mempalace": {
-      "command": "mempalace",
-      "args": ["mcp", "run"]
-    }
-  }
-}
-```
-
-#### 5.9.2 MCP 工具列表
-
-MemPalace 提供 35 个 MCP 工具，完整列表请参考 [官方文档](https://mempalaceofficial.com/reference/mcp-tools)。
-
-**Palace 读取工具：**
-
-| 工具 | 功能 |
-|------|------|
-| `mempalace_status` | Palace 概览 |
-| `mempalace_list_wings` | 列出所有 Wings |
-| `mempalace_list_rooms` | 列出 Wing 内的 Rooms |
-| `mempalace_search` | 语义搜索 |
-| `mempalace_check_duplicate` | 检查重复内容 |
-
-**Palace 写入工具：**
-
-| 工具 | 功能 |
-|------|------|
-| `mempalace_add_drawer` | 添加原文内容 |
-| `mempalace_checkpoint` | 批量保存会话 |
-| `mempalace_mine` | 挖掘目录 |
-| `mempalace_delete_drawer` | 删除抽屉 |
-| `mempalace_sync` | 同步清理 |
-
-**知识图谱工具：**
-
-| 工具 | 功能 |
-|------|------|
-| `mempalace_kg_query` | 查询实体关系 |
-| `mempalace_kg_add` | 添加事实 |
-| `mempalace_kg_invalidate` | 失效事实 |
-| `mempalace_kg_timeline` | 时间线视图 |
-
-### 5.10 团队开发配置
-
-MemPalace 原生支持本地优先，但在团队协作场景下需要额外配置。
-
-#### 5.10.1 团队数据存储架构
-
-```
-个人 Palace (本地)          团队 Palace (共享)
-~/.mempalace/              共享存储 (NFS/S3/Git)
-    ├── wing_personal      ├── wing_team-shared
-    └── wing_project       └── wing_project
-```
-
-#### 5.10.2 共享 Palace 配置
-
-**方案一：使用 Git 仓库共享**
-
-```bash
-# 创建共享 palace 仓库
-git init --bare ~/.mempalace/team-shared.git
-
-# 添加共享 remote
-git -C ~/.mempalace remote add team ssh://team@git-server/mempalace.git
-
-# 共享记忆
-git -C ~/.mempalace push team main
-
-# 获取团队记忆
-git -C ~/.mempalace pull team main
-```
-
-**方案二：使用 NAS/SMB 共享**
-
-```bash
-# 挂载共享存储
-mount -t cifs //nas-server/mempalace /mnt/nas-mempalace -o username=team
-
-# 链接到本地
-ln -s /mnt/nas-mempalace ~/.mempalace/shared
-```
-
-**方案三：使用 S3 兼容存储**
-
-```bash
-# 配置 S3 后端
-export MEMPALACE_S3_BUCKET=team-mempalace
-export MEMPALACE_S3_ENDPOINT=https://s3.example.com
-
-# 同步到 S3
-mempalace sync --remote s3://team-mempalace
-```
-
-#### 5.10.3 团队协作命令
-
-```bash
-# 标记为团队记忆
-mempalace add-drawer \
-  --wing "team-shared" \
-  --room "api-design" \
-  --content "统一 RESTful API 规范 v2.0"
-
-# 跨项目检索
-mempalace search --wing "team-shared" --query "数据库设计规范"
-
-# 创建跨 Wing 隧道
-mempalace create-tunnel \
-  --source-wing "project-frontend" \
-  --source-room "component-lib" \
-  --target-wing "project-backend" \
-  --target-room "api-design" \
-  --label "前后端组件规范同步"
-```
-
-#### 5.10.4 团队命名规范建议
-
-| Wing 命名 | 说明 | 示例 |
-|-----------|------|------|
-| `wing-{project}` | 项目专用 | `wing-payment`、`wing-auth` |
-| `wing-{person}` | 人员专用 | `wing-kai`、`wing-priya` |
-| `wing-team-{name}` | 团队共享 | `wing-team-backend`、`wing-team-infra` |
-
-#### 5.10.5 团队使用工作流
-
-**新成员加入流程：**
-
-```bash
-# 1. 安装 MemPalace
-uv tool install mempalace
-
-# 2. 克隆团队 palace（使用 Git）
-git clone ssh://git-server/team/mempalace.git ~/.mempalace/team
-
-# 3. 合并到本地
-git -C ~/.mempalace remote add personal ~/.mempalace
-git -C ~/.mempalace pull personal main
-
-# 4. 初始化项目
-mempalace init ~/projects/current-project
-
-# 5. 挖掘项目数据
-mempalace mine ~/projects/current-project --mode projects
-
-# 6. 搜索团队知识
-mempalace search --wing "wing-team-backend" --query "API 规范"
-```
-
-**团队记忆贡献流程：**
-
-```bash
-# 1. 贡献有价值的技术决策
-mempalace add-drawer \
-  --wing "wing-team-backend" \
-  --room "decisions" \
-  --content "采用 PostgreSQL 作为主数据库，原因：1)成熟稳定 2)pgvector 支持 3)团队熟悉"
-
-# 2. 创建跨项目隧道
-mempalace create-tunnel \
-  --source-wing "wing-payment" \
-  --source-room "database-design" \
-  --target-wing "wing-team-backend" \
-  --target-room "decisions"
-
-# 3. 推送到团队仓库
-git -C ~/.mempalace add .
-git -C ~/.mempalace commit -m "Add PostgreSQL decision record"
-git -C ~/.mempalace push team main
-```
-
-### 5.11 性能基准与调优
-
-#### 5.11.1 基准测试结果
-
-| 基准 | 指标 | 得分 | 备注 |
-|------|------|------|------|
-| LongMemEval (raw) | R@5 | **96.6%** | 无 LLM，无需 API Key |
-| LongMemEval (Hybrid v4) | R@5 | **98.4%** | 50 题调优后泛化 |
-| LongMemEval (Hybrid + LLM) | R@5 | ≥99% | 任何可用 LLM |
-| LoCoMo (session) | R@10 | 60.3% | 1986 题 |
-| LoCoMo (hybrid v5) | R@10 | 88.9% | 同集合 |
-| ConvoMem | Avg recall | 92.9% | 250 项 |
-| MemBench | R@5 | 80.3% | 8500 项 |
-
-#### 5.11.2 调优建议
-
-```bash
-# 使用更精确的后端
-mempalace mine ~/projects --backend sqlite_exact
-
-# 启用混合搜索
-mempalace search "query" --mode hybrid --rerank
-
-# 使用更大 embedding 模型
-python -m mempalace.onboarding
-```
-
-### 5.12 故障排查
-
-| 问题 | 可能原因 | 解决方案 |
-|------|---------|---------|
-| 安装失败 | PEP 668 错误 | 使用 `uv tool install` 或 `pipx install` |
-| MCP 连接失败 | 服务未启动 | 运行 `mempalace mcp run` 或启动 Docker 容器 |
-| 搜索无结果 | 尚未挖掘数据 | 先运行 `mempalace mine <path>` |
-| Hook 不触发 | 权限问题 | 确保 hook 脚本有执行权限 `chmod +x` |
-| 索引过期 | 外部脚本修改了 palace | 运行 `mempalace reconnect` 刷新索引 |
-| Docker 挂载失败 | 路径问题 | 使用绝对路径，确保 volume 存在 |
-
-**调试日志：**
-
-```bash
-# Claude/Codex Hook 日志
-cat ~/.mempalace/hook_state/hook.log
-
-# Cursor Hook 日志
-cat ~/.mempalace/hook_state/cursor_hook.log
-
-# 详细调试
-export MEMPAL_VERBOSE=1
-mempalace mine ~/projects/myapp
-```
-
-### 5.13 相关资源
-
-| 资源 | 链接 |
-|------|------|
-| GitHub 仓库 | https://github.com/MemPalace/mempalace |
-| 官方文档 | https://mempalaceofficial.com/ |
-| PyPI 包 | https://pypi.org/project/mempalace/ |
-| Getting Started | https://mempalaceofficial.com/guide/getting-started.html |
-| MCP 工具参考 | https://mempalaceofficial.com/reference/mcp-tools |
-| The Palace 概念 | https://mempalaceofficial.com/concepts/the-palace |
-| Cursor Hooks | https://mempalaceofficial.com/guide/cursor-hooks |
-| Auto-Save Hooks | https://mempalaceofficial.com/guide/hooks |
-
+| MCP 连接 | `~/.codebuddy/mcp.json` → `mem0-local` | 端点与传输方式 |
+| 凭证/作用域 | `.codebuddy/mem0.config.json`（git-ignored） | `api_key` / `admin_user_id` / `project_id` / `git_remote` / `roster` |
+| 行为规则 | 根 `CODEBUDDY.md` | 自动拉取/提交约定 |
+
+- **项目共享池**：`add_memory` 携带 `git_remote`，服务端解析为 `project_id`；
+  `get_memories(project_id=...)` 跨成员读取全池。
+- **个人隔离**：不带 `project_id` 写入的记忆仅本人 `user_id` 可见。
+
+### 5.4 核心工具速查
+
+| 工具 | 用途 | 示例 |
+|------|------|------|
+| `add_memory` | 写入记忆 | `add_memory(text=..., git_remote=..., metadata={"type":"decision"})` |
+| `search_memories` | 语义检索 | `search_memories(query="支付网关 决策", top_k=5)` |
+| `get_memories` | 全量拉取共享池 | `get_memories(api_key, project_id="ai-dev-sop")` |
+| `update_memory` | 更新记忆 | `update_memory(memory_id, text)` |
+| `delete_memory` | 删除单条（须用户明示） | - |
+| `list_entities` / `list_events` | 实体与操作流水 | - |
+
+写入模式：`infer=False` 原文留痕（默认，会话归档）；`infer=True` LLM 事实抽取（提炼偏好/知识）。
+
+### 5.5 自动化约定（CODEBUDDY.md）
+
+| 行为 | 时机 | 说明 |
+|------|------|------|
+| 自动拉取 | 每会话首轮 | `get_memories(project_id=...)` 全池 + 按需 `search_memories`，并向用户汇报召回摘要 |
+| 自动提交（事实） | 发现 durable 事实/决策/偏好时 | `metadata.type = fact/decision/preference/note` |
+| 自动提交（留痕） | 每轮回复完成时 | `Q: <用户原话>\n\nA: <完整回复>`，`metadata.type=conversation`，按 `session_id` 分组 |
+
+### 5.6 团队协作与知识沉淀
+
+- 成员权限（Can Read / Can Edit / Admin）与邀请流程：Dashboard → Settings → Members
+- 知识沉淀规范（metadata.type 分类、质量标准、归纳/蒸馏流程）：
+  [SOP-M4: 知识沉淀指南](../sop/SOP-M4-knowledge.md)
+- 团队协作（共享池、ADR 管理、Onboarding）：[SOP-M5: 团队协作指南](../sop/SOP-M5-collaboration.md)
+- 各 IDE 配置模板：[IDE MCP 配置模板](../ide-config/ide-mcp-templates.md)
+- 完整接入手册（云端/自托管/多工具共享）：[mem0 AI 工具配置手册](../quick-ref/mem0-ai-tools-config-guide.md)
+
+### 5.7 历史版本说明
+
+MemPalace（Wing/Room/Drawer 组织模型、`mempalace_*` 工具族）与 cbmem-team
+（:8787 团队服务、Console 归纳蒸馏、JWT 多用户封装）已随 `tools/` 目录移除。
+历史设计文档见 `docs/superpowers/specs/`（已标注废弃），安装/使用细节见 git 历史
+（`git log -- tools/`）。
 
 ## 6.文档编写
 
