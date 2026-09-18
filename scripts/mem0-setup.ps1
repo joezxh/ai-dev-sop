@@ -61,10 +61,21 @@ function Write-TextFile([string]$path, [string]$content, [string]$desc) {
     Write-Ok "$desc -> $path"
 }
 
+function ConvertTo-Hashtable($obj) {
+    if ($null -eq $obj) { return $null }
+    if ($obj -is [System.Array]) { return @($obj | ForEach-Object { ConvertTo-Hashtable $_ }) }
+    if ($obj -is [System.Management.Automation.PSCustomObject]) {
+        $h = @{}
+        foreach ($p in $obj.PSObject.Properties) { $h[$p.Name] = ConvertTo-Hashtable $p.Value }
+        return $h
+    }
+    return $obj
+}
+
 function Read-JsonFile([string]$path) {
     $cfg = @{ mcpServers = @{} }
     if (Test-Path $path) {
-        try { $cfg = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable }
+        try { $cfg = ConvertTo-Hashtable ([System.IO.File]::ReadAllText($path, $Utf8) | ConvertFrom-Json) }
         catch {
             $bak = "$path.bak-" + (Get-Date -Format "yyyyMMddHHmmss")
             Copy-Item $path $bak
@@ -137,7 +148,7 @@ function Set-CredFile([string]$key, [string]$source) {
     $path = Join-Path $Repo ".mem0\mem0.config.json"
     $cfg = @{}
     if (Test-Path $path) {
-        try { $cfg = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable } catch { $cfg = @{} }
+        try { $cfg = ConvertTo-Hashtable ([System.IO.File]::ReadAllText($path, $Utf8) | ConvertFrom-Json) } catch { $cfg = @{} }
     }
     $cfg["api_key"] = $key
     if (-not $cfg.ContainsKey("git_remote")) {
@@ -165,6 +176,7 @@ function Test-EndToEnd([string]$key) {
     try { Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 5 | Out-Null } catch { $code = [int]$_.Exception.Response.StatusCode }
     if ($code -eq 406) { Write-Ok "MCP 端点存活 ($Url, HTTP 406 = streamable-http 正常)" }
     else { Write-Err "MCP 端点异常（HTTP $code）。服务未启动？→ deploy/mem0 或 install-all" }
+    if ($DryRun) { Write-Info "[DryRun] 跳过 REST 写读往返（DryRun 不落盘、不写入记忆）"; return }
     $rest = ($Url -replace ":\d+/", ":$RestPort/") -replace "/mcp$", ""
     $headers = @{ "X-API-Key" = $key; "Content-Type" = "application/json" }
     $payload = @{ text = "mem0-setup validation $(Get-Date -Format o)"; infer = $false } | ConvertTo-Json
