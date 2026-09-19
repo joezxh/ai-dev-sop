@@ -9,8 +9,10 @@
 #
 # 选项:
 #   --skip-mem0    跳过 mem0 服务安装
-#   --skip-ide     跳过 IDE MCP 配置
 #   --help         显示帮助
+#
+# 仅负责 mem0 服务端安装/启动；IDE 接入（MCP 配置 + 规则文件 + 凭证）
+# 请运行 scripts/mem0-setup.sh。
 
 set -e
 
@@ -23,8 +25,6 @@ NC='\033[0m'
 
 # 默认配置
 SKIP_MEM0=false
-SKIP_IDE=false
-MCP_URL="http://127.0.0.1:8080/mcp"
 
 show_help() {
     cat << EOF
@@ -35,13 +35,10 @@ ${YELLOW}使用方法:${NC}
 
 ${YELLOW}选项:${NC}
     --skip-mem0    跳过 mem0 服务安装
-    --skip-ide     跳过 IDE MCP 配置
-    --mcp-url URL  指定 MCP 端点 (默认: $MCP_URL)
     --help         显示此帮助信息
 
 ${YELLOW}示例:${NC}
-    $0                                # 完整安装
-    $0 --skip-ide                     # 仅启动 mem0 服务
+    $0                                # 完整安装（启动 mem0 服务）
 
 EOF
 }
@@ -49,8 +46,6 @@ EOF
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-mem0)  SKIP_MEM0=true; shift ;;
-        --skip-ide)   SKIP_IDE=true; shift ;;
-        --mcp-url)    MCP_URL="$2"; shift 2 ;;
         --help)       show_help; exit 0 ;;
         *) echo -e "${RED}未知选项: $1${NC}"; show_help; exit 1 ;;
     esac
@@ -112,46 +107,6 @@ install_mem0() {
     fi
 }
 
-# ========== IDE MCP 配置 ==========
-configure_ide() {
-    if [ "$SKIP_IDE" = true ]; then
-        print_info "跳过 IDE 配置"; return
-    fi
-
-    print_header "配置 AI IDE MCP"
-
-    local ide=""
-    if [ -d "$HOME/.cursor" ]; then ide="cursor"
-    elif [ -d "$HOME/.qoder" ]; then ide="qoder"
-    fi
-
-    if [ -z "$ide" ]; then
-        print_info "未检测到支持的 IDE (Cursor/Qoder)，跳过"
-        return
-    fi
-
-    print_info "检测到 $ide"
-    local config_file="$HOME/.$ide/mcp.json"
-    mkdir -p "$HOME/.$ide"
-
-    cat > "$config_file" << EOF
-{
-  "mcpServers": {
-    "mem0": {
-      "type": "http",
-      "url": "$MCP_URL",
-      "headers": {
-        "Authorization": "Bearer \${MEM0_API_KEY}"
-      }
-    }
-  }
-}
-EOF
-
-    print_success "MCP 配置已创建: $config_file"
-    print_info "请确保环境变量 MEM0_API_KEY 已设置（或手动替换 \${MEM0_API_KEY}），然后重启 $ide"
-}
-
 # ========== 验证 ==========
 verify_install() {
     print_header "验证安装"
@@ -173,14 +128,12 @@ main() {
     print_header "mem0 记忆系统一键安装"
 
     install_mem0
-    configure_ide
     verify_install
 
     print_header "安装完成"
     echo -e "${GREEN}下一步:${NC}"
     echo "  1. 在 Dashboard (http://localhost:3001) 创建 API Key"
-    echo "  2. 设置环境变量 MEM0_API_KEY 或编辑 IDE mcp.json"
-    echo "  3. 重启 IDE，验证 MCP 工具可用"
+    echo "  2. 接入 IDE：运行 scripts/mem0-setup.sh（一键配置 MCP + 规则文件 + 凭证并校验）"
     echo ""
     echo -e "${BLUE}详细文档: docs/quick-ref/mem0-manual.md${NC}"
     echo ""

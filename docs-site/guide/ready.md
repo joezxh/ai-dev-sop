@@ -114,7 +114,7 @@ curl -s http://localhost:3001 > /dev/null && echo "Dashboard OK"
 ```
 
 各 IDE 详细配置见 [ide-mcp-templates（仓库 docs/ide-config/）](https://github.com/joezxh/ai-dev-sop/blob/main/docs/ide-config/ide-mcp-templates.md)
-与 [mem0 AI 工具配置手册](https://github.com/joezxh/ai-dev-sop/blob/main/docs/quick-ref/mem0-ai-tools-config-guide.md)。
+与 [mem0 AI 工具配置手册](https://github.com/joezxh/ai-dev-sop/blob/main/docs/quick-ref/mem0-manual.md)。
 
 ### 1.5 验证安装
 
@@ -176,7 +176,7 @@ docker compose -f deploy/mem0/docker-compose.yaml ps   # 全部 healthy
 ### 3.1 根据现有框架设置Rule  
 
 ```
-根据当前的后端代码模块 @ruoyi/ruoyi-module-uaa 与前端代码模块 @ruoyi-ui 的现有架构和技术栈，为整个调解平台工程项目制定并实施一套统一的开发约束和代码规范，并生成为当前开发工具cursor的Project Rules,并安装。
+根据当前的后端代码模块 @ruoyi/ruoyi-module-uaa 与前端代码模块 @ruoyi-ui 的现有架构和技术栈，为整个业务平台工程项目制定并实施一套统一的开发约束和代码规范，并生成为当前开发工具cursor的Project Rules,并安装。
 
 具体要求：
 1. 分析现有代码结构，识别当前使用的编码规范、技术栈和最佳实践
@@ -327,8 +327,8 @@ bearer_token_env_var = "MEM0_API_KEY"
 
 **云端替代**: 将 URL 换为 `https://mcp.mem0.ai/mcp`（OAuth 或 Bearer Key）。
 
-**配置生成脚本**（仓库 `scripts/` 提供 `install-all.sh` / `install-all.ps1`，
-自动启动服务并生成 IDE 配置）。
+**服务安装脚本**（仓库 `scripts/` 提供 `install-all.sh` / `install-all.ps1`，
+自动启动 mem0 服务；IDE 接入用 `mem0-setup.ps1` / `mem0-setup.sh`）。
 
 | Server | 传输 | 配置要点 | 用途 |
 |---|---|---|---|

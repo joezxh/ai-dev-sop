@@ -6,7 +6,7 @@
 
 ## 概述
 
-本仓库是 **mediation-platform**（调解平台）的完整开发 SOP，面向全栈开发者、测试工程师和产品经理。提供从"一句话需求"到"代码交付"的完整研发链路标准操作指南。
+本仓库是 **business-platform**（业务平台）的完整开发 SOP，面向全栈开发者、测试工程师和产品经理。提供从"一句话需求"到"代码交付"的完整研发链路标准操作指南。
 
 ## 核心特性
 
@@ -100,7 +100,7 @@
 ### 部署
 
 ```bash
-# 一键安装（服务 + IDE 配置）
+# 一键安装（mem0 服务）
 ./scripts/install-all.sh          # Linux/macOS
 ./scripts/install-all.ps1         # Windows
 
@@ -121,7 +121,7 @@ cd deploy/mem0 && docker compose up -d
 }
 ```
 
-完整配置见 [docs/quick-ref/mem0-ai-tools-config-guide.md](docs/quick-ref/mem0-ai-tools-config-guide.md)。
+完整配置见 [docs/quick-ref/mem0-manual.md](docs/quick-ref/mem0-manual.md)。
 
 ## 快速开始
 
@@ -173,7 +173,7 @@ rm -rf temp-design
 ```bash
 # 从现有代码生成测试+开发提示词
 /brainstorm
-参照模板 @mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档...
+参照模板 @business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档...
 ```
 
 ### 5. 执行开发

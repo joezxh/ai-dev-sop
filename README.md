@@ -6,7 +6,7 @@ A comprehensive standard operating procedure (SOP) repository for AI-assisted de
 
 ## Overview
 
-This repository contains the complete development SOP for **mediation-platform**, a full-stack Java + Vue enterprise application platform. It provides:
+This repository contains the complete development SOP for **business-platform**, a full-stack Java + Vue enterprise application platform. It provides:
 
 - Standardized development workflows from "one-sentence requirement" to "code delivery"
 - Skills for AI coding tools (Cursor, Qoder, CodeBuddy, Claude Code)
@@ -98,7 +98,7 @@ Provides long-term memory to all AI development tools via MCP:
 ### Deployment
 
 ```bash
-# One-shot install (service + IDE config)
+# One-shot install (mem0 service)
 ./scripts/install-all.sh          # Linux/macOS
 ./scripts/install-all.ps1         # Windows
 
@@ -119,7 +119,7 @@ cd deploy/mem0 && docker compose up -d
 }
 ```
 
-See [docs/quick-ref/mem0-ai-tools-config-guide.md](docs/quick-ref/mem0-ai-tools-config-guide.md) for the full guide.
+See [docs/quick-ref/mem0-manual.md](docs/quick-ref/mem0-manual.md) for the full guide.
 
 ## Getting Started
 
@@ -171,7 +171,7 @@ This generates 7 cognitive files in `.planning/codecase/`:
 ```bash
 # Generate test + development prompts from existing code
 /brainstorm
-参照模板 @mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档...
+参照模板 @business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档...
 ```
 
 ### 5. Execute Development

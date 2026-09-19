@@ -4,12 +4,13 @@
 # 记忆功能统一由自托管 mem0 提供（deploy/mem0）。
 #
 # 使用方法:
-#   .\install-all.ps1 [-SkipMem0] [-SkipIde] [-McpUrl "http://127.0.0.1:8080/mcp"]
+#   .\install-all.ps1 [-SkipMem0]
+#
+# 仅负责 mem0 服务端安装/启动；IDE 接入（MCP 配置 + 规则文件 + 凭证）
+# 请运行 scripts\mem0-setup.ps1。
 
 param(
-    [switch]$SkipMem0,
-    [switch]$SkipIde,
-    [string]$McpUrl = "http://127.0.0.1:8080/mcp"
+    [switch]$SkipMem0
 )
 
 $ErrorActionPreference = "Stop"
@@ -56,38 +57,6 @@ function Install-Mem0 {
     }
 }
 
-# ========== IDE MCP 配置 ==========
-function Set-IdeConfig {
-    if ($SkipIde) { Write-Info "跳过 IDE 配置"; return }
-
-    Write-Header "配置 AI IDE MCP"
-
-    $targets = @()
-    if (Test-Path "$env:USERPROFILE\.cursor") { $targets += ".cursor" }
-    if (Test-Path "$env:USERPROFILE\.qoder")  { $targets += ".qoder" }
-
-    if ($targets.Count -eq 0) {
-        Write-Info "未检测到支持的 IDE (Cursor/Qoder)，跳过"; return
-    }
-
-    foreach ($dir in $targets) {
-        $configFile = "$env:USERPROFILE\$dir\mcp.json"
-        $config = @{
-            mcpServers = @{
-                mem0 = @{
-                    type    = "http"
-                    url     = $McpUrl
-                    headers = @{ Authorization = "Bearer `${MEM0_API_KEY}" }
-                }
-            }
-        }
-        New-Item -ItemType Directory -Force -Path (Split-Path $configFile) | Out-Null
-        $config | ConvertTo-Json -Depth 10 | Set-Content $configFile -Encoding UTF8
-        Write-Ok "MCP 配置已创建: $configFile"
-    }
-    Write-Info "请确保环境变量 MEM0_API_KEY 已设置（或手动替换占位符），然后重启 IDE"
-}
-
 # ========== 验证 ==========
 function Test-Install {
     Write-Header "验证安装"
@@ -106,14 +75,11 @@ function Test-Install {
 # ========== 主流程 ==========
 Write-Header "mem0 记忆系统一键安装"
 Install-Mem0
-Set-IdeConfig
 Test-Install
 
 Write-Header "安装完成"
 Write-Host "下一步:"
 Write-Host "  1. 在 Dashboard (http://localhost:3001) 创建 API Key"
-Write-Host "  2. 设置环境变量 MEM0_API_KEY 或编辑 IDE mcp.json"
-Write-Host "  3. 重启 IDE，验证 MCP 工具可用"
+Write-Host "  2. 接入 IDE：运行 scripts\mem0-setup.ps1（一键配置 MCP + 规则文件 + 凭证并校验）"
 Write-Host ""
 Write-Host "详细文档: docs/quick-ref/mem0-manual.md"
-Write-Host "  4. 接入 IDE：运行 scripts\mem0-setup.ps1（一键配置 MCP + 规则文件 + 凭证并校验）"

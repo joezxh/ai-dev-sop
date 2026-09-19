@@ -6,7 +6,7 @@ AI 支援開発のための包括的な標準作業手順（SOP）リポジト�
 
 ## 概要
 
-このリポジトリは **mediation-platform**（調停プラットフォーム）の完全な開発 SOP であり、バックエンド開発者、テストエンジニア、プロジェクトマネージャー向けです。「一言の必要条件」から「コードデリバリー」までの完全な RD チェーンの標準操作ガイドを提供します。
+このリポジトリは **business-platform**（業務プラットフォーム）の完全な開発 SOP であり、バックエンド開発者、テストエンジニア、プロジェクトマネージャー向けです。「一言の必要条件」から「コードデリバリー」までの完全な RD チェーンの標準操作ガイドを提供します。
 
 ## 主な機能
 
@@ -100,7 +100,7 @@ MCP プロトコルですべての AI 開発ツールに長期メモリを提供
 ### デプロイ
 
 ```bash
-# ワンクリックインストール（サービス + IDE 設定）
+# ワンクリックインストール（mem0 サービス）
 ./scripts/install-all.sh          # Linux/macOS
 ./scripts/install-all.ps1         # Windows
 
@@ -121,7 +121,7 @@ cd deploy/mem0 && docker compose up -d
 }
 ```
 
-詳細は [docs/quick-ref/mem0-ai-tools-config-guide.md](docs/quick-ref/mem0-ai-tools-config-guide.md) を参照。
+詳細は [docs/quick-ref/mem0-manual.md](docs/quick-ref/mem0-manual.md) を参照。
 
 ## クイックスタート
 
@@ -173,7 +173,7 @@ rm -rf temp-design
 ```bash
 # 既存コードからテスト+開発プロンプトを生成
 /brainstorm
-@mediation-web/docs/scene/scene-template.md のテンプレートに従って...]
+@business-web/docs/scene/scene-template.md のテンプレートに従って...]
 ```
 
 ### 5. 開発の実行
