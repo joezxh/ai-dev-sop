@@ -183,7 +183,7 @@ export default withMermaidWithoutDayjs(defineConfig({
             { text: 'Graph Engineering', link: '/reference/graph-engineering/graph-engineering'},
             { text: 'Codex 进阶指南', link: '/reference/codex-multi-agent-guide/codex-multi-agent-guide'},
             { text: 'FDE 到底是干嘛的', link: '/reference/fde-ai-position/fde-position'},
-            { text: 'Tencent WorkBuddy Bench paper', link: '/reference/workbuddy-bench/paper'},
+            { text: 'Coding Agent Bench paper', link: '/reference/coding-agent-bench/paper'},
             {
               text: 'Agentic Design Patterns',
               collapsible: true,
@@ -227,6 +227,7 @@ export default withMermaidWithoutDayjs(defineConfig({
                   items: [
                     { text: '安装', link: '/guide/ready.md#1-记忆体安装-mem0' },
                     { text: '速查表', link: '/guide/mem-tools' },
+                    { text: 'mem0 配置手册', link: '/guide/mem0-manual' },
                     { text: '项目理解', link: '/guide/SOP-M2-understanding' },
                     { text: '开发调试', link: '/guide/SOP-M3-development' },
                     { text: '知识沉淀', link: '/guide/SOP-M4-knowledge' },
