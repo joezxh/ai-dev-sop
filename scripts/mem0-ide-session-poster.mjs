@@ -474,9 +474,9 @@ async function run() {
           console.log(`\n===== [${sid}] turn ${i + 1} (dry/verify) len=${text.length} =====`);
           console.log(text.slice(0, 2000) + (text.length > 2000 ? "\n…(截断预览)" : ""));
         }
-        seq = i + 1;
         if (DRY) {
           posted++;
+          seq = i + 1;
           continue;
         }
         if (VERIFY) {
@@ -488,6 +488,7 @@ async function run() {
           await postMemorySafe(text, meta);
           posted++;
           totalPosted++;
+          seq = i + 1; // 仅提交成功后才前进；失败轮次不前进，下次运行重试（避免瞬断导致永久丢轮）
         } catch (e) {
           console.error(`[ide-poster] ${sid} turn ${i + 1} 提交失败: ${e.message}`);
           break;
@@ -501,7 +502,10 @@ async function run() {
   }
   // 更新状态
   if (!DRY) {
-    state.lastRun = new Date().toISOString();
+    // 仅在确有提交时推进 lastRun：避免“全部提交失败却推进 lastRun”导致该会话被 mtime 过滤永久跳过
+    if (totalPosted > 0) {
+      state.lastRun = new Date().toISOString();
+    }
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2), "utf8");
   }
   console.log(`[ide-poster] 完成，本次共提交 ${totalPosted} 轮。`);

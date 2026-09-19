@@ -322,9 +322,9 @@ function Set-IdeSessionHook {
         }
     }
     if (-not $cfg.ContainsKey("hooks")) { $cfg["hooks"] = @{} }
-    # 同时注册 SessionStart（flush 上一会话，兜底）与 SessionEnd（flush 当前会话，解决“最后一个会话在下次 SessionStart 前不入库”的缺口）
+    # 同时注册 SessionStart（flush 上一会话，兜底）、SessionEnd（flush 当前会话，解决“最后一个会话在下次 SessionStart 前不入库”的缺口）与 Stop（每轮 Agent 回复结束即 flush，实现“每轮自动提交”更可靠）
     $changed = $false
-    foreach ($ev in @("SessionStart", "SessionEnd")) {
+    foreach ($ev in @("SessionStart", "SessionEnd", "Stop")) {
         if (-not $cfg["hooks"].ContainsKey($ev)) { $cfg["hooks"][$ev] = @() }
         $exists = $false
         foreach ($entry in @($cfg["hooks"][$ev])) {
@@ -339,11 +339,11 @@ function Set-IdeSessionHook {
         }
     }
     if ($changed) {
-        Write-TextFile $settingsPath ($cfg | ConvertTo-Json -Depth 20) "settings.json (IDE 会话转录直投 hook: SessionStart+SessionEnd)"
+        Write-TextFile $settingsPath ($cfg | ConvertTo-Json -Depth 20) "settings.json (IDE 会话转录直投 hook: SessionStart+SessionEnd+Stop)"
     } else {
         Write-Info "IDE 会话转录直投 hook 已存在（幂等跳过）"
     }
-    Write-Info "IDE 会话转录直投 hook：SessionStart flush 上一会话，SessionEnd flush 当前会话（均幂等，零 LLM 逐字留痕）"
+    Write-Info "IDE 会话转录直投 hook：SessionStart flush 上一会话，SessionEnd flush 当前会话，Stop 每轮回复结束即 flush（均幂等，零 LLM 逐字留痕）"
 }
 
 function Test-EndToEnd([string]$key) {

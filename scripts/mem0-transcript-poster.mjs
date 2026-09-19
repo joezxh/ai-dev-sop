@@ -221,21 +221,22 @@ for (const { file, uuid } of jsonlFiles) {
       process.exit(byteEqual && qIn && thIn && outIn ? 0 : 1);
     }
 
-    st.turnSeq += 1;
     const sid = sessionId ?? `cb-${new Date(turn.userTs).toISOString().slice(0, 10).replace(/-/g, "")}-${uuid.slice(0, 6)}`;
     const meta = {
       type: "conversation", session_id: sid, agent: "CodeBuddy", role: "turn",
-      people: ["joezxh"], turn_seq: String(st.turnSeq),
+      people: ["joezxh"], turn_seq: String(st.turnSeq + 1),
       created_at: iso(turn.userTs), source: "transcript-poster",
     };
     if (DRY) {
+      st.turnSeq += 1;
       console.log(`--- DRY turn#${st.turnSeq} (${text.length} chars) ---\n${text.slice(0, 600)}\n`);
     } else {
       try {
         await postMemory(text, meta);
         posted += 1; totalPosted += 1;
+        st.turnSeq += 1; // 仅提交成功后才前进，失败轮次下次重试（避免瞬断导致永久丢轮/序号错乱）
       } catch (e) {
-        console.error(`[mem0-poster] POST failed turn#${st.turnSeq}: ${e.message}`);
+        console.error(`[mem0-poster] POST failed turn#${st.turnSeq + 1}: ${e.message}`);
         newOffset = st.offset; // do not advance on failure; retry next run
         break;
       }
