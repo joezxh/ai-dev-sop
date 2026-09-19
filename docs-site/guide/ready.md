@@ -60,9 +60,6 @@ AI开发原则： AI-First </span>
 
 <span style="color: #d32f2f; font-size: 1em; font-weight: 700;">强烈建议安装记忆，这样不同的 AI Coding 工具的记忆可以共享，善用 mem0 的项目共享池与团队协作功能。</span>
 
-> **变更说明（2026-09）**：旧双轨记忆系统（MemPalace / codebase-mem-mcp / cbmem-team）已移除，
-> 统一替换为自托管 **mem0**（`deploy/mem0/`）。
-
 mem0 提供向量记忆（PostgreSQL + pgvector）与图记忆（Neo4j），通过 MCP 协议
 （`http://127.0.0.1:8080/mcp`）接入 CodeBuddy / Qoder / Cursor 等全部 AI IDE，
 Dashboard（`http://localhost:3001`）负责管理与回放。

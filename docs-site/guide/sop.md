@@ -21,6 +21,4 @@
 - 工具速查：[mem-tools](/guide/mem-tools)
 - 知识沉淀：[SOP-M4](/guide/SOP-M4-knowledge)
 - 团队协作：[SOP-M5](/guide/SOP-M5-collaboration)
-- 配置手册：仓库 `docs/quick-ref/mem0-ai-tools-config-guide.md`
-
-> 历史说明：旧双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已于 2026-09 移除。
+- 配置手册：[mem0 配置手册](/guide/mem0-manual)（站点快照；仓库权威母本 `docs/quick-ref/mem0-manual.md`）

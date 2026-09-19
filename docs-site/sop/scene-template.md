@@ -151,7 +151,7 @@
 
 # 或导入 Cookie 跳过登录
 /setup-browser-cookies
-选择已登录的 mediation_platform 会话
+选择已登录的 business_platform 会话
 执行测试...
 ```
 
@@ -370,7 +370,7 @@ $B screenshot "after-login.png"
 
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【案件登记】模块。
+请基于以下信息,在 business-platform 仓库中实现【案件登记】模块。
 
 【模块信息】
 - 服务: Case(:8084)
@@ -384,11 +384,11 @@ $B screenshot "after-login.png"
   - case:manage:query(查询案件)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/case/register.vue
-- API 封装: mediation-web/src/api/case/index.ts
+- 主页面: business-web/src/views/case/register.vue
+- API 封装: business-web/src/api/case/index.ts
 
 【后端文件清单】
-- Controller: mediation-platform-biz/mediation-module-case/mediation-module-case-server/src/main/java/com/tianque/module/medcase/controller/CaseController.java
+- Controller: business-platform-biz/business-module-case/business-module-case-server/src/main/java/com/example/module/bizcase/controller/CaseController.java
 - Service 接口: .../service/CaseService.java
 - DTO/Request: .../dto/CaseRegisterRequest.java
 - DO: .../dal/dataobject/CaseInfoDO.java
@@ -415,14 +415,14 @@ $B screenshot "after-login.png"
 - UI 库: ant-design-vue
 - 表单字段:案件标题、案件类型、申请人姓名、申请人电话、被申请人姓名、被申请人电话、纠纷描述
 - 字典类型: case_type(案件类型)
-- 业务组件复用: DictSelect(来自 mediation-web/src/components/business)
+- 业务组件复用: DictSelect(来自 business-web/src/components/business)
 - 操作按钮:提交案件、取消
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/system/notice/index.vue(通知公告,适合作为含富文本/多字段表单参考)
-- 复用 mediation-web/src/components/business 中的 DictSelect 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/system/notice/index.vue(通知公告,适合作为含富文本/多字段表单参考)
+- 复用 business-web/src/components/business 中的 DictSelect 组件
 - 字典数据从 case_type 字典类型读取
 
 【测试验证】
@@ -513,11 +513,11 @@ $B screenshot "after-login.png"
 
 ## 7.模块开发对照与补全清单
 
-本章节对照 tianque-ui(参考项目)与 mediation-platform(当前项目),梳理 System 模块的实现状态与补全建议。
+本章节对照 example-ui(参考项目)与 business-platform(当前项目),梳理 System 模块的实现状态与补全建议。
 
 ### System 模块补全对照表
 
-| 模块 | tianque-ui 路径 | mediation-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
+| 模块 | example-ui 路径 | business-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
 |------|-----------------|----------------------|---------|---------|---------|
 | 参数配置 | system/config/index.vue | system/config/index.vue | ✅ 完整 | ✅ | 对齐:无明显差距 |
 | 字典管理 | system/dict/index.vue + dict/data/ | system/dict/index.vue | ✅ 完整(子组件化) | ✅ | 已完成:DictTypeFormModal + DictDataFormModal 子组件 |
@@ -533,8 +533,8 @@ $B screenshot "after-login.png"
 | 短信渠道 | system/sms/channel/index.vue | system/sms/index.vue | ✅ 完整(Tab结构) | ✅ | 当前已是完整 Tab 结构(渠道/模板/日志) |
 | 短信模板 | system/sms/template/index.vue | system/sms/index.vue | ✅ 完整(Tab结构) | ✅ | 当前已是完整 Tab 结构 |
 | 短信日志 | system/sms/log/index.vue | system/sms/index.vue | ✅ 完整(Tab结构) | ✅ | 当前已是完整 Tab 结构 |
-| 文件管理 | infra/file/index.vue | system/file/index.vue | ✅ 完整(列表+网格+预览+拖拽上传) | ✅ | 当前文件管理较 tianque-ui 更完善 |
-| 文件配置 | infra/file/FileForm.vue | system/file/FileConfigFormModal.vue | ✅ 完整(测试连接+主配置+复制) | ✅ | 当前文件配置较 tianque-ui 更完善 |
+| 文件管理 | infra/file/index.vue | system/file/index.vue | ✅ 完整(列表+网格+预览+拖拽上传) | ✅ | 当前文件管理较 example-ui 更完善 |
+| 文件配置 | infra/file/FileForm.vue | system/file/FileConfigFormModal.vue | ✅ 完整(测试连接+主配置+复制) | ✅ | 当前文件配置较 example-ui 更完善 |
 
 
 ## 8.文档版本

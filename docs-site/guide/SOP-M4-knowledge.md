@@ -3,8 +3,7 @@
 > **版本**: v2.0
 > **适用阶段**: 开发流程 M4 - 知识沉淀
 > **目标读者**: 开发者
-> **变更说明**: 旧双轨沉淀（MemPalace 手动写入 × cbmem-team Console 归纳蒸馏）已移除，
-> 统一改为 **mem0** 沉淀：Agent 自动提交（MCP `add_memory`）+ Dashboard 人工浏览，
+> **沉淀方式**: **mem0** 沉淀——Agent 自动提交（MCP `add_memory`）+ Dashboard 人工浏览，
 > AI 归纳/蒸馏由 Agent 在会话内完成（结合 `infer=True` 事实抽取）。
 
 ---

@@ -121,7 +121,8 @@ export default withMermaidWithoutDayjs(defineConfig({
             items: [
               { text: '指南', link: '/guide/' },
               { text: 'SOP', link: '/sop/' },
-              { text: '参考', link: '/reference/' }
+              { text: '参考', link: '/reference/' },
+              { text: 'mem0 控制台', link: 'http://localhost:3001' }
             ]
           },
           {
@@ -284,7 +285,8 @@ export default withMermaidWithoutDayjs(defineConfig({
             items: [
               { text: 'Guide', link: '/en/guide/intro' },
               { text: 'SOP', link: '/en/sop/' },
-              { text: 'Reference', link: '/en/reference/' }
+              { text: 'Reference', link: '/en/reference/' },
+              { text: 'mem0 Dashboard', link: 'http://localhost:3001' }
             ]
           },
           {
@@ -335,7 +337,8 @@ export default withMermaidWithoutDayjs(defineConfig({
             items: [
               { text: 'ガイド', link: '/ja/guide/intro' },
               { text: 'SOP', link: '/ja/sop/' },
-              { text: 'リファレンス', link: '/ja/reference/' }
+              { text: 'リファレンス', link: '/ja/reference/' },
+              { text: 'mem0 ダッシュボード', link: 'http://localhost:3001' }
             ]
           },
           {
@@ -499,9 +502,7 @@ export default withMermaidWithoutDayjs(defineConfig({
       ]
     },
     optimizeDeps: {
-      exclude: ['dayjs', 'element-plus']
+      exclude: ['dayjs']
     },
-    // Local dev proxy: console (cbmem-team backend) removed 2026-09.
-    // Memory is served by mem0 (deploy/mem0) — no site-side API proxy needed.
   }
 }))

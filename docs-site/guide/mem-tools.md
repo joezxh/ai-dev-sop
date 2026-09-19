@@ -1,9 +1,8 @@
 # 记忆系统工具速查表（mem0）
 
-> **版本**: v2.0
-> **最后更新**: 2026-09-18
-> **变更说明**: 旧双轨记忆系统（MemPalace / codebase-memory-mcp / cbmem-team）已移除，
-> 统一替换为自托管 **mem0**（MCP: `mem0-local` @ `http://127.0.0.1:8080/mcp`）。
+> **版本**: v2.1
+> **最后更新**: 2026-09-19
+> **变更说明**: 移除旧工具映射表；收录《mem0 配置手册》（见 [mem0-manual.md](./mem0-manual.md)）。
 
 ---
 
@@ -17,7 +16,7 @@
 | 项目 ID | 服务端解析 `git_remote` | `ai-dev-sop` |
 | 规则文件 | 根 `CODEBUDDY.md` | 自动拉取/提交的行为约定 |
 
-完整接入手册见 [mem0-ai-tools-config-guide.md](./mem0-ai-tools-config-guide.md)。
+完整接入手册见 [mem0-manual.md](./mem0-manual.md)。
 
 ---
 
@@ -63,26 +62,7 @@
 
 ---
 
-## 3. 旧工具 → mem0 映射表（迁移参考）
-
-| 旧（双轨系统，已移除） | 新（mem0） |
-|------------------------|------------|
-| `mempalace_status` | `get_memories` / Dashboard `localhost:3001` |
-| `mempalace_search <query>` | `search_memories(query, top_k=5)` |
-| `mempalace_recall <query>` | `search_memories`（语义召回） |
-| `mempalace_list_wings/rooms` | `list_entities`（user/agent/run） |
-| `mempalace_get_context --wing-ids` | `get_memories(project_id=...)` 全池拉取 |
-| `mempalace_add_drawer` | `add_memory(text, metadata.type=...)` |
-| `mempalace_update_drawer` | `update_memory(memory_id, text)` |
-| `mempalace_delete_drawer` | `delete_memory(memory_id)` |
-| `mempalace_tag_drawer --tags` | `metadata` 字段 + `update_memory` |
-| `mempalace_checkpoint` | 会话留痕 `add_memory(type=conversation)`（见 CODEBUDDY.md §2.1） |
-| cbmem-team 服务（:8787, JWT） | mem0 Dashboard（:3001）+ MCP（:8080） |
-| Wing/Room/Drawer/Hall 层级 | 平面记忆 + `metadata.type` + `project_id` 共享池 |
-
----
-
-## 4. 验证
+## 3. 验证
 
 ```text
 1. docker compose -f deploy/mem0/docker-compose.yaml ps   # mem0-api healthy

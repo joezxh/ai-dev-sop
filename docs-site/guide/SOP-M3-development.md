@@ -3,8 +3,7 @@
 > **版本**: v2.0
 > **适用阶段**: 开发流程 M3 - 开发调试
 > **目标读者**: 开发者
-> **变更说明**: 旧双轨调试工具（MemPalace / codebase-mem-mcp 的 trace_path、
-> detect_changes、search_graph 等）已移除。代码追踪使用 IDE 原生能力
+> **工具约定**: 代码追踪使用 IDE 原生能力
 > （LSP 语义导航 / 文本搜索 / git），调试记忆使用 mem0 MCP。
 
 ---

@@ -59,7 +59,7 @@
 
 ### 输入信息
 
-- 测试场景文件: @mediation-web/docs/scene/scene-template.md
+- 测试场景文件: @business-web/docs/scene/scene-template.md
 - 指定模块: {MODULE_ID} (如 SYS-01)
 - 指定场景: {SCENARIO_SECTION} (如 5.1.2)
 
@@ -155,7 +155,7 @@
 
 ### 输出文件
 
-生成文件: `@mediation-web/docs/scene/{module}-dev-prompt.md`
+生成文件: `@business-web/docs/scene/{module}-dev-prompt.md`
 
 文件结构:
 ```
@@ -217,12 +217,12 @@
 ## 前端文件清单
 
 ```
-mediation-web/src/views/system/config/
+business-web/src/views/system/config/
 ├── index.vue                    # 主页面
 ├── ConfigFormModal.vue          # 表单弹窗
 └── index.ts                     # API 封装
 
-mediation-web/src/api/system/
+business-web/src/api/system/
 └── config.ts                    # API 接口
 ```
 
@@ -231,7 +231,7 @@ mediation-web/src/api/system/
 ## 后端文件清单
 
 ```
-mediation-module-system-server/src/main/java/com/tianque/system/
+business-module-system-server/src/main/java/com/example/system/
 ├── controller/
 │   └── ConfigController.java    # 控制器
 ├── service/
@@ -568,9 +568,9 @@ INSERT INTO `sys_menu` (`menu_name`, `parent_id`, `order_num`, `path`, `componen
 
 ## 参考实现
 
-- `mediation-web/src/views/system/dict/index.vue` - 字典管理(适合作为列表参考)
-- `mediation-web/src/views/system/dict/DictTypeFormModal.vue` - 字典类型表单(适合作为FormModal参考)
-- `mediation-web/src/api/system/dict.ts` - API封装参考
+- `business-web/src/views/system/dict/index.vue` - 字典管理(适合作为列表参考)
+- `business-web/src/views/system/dict/DictTypeFormModal.vue` - 字典类型表单(适合作为FormModal参考)
+- `business-web/src/api/system/dict.ts` - API封装参考
 ```
 
 ---

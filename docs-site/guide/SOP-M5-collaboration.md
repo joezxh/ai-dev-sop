@@ -3,8 +3,7 @@
 > **版本**: v2.0
 > **适用阶段**: 开发流程 M5 - 团队协作
 > **目标读者**: 开发者、团队负责人
-> **变更说明**: 旧 Wing/Room/Drawer/Tunnel 组织模型（MemPalace）已移除。
-> 团队协作统一基于 mem0：项目共享池（`project_id`/`git_remote`）、
+> **协作方式**: 团队协作统一基于 mem0：项目共享池（`project_id`/`git_remote`）、
 > `metadata` 分类、Dashboard 管理、组织成员权限。
 
 ---

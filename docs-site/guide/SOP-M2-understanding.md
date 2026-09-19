@@ -3,8 +3,7 @@
 > **版本**: v2.0
 > **适用阶段**: 开发流程 M2 - 项目理解
 > **目标读者**: 开发者
-> **变更说明**: 旧双轨记忆工具（MemPalace / codebase-mem-mcp）已移除，本指南的
-> 记忆检索统一使用 **mem0 MCP**（`search_memories` / `get_memories`），代码分析
+> **记忆检索**: 统一使用 **mem0 MCP**（`search_memories` / `get_memories`），代码分析
 > 使用 IDE 原生能力（语义导航 / 文本搜索）。
 
 ---

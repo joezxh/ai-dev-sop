@@ -29,7 +29,7 @@
 > | `{ADMIN_USER}` | 管理员账号 | `admin` |
 > | `{ADMIN_PASS}` | 管理员密码 | `admin123` |
 > | `{TENANT_ID}` | 默认租户 ID | `1` |
-> | `{PROJECT_NAME}` | 项目名称/仓库名 | `mediation-platform` |
+> | `{PROJECT_NAME}` | 项目名称/仓库名 | `business-platform` |
 > | `{MODULE_ID}` | 模块编号前缀 | `SYS`、`CASE`、`ORD` |
 > | `{MODULE_NAME}` | 模块名称 | `参数配置`、`案件登记` |
 > | `{MENU_PATH}` | 菜单导航路径 | `系统管理 → 参数配置` |
@@ -37,7 +37,7 @@
 > | `{PERMISSION_PREFIX}` | 权限标识前缀 | `system:config:` |
 > | `{API_BASE_PATH}` | API 路径前缀 | `/admin-api/system/config` |
 > | `{UI_FRAMEWORK}` | UI 组件库 | `ant-design-vue`、`element-plus` |
-> | `{REF_PROJECT}` | 参考项目名 | `tianque-ui` |
+> | `{REF_PROJECT}` | 参考项目名 | `example-ui` |
 >
 > **章节扩展说明:**
 > - 第 5 章按模块逐一展开,每个模块包含:测试场景、测试提示词、开发提示词

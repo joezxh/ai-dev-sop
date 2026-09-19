@@ -1,5 +1,5 @@
 > [!WARNING]
-> **已废弃（2026-09-18）**：本评测数据集配套的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，统一替换为 mem0（见仓库 docs/quick-ref/mem0-ai-tools-config-guide.md）。本文仅作历史归档。
+> **已废弃（2026-09-18）**：本评测数据集配套的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，统一替换为 mem0（见仓库 docs/quick-ref/mem0-manual.md）。本文仅作历史归档。
 
 # DS-Decision · 自然语言技术决策语义检索数据集
 
@@ -17,7 +17,7 @@
 
 **示例 query**：
 - "我们为什么选择 PostgreSQL 而不是 MySQL？"
-- "调解平台的前端框架是什么？"
+- "业务平台的前端框架是什么？"
 - "Redis 缓存过期的策略是怎么定的？"
 
 **Ground truth**：人工标注的、与该 query 强相关的 drawer_id 列表（1-N 条）。

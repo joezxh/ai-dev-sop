@@ -1,13 +1,13 @@
-# Tencent WorkBuddy Bench：一种具有抗污染任务构造的多领域编码智能体基准
+# Coding Agent Bench：一种具有抗污染任务构造的多领域编码智能体基准
 
-**Tencent WorkBuddy Bench Team**
-Youtu Lab · Keen Security Lab · Workbuddy · Yunding Security Lab
+**Coding Agent Bench Team**
+Coding Agent Bench Team
 
 ---
 
 ## 摘要
 
-本文提出腾讯 WorkBuddy Bench，一套面向代码智能体的多领域评测套件；本报告阐述该评测套件的构建方法、打分规则以及跨模型排行榜。该套件的核心是一套统一评测框架，可构建并执行贴合真实分布的代码智能体任务，覆盖四大工作领域：代码、网页、办公与安全。
+本文提出腾讯 Coding Agent Bench，一套面向代码智能体的多领域评测套件；本报告阐述该评测套件的构建方法、打分规则以及跨模型排行榜。该套件的核心是一套统一评测框架，可构建并执行贴合真实分布的代码智能体任务，覆盖四大工作领域：代码、网页、办公与安全。
 本评测集并未直接复用公开的问题文本，所有任务均由真实提交记录、合并请求或业务场景逆向推导而来，并改写为简短、口语化的角色扮演式需求。因此，无法通过网络搜索原始问题、合并请求或提交记录来还原任务提示词。该数据集完全开源发布，包含任务目录、环境镜像、评测驱动程序、测试用例以及参考解法；其抗数据污染能力依靠这套任务构建方式与数据集版本管理机制实现，而非依靠数据保密。
 四大子数据集分别对应仓库级工程开发、前端开发、办公业务工作流、红蓝对抗安全场景，从不同维度模拟真实工作，各子数据集拥有独立的验证方式。全部任务采用统一的任务目录格式封装，可基于两套智能体运行框架（CodeBuddy Code、Claude Code），按照统一、可复现的流程执行。完整开源版本支持端到端复现评测结果，第三方可重新运行每一项任务并查看全部内容，具备可审计性。
 由于各子数据集采用不同打分机制，不同子集之间分数不具备可比性，本套件不提供整体平均分。文中给出了多系列模型的跨模型评测排行榜。
@@ -16,9 +16,9 @@ Youtu Lab · Keen Security Lab · Workbuddy · Yunding Security Lab
 
 ## 1 引言
 
-![Tencent WorkBuddy Bench 概览](images/x1.png)
+![Coding Agent Bench 概览](images/x1.png)
 
-**图 1：Tencent WorkBuddy Bench 概览。** 真实的提交（commits）、拉取请求（pull requests）、办公工作流和安全案例被逆向工程为口语化的角色请求，任务分布与真实使用情况匹配（左）；四个赛道——代码（Code）、Web、办公（Office）和安全（Security）——共享一个开放的任务目录格式（中）；每个任务在隔离的沙箱中由两种智能体框架（agent harnesses）评分（右）。
+**图 1：Coding Agent Bench 概览。** 真实的提交（commits）、拉取请求（pull requests）、办公工作流和安全案例被逆向工程为口语化的角色请求，任务分布与真实使用情况匹配（左）；四个赛道——代码（Code）、Web、办公（Office）和安全（Security）——共享一个开放的任务目录格式（中）；每个任务在隔离的沙箱中由两种智能体框架（agent harnesses）评分（右）。
 
 **为什么这四个领域属于同一套件。** 当编码智能体被置于真实组织工作中时，它不再仅仅编辑代码：同一个智能体还被要求构建 Web 前端、生成或协调办公文档，以及推理安全工件。代码、Web、办公和安全是该工作跨越的四个工件和工作流边界，该套件将它们视为一体，因为在每个边界处任务形态是相同的——智能体被放入工作空间，从自然语言请求中生成工件，并由一个它永远看不到的验证器评分。正是这种共享形态（而非共享评分规则）使四个子集成为一个套件。
 
@@ -40,7 +40,7 @@ Youtu Lab · Keen Security Lab · Workbuddy · Yunding Security Lab
 ---
 
 ## 2 任务构造
-本节阐述腾讯 WorkBuddy Bench 套件级别的构建规范。代码、网页、办公、安全四大子数据集的任务均遵循统一的核心流程：素材来源采集、改写为真实业务需求、组装智能体可见工作空间、在任务会话结束前隔离评测资源，最后将每项任务封装为独立完整目录。整个构建过程全程规避用户原始数据。
+本节阐述腾讯 Coding Agent Bench 套件级别的构建规范。代码、网页、办公、安全四大子数据集的任务均遵循统一的核心流程：素材来源采集、改写为真实业务需求、组装智能体可见工作空间、在任务会话结束前隔离评测资源，最后将每项任务封装为独立完整目录。整个构建过程全程规避用户原始数据。
 各子数据集的打分工具与准入校验规则并不统一：代码子集采用隐藏测试用例；网页子集结合规则、大模型 / 多模态大模型以及智能体评判打分细则；办公子集混合使用确定性规则校验与基于事实依据的大模型评判标准；安全子集则使用确定性的 scoring.py 脚本。由于评判工具各不相同，各子集得分不可横向对比，本评测套件不输出整体平均分；该设计为刻意选择，而非有待修复的缺陷。本节主要介绍任务构建与封装；任务执行与各赛道打分规则将统一在第 4 章说明。  
 
 #### 任务来源
@@ -108,7 +108,7 @@ tasks/<task-name>/
 
 ## 3 基准测试
 
-Tencent WorkBuddy Bench 组织为四个互补的子集——代码（Code）、Web、办公（Office）和安全（Security），每个子集针对一类独特的现实智能体任务，同时共享通用的任务格式和评分理念。本节介绍代码子集；后续章节依次介绍 Web、Office 和 Security。
+Coding Agent Bench 组织为四个互补的子集——代码（Code）、Web、办公（Office）和安全（Security），每个子集针对一类独特的现实智能体任务，同时共享通用的任务格式和评分理念。本节介绍代码子集；后续章节依次介绍 Web、Office 和 Security。
 
 ### 3.1 代码（Code）
 
@@ -236,9 +236,9 @@ Office 子集测试智能体能否在包含混合格式文件的本地工作空�
 
 难度设计上偏向困难。
 
-![WorkBuddy Bench 安全概览](images/x8.png)
+![Coding Agent Bench 安全概览](images/x8.png)
 
-**图 8：WorkBuddy Bench 安全概览。** 任务从真实历史漏洞和编写场景构建为可复现、自包含的案例（左）；它们跨越六个红蓝队任务类型——白盒源代码审计、黑盒二进制利用、Web 利用、智能体安全、恶意软件分析和安全运营——涵盖 38 个红队和 22 个蓝队任务（中）；每个由隔离 Docker 容器内的每任务确定性程序评分，输出数值奖励（右）。
+**图 8：Coding Agent Bench 安全概览。** 任务从真实历史漏洞和编写场景构建为可复现、自包含的案例（左）；它们跨越六个红蓝队任务类型——白盒源代码审计、黑盒二进制利用、Web 利用、智能体安全、恶意软件分析和安全运营——涵盖 38 个红队和 22 个蓝队任务（中）；每个由隔离 Docker 容器内的每任务确定性程序评分，输出数值奖励（右）。
 
 每个任务的确定性评分器在隔离 Docker 容器内执行并直接写入数值奖励，因此同一输出重新评分两次会返回相同数字（图 8，右）。第 4 节给出每评分器定义——PoC 和标志验证、IOC 匹配、零假阳性约束下的 YARA 匹配率，以及宏平均-F1/Kendall-tau 报告评分。
 
@@ -311,9 +311,9 @@ Office 子集测试智能体能否在包含混合格式文件的本地工作空�
 
 ## 5 结果
 
-本节报告 Tencent WorkBuddy Bench 排行榜，对照套件构建要回答的问题：智能体能力在四类真实工作——代码、Web、办公和安全——中如何排名，以及当框架本身变化时该排名有多稳健。每个分数是三次独立运行在思考模式下的平均值，所有四个子集均在 CodeBuddy Code (cbc) 和 Claude Code (cc) 框架下评分。
+本节报告 Coding Agent Bench 排行榜，对照套件构建要回答的问题：智能体能力在四类真实工作——代码、Web、办公和安全——中如何排名，以及当框架本身变化时该排名有多稳健。每个分数是三次独立运行在思考模式下的平均值，所有四个子集均在 CodeBuddy Code (cbc) 和 Claude Code (cc) 框架下评分。
 
-**表 6：Tencent WorkBuddy Bench 排行榜。分数为 0–100，思考模式，三次运行平均，在 CodeBuddy Code (cbc) 和 Claude Code (cc) 框架下。**
+**表 6：Coding Agent Bench 排行榜。分数为 0–100，思考模式，三次运行平均，在 CodeBuddy Code (cbc) 和 Claude Code (cc) 框架下。**
 
 | 模型 | Code cbc | Code cc | Web cbc | Web cc | Office cbc | Office cc | Security cbc | Security cc |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -361,7 +361,7 @@ Office 子集测试智能体能否在包含混合格式文件的本地工作空�
 
 ## 6 相关工作
 
-我们首先将 Tencent WorkBuddy Bench 与代码、Web、办公和安全领域的现有智能体基准进行对比。
+我们首先将 Coding Agent Bench 与代码、Web、办公和安全领域的现有智能体基准进行对比。
 
 **Web。** Design2Code [3] 和 Interaction2Code [13] 评估从参考设计进行的静态和轻度交互式页面复现；FrontendBench [14] 将自动评判扩展到更广泛的前端生成任务；WebArena [4] 和 VisualWebArena [15] 评估操作现有浏览器环境的智能体而非从头生成可运行工件。每个在一两个轴上很强，但没有一个结合页面/UI 工作、数据和图表工件、前端项目文档、测试和分析、非零起点生命周期覆盖、运行时交互/状态检查，以及规则、LLM/VLM 和智能体评判。
 
@@ -376,25 +376,25 @@ Office 子集测试智能体能否在包含混合格式文件的本地工作空�
 | FrontendBench | ● | ○ | | | ● | | | ● | ○ | ● | | |
 | WebArena | | ● | | | | | | ● | ● | ● | | |
 | VisualWebArena | | ● | | | | | | ● | ● | ● | ○ | |
-| WorkBuddy Web | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Coding Agent Bench Web | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 
 ● = 完整覆盖，○ = 部分覆盖，空白 = 未覆盖或不适用。
 
 **Office。** 近期基准覆盖办公智能体工作的互补部分。Workspace-Bench 1.0 [16] 评估具有大规模异构文件依赖的任务；ClawsBench [17] 评估快照恢复模拟中的能力和安全；OdysseyBench [18] 针对长期、多应用工作流；SpreadsheetBench 2 [19] 探测复杂多表工作簿中的端到端构建、修复和可视化。
 
-WorkBuddyBench-Office 专注于包含多文件格式的本地工作空间中的完整交接。智能体必须将源信息带入交付物，保持相关文件和状态一致，并尊重执行约束。
+Coding Agent Bench-Office 专注于包含多文件格式的本地工作空间中的完整交接。智能体必须将源信息带入交付物，保持相关文件和状态一致，并尊重执行约束。
 
 ---
 
 ## 7 局限性与结论
 
-本节讨论本报告中 Tencent WorkBuddy Bench 的当前局限性，以及计划中的近期工作。
+本节讨论本报告中 Coding Agent Bench 的当前局限性，以及计划中的近期工作。
 
 - **一个排行榜单元格使用修改指令设置。** 所有七个模型在所有四个赛道的两个框架下评分。一个可比性注意事项是 Claude Opus 4.8 在 Claude Code 下的代码分数：如表 6 所述，在禁用 AskUserQuestion 工具的基础上添加了显式的"不要提问、一次性完成"指令。
 
 - **代码中的单语言侧重。** 代码子集的开放发布以 Python 任务为主；跨语言覆盖仅限于少量将目标行为从 JavaScript、TypeScript 或 Rust 项目移植到 Python 的任务。
 
-- **开放发布带杶发布后污染风险。** Tencent WorkBuddy Bench 完全开放发布——任务目录、环境镜像、评估代码、评分测试和参考解决方案都是公开的。开放性的代价是发布的任务内容从发布时起就暴露在被抓取进未来模型训练数据的风险中。这通过数据集版本化缓解而非消除。
+- **开放发布带杶发布后污染风险。** Coding Agent Bench 完全开放发布——任务目录、环境镜像、评估代码、评分测试和参考解决方案都是公开的。开放性的代价是发布的任务内容从发布时起就暴露在被抓取进未来模型训练数据的风险中。这通过数据集版本化缓解而非消除。
 
 - **基于评判的组件携带模型评判偏差。** Web 评分结合规则检查和 LLM/VLM 及智能体评判；Office 结合确定性规则检查和 LLM 评判；代码还计算诊断性 LLM 评判分数。模型评判可能偏向它们发现熟悉或易读的响应风格，独立于任务正确性。
 
@@ -404,7 +404,7 @@ WorkBuddyBench-Office 专注于包含多文件格式的本地工作空间中的�
 
 近期工作集中在校准上：继续 Web 评分标准校准，并在可行时将一个修改指令配置（Claude Opus 4.8 在 Claude Code 下的代码）纳入标准指令协议。
 
-本报告描述了已发布的 Tencent WorkBuddy Bench：四个子集共享一个任务目录格式、一个准入协议和一个执行框架，以及其排行榜和上述局限性。该套件完全开放发布——任务目录、环境镜像、评估代码、评分测试和参考解决方案都是公开的，供离线第三方测试和审计。
+本报告描述了已发布的 Coding Agent Bench：四个子集共享一个任务目录格式、一个准入协议和一个执行框架，以及其排行榜和上述局限性。该套件完全开放发布——任务目录、环境镜像、评估代码、评分测试和参考解决方案都是公开的，供离线第三方测试和审计。
 
 ---
 
@@ -412,7 +412,7 @@ WorkBuddyBench-Office 专注于包含多文件格式的本地工作空间中的�
 
 Siqi Cai¹*, Shaopeng Chen⁴*, Xiang Fei¹*, Yong Mao¹*, Zihan Xu¹*, Zhiheng Lyu³*, Zhijian Shao²*, Yuchen Shi¹, Shuwen Zhang¹, Chaofan Qiu¹, Linjie Che³, Xiaoxi Zhao³, Feng Wu³, Kai Zhang³, Chaofan Zhu³, Yubin Qi³, Xiaoyun Liang³, Peijie Dong³, Yunhao Zhang³, Yuanjie Zhu, Ling Jiang², Xianjun Zhang², Zhehang Chu², Anyuan Sang², Zhen Feng², Sen Nie², Shi Wu², Yuanzhen Xu⁴, Xin Li⁴, Ning Yang⁴, Zhiqiang Dong⁴, Hande Dong³, Qiang Lin³, Yi Liu³, Yunsheng Wu¹, Ke Li¹†, Xing Sun¹
 
-¹Youtu Lab · ²Keen Security Lab · ³Workbuddy · ⁴Yunding Security Lab
+¹Youtu Lab · ²Keen Security Lab · ³Coding Agent Bench · ⁴Yunding Security Lab
 
 *这些作者对本工作贡献相同。作者顺序按字母序排列。
 †项目负责人。

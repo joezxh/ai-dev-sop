@@ -206,7 +206,7 @@ flowchart LR
   2. 登录账号: {{SOURCE_ACCOUNT}}            # 例: admin
   3. 登录密码: {{SOURCE_PASSWORD}}            # 例: ******** (用户提供,不入库)
   4. 2FA/TOTP 密钥(可选): {{TOTP_SECRET}}
-  5. 源系统名称: {{APP_NAME}}                 # 例: mediation-platform
+  5. 源系统名称: {{APP_NAME}}                 # 例: business-platform
   6. 复刻目标类型: web-spa / web-mpa / web-with-electron / web-with-pwa
   7. 授权声明: 已获得合法授权 (是/否),若否必须终止
   8. 业务背景: 1~3 句说明
@@ -347,7 +347,7 @@ flowchart LR
 [输入]
   - N1 产出的 reverse-spec.md、feature-catalog.md、api-mapping.md、data-model.md、screen-blueprints.md、auth-flow.md
   - 复刻目标类型: {{DELIVERY_FORM}} (web-spa / web-mpa / web-with-electron / web-with-pwa)
-  - 既有架构约束(若复用现有 mediation-platform 工程)
+  - 既有架构约束(若复用现有 business-platform 工程)
 
 [任务]
   1. **复刻产物形态矩阵** `delivery-matrix.md`:
@@ -569,7 +569,7 @@ flowchart LR
        - @commitlint/cli @commitlint/config-conventional husky lint-staged commitizen cz-git
        - rollup-plugin-visualizer(打包分析)
 
-  2. **预置目录结构**(对齐 mediation-web 的实际布局):
+  2. **预置目录结构**(对齐 business-web 的实际布局):
      {{APP_NAME}}/
      ├── src/
      │   ├── api/                          # 与 N1 api-mapping.md 一致
@@ -883,7 +883,7 @@ flowchart LR
 │   │   │   └── config.ts
 │   │   └── modules/                       # 业务模块(以源系统为准)
 │   │       ├── case.ts
-│   │       ├── mediation.ts
+│   │       ├── business.ts
 │   │       └── ...
 │   ├── components/
 │   │   ├── common/                        # PageHeader/EmptyState/Loading/ErrorBoundary
@@ -1053,7 +1053,7 @@ flowchart LR
 
   5. **类型完备**:所有 API 都有 TS 类型定义,避免 any。
 
-[必含功能模块 — 复刻 mediation-web 登录/账号体系]
+[必含功能模块 — 复刻 business-web 登录/账号体系]
   ### M1 — 账号密码登录
     - views/login/index.vue:账号+密码+记住密码+忘记密码入口+图形验证码
     - stores/user.ts:login/logout/fetchUserInfo actions
@@ -1532,8 +1532,8 @@ flowchart LR
 ### 10.2 占位符说明
 
 ```
-{{APP_NAME}}                复刻目标 Web 系统短名,例: mediation-copy / reverse-app
-{{APP_TITLE}}               中文标题,例: 矛盾纠纷调解平台 - 复刻版
+{{APP_NAME}}                复刻目标 Web 系统短名,例: business-copy / reverse-app
+{{APP_TITLE}}               中文标题,例: 矛盾纠纷业务平台 - 复刻版
 {{SOURCE_URL}}              源 Web 系统 URL,例: https://admin.example.com
 {{SOURCE_ACCOUNT}}          源系统登录账号(用户提供,**不入库**)
 {{SOURCE_PASSWORD}}         源系统登录密码(用户提供,**不入库**)
@@ -1545,9 +1545,9 @@ flowchart LR
 {{LOGIN_URL}}               登录接口路径,例: /api/v1/auth/login
 {{TARGET_PLATFORMS}}        目标平台数组(仅当启用 Electron/PWA 时有意义)
 {{PORT}}                    前端 dev server 端口,例: 5173
-{{OUTPUT_DIR}}              复刻工程输出目录,例: mediation-copy/
+{{OUTPUT_DIR}}              复刻工程输出目录,例: business-copy/
 {{WEB_DEPLOY_TARGET}}       部署目标,例: docker / s3 / nginx / k8s
-{{DOCKER_REGISTRY}}         镜像仓库,例: ghcr.io/org/mediation-copy
+{{DOCKER_REGISTRY}}         镜像仓库,例: ghcr.io/org/business-copy
 {{CDN_URL}}                 CDN 地址,例: https://cdn.example.com
 {{ELECTRON_TARGET}}         Electron 目标,例: mac/win/linux
 {{SERVER_SSH_CONFIG}}       服务器 SSH 别名,例: prod-server
@@ -1601,7 +1601,7 @@ TOTP_SECRET=***************
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| v1.0.0 | 2026-06-17 | gstack + GSD | 初版,基于 mediation-web(Vue 3 + Vite + TS + Ant Design Vue + Pinia)作为复刻目标样本 |
+| v1.0.0 | 2026-06-17 | gstack + GSD | 初版,基于 business-web(Vue 3 + Vite + TS + Ant Design Vue + Pinia)作为复刻目标样本 |
 
 ---
 

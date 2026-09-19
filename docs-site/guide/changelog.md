@@ -1,5 +1,16 @@
 # 更新日志
 
+## v2.1.0（2026-09-19）
+
+### 双轨记忆残留彻底清除
+
+- 删除 console 模块：`.vitepress/theme/console/` 整套 Vue 应用（16 文件）与三语 `console/` 文档页（后端 cbmem-team 已于 v2.0.0 移除，页面为死代码）
+- 顶栏三语导航新增 **mem0 控制台 / mem0 Dashboard** 外链（`http://localhost:3001`），承接原控制台入口
+- 移除 console 专属依赖（`element-plus`、`pinia`）与构建排除项；`theme/index.ts` 精简为纯 `extends`
+- 清理正文全部“旧双轨已移除”历史横幅与旧系统描述段落（guide/reference 双镜像、SOP-M2~M5、ready、sop）
+- `mem-tools.md` 移除旧工具→mem0 映射表（v2.1，纯 mem0 速查）
+- 收录《mem0 配置手册》站点快照（`guide/mem0-manual.md` + 15 张截图 + 侧栏入口），权威母本为仓库 `docs/quick-ref/mem0-manual.md`
+
 ## v2.0.0（2026-09-18）
 
 ### 记忆系统切换为 mem0

@@ -1,7 +1,7 @@
 # PRD → 子模块 → 测试/开发提示词 — 一体化 Pipeline
 
 > 本文档定义**从一句话需求生成完整 PRD,再到最小子模块级测试/开发提示词**的可复用 Pipeline。
-> 输出文档结构 **1:1 对齐** `mediation-web/docs/scene/scene-template.md`。
+> 输出文档结构 **1:1 对齐** `business-web/docs/scene/scene-template.md`。
 > 适用于 Cursor / Claude Code / gstack `/qa` / Superpowers brainstroming / OpenSpec / awesome-design-md 等 AI 编码工作流。
 
 ---
@@ -16,7 +16,7 @@
                                   ▼
         ┌─────────────────────────────────────────────┐
         │ N1 — 一句话需求 → 完整 PRD 文档              │  prompt:  N1.md
-        │ 产物: mediation-web/docs/scene/{name}-prd.md│
+        │ 产物: business-web/docs/scene/{name}-prd.md│
         └─────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -46,7 +46,7 @@
                                   ▼
         ┌─────────────────────────────────────────────┐
         │ N6 — Cursor 中串行调用 N1→N2→N3→N4→N5       │  prompt:  N6.md
-        │ 产物: mediation-web/docs/scene/{name}-scene.md│
+        │ 产物: business-web/docs/scene/{name}-scene.md│
         └─────────────────────────────────────────────┘
 ```
 
@@ -64,14 +64,14 @@
 ### 通用占位符(下游所有提示词都使用)
 
 ```
-{{NAME}}           服务短名,例: system / case / mediation
-{{NAME_TITLE}}     中文标题,例: 系统管理 / 案件管理 / 人民调解
+{{NAME}}           服务短名,例: system / case / business
+{{NAME_TITLE}}     中文标题,例: 系统管理 / 案件管理 / 人民业务
 {{PORT}}           后端端口,例: 8082
-{{FRONT_VIEW_DIR}} 前端 views 目录,例: mediation-web/src/views/{{NAME}}
-{{API_DIR}}        前端 api 目录,例: mediation-web/src/api/{{NAME}}
-{{BACKEND_DIR}}    后端基础路径,例: mediation-basic/mediation-module-{{NAME}}
-{{SCENE_FILE}}     最终输出文件,例: mediation-web/docs/scene/{{NAME}}-scene.md
-{{PRD_FILE}}       中间 PRD 文件,例: mediation-web/docs/scene/{{NAME}}-prd.md
+{{FRONT_VIEW_DIR}} 前端 views 目录,例: business-web/src/views/{{NAME}}
+{{API_DIR}}        前端 api 目录,例: business-web/src/api/{{NAME}}
+{{BACKEND_DIR}}    后端基础路径,例: business-basic/business-module-{{NAME}}
+{{SCENE_FILE}}     最终输出文件,例: business-web/docs/scene/{{NAME}}-scene.md
+{{PRD_FILE}}       中间 PRD 文件,例: business-web/docs/scene/{{NAME}}-prd.md
 ```
 
 ---
@@ -91,7 +91,7 @@
 
 ````markdown
 # 角色
-你是 mediation-platform 资深产品经理 + 架构师,负责将一句话需求转换为 PRD。
+你是 business-platform 资深产品经理 + 架构师,负责将一句话需求转换为 PRD。
 
 # 输入
 - 一句话需求:`{{USER_INPUT}}`
@@ -101,7 +101,7 @@
 - 输出路径:`{{PRD_FILE}}`
 
 # 任务
-生成完整 PRD 文档,章节结构 **1:1 对齐** `mediation-web/docs/scene/scene-template.md` 的 §1 ~ §8 骨架。
+生成完整 PRD 文档,章节结构 **1:1 对齐** `business-web/docs/scene/scene-template.md` 的 §1 ~ §8 骨架。
 本 PRD 是后续 N2~N5 的唯一数据源,请最大化信息密度。
 
 # 输出文档骨架(必须严格遵循)
@@ -182,7 +182,7 @@
 1. 章节顺序、命名、子节编号、表格列 **不得改动**。
 2. 不要生成第 10 章内容,留给 N2。
 3. 信息不全时,使用 `<待定>` 占位,**不要省略章节**。
-4. 字段命名、字典类型、权限码命名遵循 mediation-platform 现有规范(case:manage:* / system:config:* / ai:model:*)。
+4. 字段命名、字典类型、权限码命名遵循 business-platform 现有规范(case:manage:* / system:config:* / ai:model:*)。
 5. 完成后输出文件路径与字节数。
 ````
 
@@ -204,7 +204,7 @@
 
 ````markdown
 # 角色
-你是 mediation-platform 架构师,负责将 PRD 拆解为最小可测试子模块。
+你是 business-platform 架构师,负责将 PRD 拆解为最小可测试子模块。
 
 # 输入
 - PRD 文件:`{{PRD_FILE}}`(N1 已生成)
@@ -265,11 +265,11 @@
 
 ````markdown
 # 角色
-你是 mediation-platform QA Lead,负责编写浏览器端到端测试提示词。
+你是 business-platform QA Lead,负责编写浏览器端到端测试提示词。
 
 # 输入
 - PRD 文件:`{{PRD_FILE}}`(含 §10 子模块表)
-- 模板骨架:`mediation-web/docs/scene/scene-template.md` 的 §5.x.2 结构
+- 模板骨架:`business-web/docs/scene/scene-template.md` 的 §5.x.2 结构
 - 当前处理的子模块:`{{MODULE_ID}} = {{NAME|upper}}-NN`
 
 # 任务
@@ -365,7 +365,7 @@
 
 ````markdown
 # 角色
-你是 mediation-platform 资深全栈架构师,负责编写 Cursor 可用的开发提示词。
+你是 business-platform 资深全栈架构师,负责编写 Cursor 可用的开发提示词。
 
 # 输入
 - PRD 文件:`{{PRD_FILE}}`
@@ -380,7 +380,7 @@
 #### {{MODULE_ID}}.3 开发提示词
 
 \`\`\`
-请基于以下信息,在 mediation-platform 仓库中实现【<子模块中文名>】模块。
+请基于以下信息,在 business-platform 仓库中实现【<子模块中文名>】模块。
 
 【模块信息】
 - 服务: <Name>(:<Port>)
@@ -458,10 +458,10 @@
 
 # 规则
 1. 所有占位符必须填充为真实值,不能保留 `{{}}`。
-2. 前端文件清单 + 后端文件清单 = 9~12 个文件,对应阿里 COLA / mediation-framework 4 层结构。
+2. 前端文件清单 + 后端文件清单 = 9~12 个文件,对应阿里 COLA / business-framework 4 层结构。
 3. 【功能需求】必须 ≥ 5 条,从 PRD §3 对应 Story 提炼。
 4. 【交付物清单】至少 10 项,使用 Markdown checkbox。
-5. 参考实现必须指向 mediation-platform 现有模块,不要假设不存在的代码。
+5. 参考实现必须指向 business-platform 现有模块,不要假设不存在的代码。
 ````
 
 ### 4.3 验收
@@ -482,14 +482,14 @@
 
 ````markdown
 # 角色
-你是 mediation-platform 技术文档工程师,负责文档归档。
+你是 business-platform 技术文档工程师,负责文档归档。
 
 # 输入
 - 全部子模块的 §5.x 内容(N3 + N4 已生成)
 - 输出文件:`{{SCENE_FILE}}`
 
 # 任务
-合并并生成 `{{SCENE_FILE}}`,**严格 1:1 对齐** `mediation-web/docs/scene/scene-template.md` 的完整结构。
+合并并生成 `{{SCENE_FILE}}`,**严格 1:1 对齐** `business-web/docs/scene/scene-template.md` 的完整结构。
 
 # 输出文档完整结构
 
@@ -587,7 +587,7 @@
 ### {{NAME_TITLE}} 模块补全对照表
 (从 PRD §10 + 当前仓库扫描结果生成)
 
-| 模块 | tianque-ui 路径 | mediation-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
+| 模块 | example-ui 路径 | business-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
 
 ---
 
@@ -601,7 +601,7 @@
 1. 章节顺序、命名、子节编号、表格列、占位符语义 **1:1 对齐** scene-template.md。
 2. §1、§2、§3、§4 大部分章节直接复用 template 内容,只替换端口/服务名。
 3. §5 是 N3+N4 合并产物,每个子模块保留 5.x.1 / 5.x.2 / 5.x.3 三个子节。
-4. §7 表格必须先扫描 mediation-platform 仓库确认模块状态,不要凭空填写 ✅。
+4. §7 表格必须先扫描 business-platform 仓库确认模块状态,不要凭空填写 ✅。
 5. 输出最终文件路径与总行数。
 ````
 
@@ -651,7 +651,7 @@
 - `OpenSpec`(规范驱动开发)
 
 ### Step 2 — 执行 N1
-读取 `mediation-web/docs/scene/scene-template.md` 作为骨架模板。
+读取 `business-web/docs/scene/scene-template.md` 作为骨架模板。
 按 N1 提示词生成 `{{PRD_FILE}}`,覆盖 §1~§9。
 
 ### Step 3 — 执行 N2
@@ -679,9 +679,9 @@
 3. 任何偏离模板的差异说明
 
 ## 模板锚点
-- 骨架模板:`@mediation-web/docs/scene/scene-template.md`
-- 范例文档:`@mediation-web/docs/scene/ai-scene.md`
-- 本 Pipeline:`@mediation-web/docs/scene/pipeline.md`(本文件)
+- 骨架模板:`@business-web/docs/scene/scene-template.md`
+- 范例文档:`@business-web/docs/scene/ai-scene.md`
+- 本 Pipeline:`@business-web/docs/scene/pipeline.md`(本文件)
 
 ## 注意事项
 - 任何步骤失败,必须停下并报告,不得跳过。
@@ -724,11 +724,11 @@ USER_INPUT: "做一个案件登记页面"
 NAME: case
 NAME_TITLE: 案件管理
 PORT: 8084
-FRONT_VIEW_DIR: mediation-web/src/views/case
-API_DIR: mediation-web/src/api/case
-BACKEND_DIR: mediation-basic/mediation-module-case
-PRD_FILE: mediation-web/docs/scene/case-prd.md
-SCENE_FILE: mediation-web/docs/scene/case-scene.md
+FRONT_VIEW_DIR: business-web/src/views/case
+API_DIR: business-web/src/api/case
+BACKEND_DIR: business-basic/business-module-case
+PRD_FILE: business-web/docs/scene/case-prd.md
+SCENE_FILE: business-web/docs/scene/case-scene.md
 ```
 
 直接粘贴上述 YAML 到 N6 提示词顶部,即可全自动生成。

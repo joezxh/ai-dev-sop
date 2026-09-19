@@ -151,7 +151,7 @@
 
 # 或导入 Cookie 跳过登录
 /setup-browser-cookies
-选择已登录的 mediation_platform 会话
+选择已登录的 business_platform 会话
 执行测试...
 ```
 
@@ -372,7 +372,7 @@ $B screenshot "after-login.png"
 #### 5.1.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【参数配置】模块。
+请基于以下信息,在 business-platform 仓库中实现【参数配置】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -386,12 +386,12 @@ $B screenshot "after-login.png"
   - system:config:query(查询配置)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/config/index.vue
-- 表单弹窗: mediation-web/src/views/system/config/ConfigFormModal.vue
-- API 封装: mediation-web/src/api/system/config.ts
+- 主页面: business-web/src/views/system/config/index.vue
+- 表单弹窗: business-web/src/views/system/config/ConfigFormModal.vue
+- API 封装: business-web/src/api/system/config.ts
 
 【后端文件清单】
-- Controller: mediation-basic/mediation-module-system/mediation-module-system-server/src/main/java/.../controller/ConfigController.java
+- Controller: business-basic/business-module-system/business-module-system-server/src/main/java/.../controller/ConfigController.java
 - Service 接口: .../service/ConfigService.java
 - DO: .../dal/dataobject/ConfigDO.java
 - Mapper: .../dal/mapper/ConfigMapper.java
@@ -423,8 +423,8 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为 CRUD 参考)
-- mediation-web/src/views/system/notice/index.vue(通知公告,适合作为弹窗表单参考)
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为 CRUD 参考)
+- business-web/src/views/system/notice/index.vue(通知公告,适合作为弹窗表单参考)
 
 【测试验证】
 实现完成后,使用 5.1.2 测试提示词中的测试场景验证,重点验证:
@@ -618,7 +618,7 @@ $B screenshot "after-login.png"
 #### 5.2.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【字典管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【字典管理】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -627,10 +627,10 @@ $B screenshot "after-login.png"
 - 权限前缀: system:dict-type: / system:dict-data:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/dict/index.vue
-- 类型弹窗: mediation-web/src/views/system/dict/DictTypeFormModal.vue
-- 数据弹窗: mediation-web/src/views/system/dict/DictDataFormModal.vue
-- API 封装: mediation-web/src/api/system/dict/type.ts, data.ts
+- 主页面: business-web/src/views/system/dict/index.vue
+- 类型弹窗: business-web/src/views/system/dict/DictTypeFormModal.vue
+- 数据弹窗: business-web/src/views/system/dict/DictDataFormModal.vue
+- API 封装: business-web/src/api/system/dict/type.ts, data.ts
 
 【API 端点】
 | 操作 | 方法 | 路径 |
@@ -784,7 +784,7 @@ $B screenshot "after-login.png"
 #### 5.3.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【通知公告】模块。
+请基于以下信息,在 business-platform 仓库中实现【通知公告】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -793,9 +793,9 @@ $B screenshot "after-login.png"
 - 权限前缀: system:notice:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/notice/index.vue
-- 表单弹窗: mediation-web/src/views/system/notice/NoticeFormModal.vue
-- API 封装: mediation-web/src/api/system/notice.ts
+- 主页面: business-web/src/views/system/notice/index.vue
+- 表单弹窗: business-web/src/views/system/notice/NoticeFormModal.vue
+- API 封装: business-web/src/api/system/notice.ts
 
 【API 端点】
 | 操作 | 方法 | 路径 |
@@ -952,7 +952,7 @@ $B screenshot "after-login.png"
 #### 5.4.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【站内信管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【站内信管理】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -961,11 +961,11 @@ $B screenshot "after-login.png"
 - 权限前缀: system:notify-template: / system:notify-message:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/notify/index.vue(Tab 结构)
-- 模板弹窗: mediation-web/src/views/system/notify/NotifyTemplateFormModal.vue
-- 发送弹窗: mediation-web/src/views/system/notify/NotifySendModal.vue
-- 详情弹窗: mediation-web/src/views/system/notify/NotifyMessageDetailModal.vue
-- API 封装: mediation-web/src/api/system/notify.ts
+- 主页面: business-web/src/views/system/notify/index.vue(Tab 结构)
+- 模板弹窗: business-web/src/views/system/notify/NotifyTemplateFormModal.vue
+- 发送弹窗: business-web/src/views/system/notify/NotifySendModal.vue
+- 详情弹窗: business-web/src/views/system/notify/NotifyMessageDetailModal.vue
+- API 封装: business-web/src/api/system/notify.ts
 
 【功能需求】
 1. 两个 Tab:消息模板 + 站内信
@@ -1235,7 +1235,7 @@ $B screenshot "after-login.png"
 #### 5.5.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【文件管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【文件管理】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -1244,14 +1244,14 @@ $B screenshot "after-login.png"
 - 权限前缀: system:file:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/file/index.vue(718行)
-- 预览弹窗: mediation-web/src/views/system/file/components/FilePreviewModal.vue
-- 网格视图: mediation-web/src/views/system/file/components/FileGridView.vue
-- 统计卡片: mediation-web/src/views/system/file/components/FileStatsCard.vue
-- 目录抽屉: mediation-web/src/views/system/file/components/FileTreeDrawer.vue
-- 拖拽覆盖: mediation-web/src/views/system/file/components/FileDropOverlay.vue
+- 主页面: business-web/src/views/system/file/index.vue(718行)
+- 预览弹窗: business-web/src/views/system/file/components/FilePreviewModal.vue
+- 网格视图: business-web/src/views/system/file/components/FileGridView.vue
+- 统计卡片: business-web/src/views/system/file/components/FileStatsCard.vue
+- 目录抽屉: business-web/src/views/system/file/components/FileTreeDrawer.vue
+- 拖拽覆盖: business-web/src/views/system/file/components/FileDropOverlay.vue
 - composables: useFileStats.ts, useFileView.ts
-- API 封装: mediation-web/src/api/system/file.ts
+- API 封装: business-web/src/api/system/file.ts
 
 【功能需求】
 1. 存储统计卡片(FileStatsCard)
@@ -1481,7 +1481,7 @@ $B screenshot "after-login.png"
 #### 5.6.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【文件配置管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【文件配置管理】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -1490,8 +1490,8 @@ $B screenshot "after-login.png"
 - 权限前缀: system:file-config:
 
 【前端文件清单】
-- 表单弹窗: mediation-web/src/views/system/file/FileConfigFormModal.vue(355行)
-- API 封装: mediation-web/src/api/system/fileConfig.ts
+- 表单弹窗: business-web/src/views/system/file/FileConfigFormModal.vue(355行)
+- API 封装: business-web/src/api/system/fileConfig.ts
 
 【功能需求】
 1. 配置列表 + 搜索(名称/存储器类型)
@@ -1626,7 +1626,7 @@ $B screenshot "after-login.png"
 #### 5.7.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【邮件管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【邮件管理】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -1635,8 +1635,8 @@ $B screenshot "after-login.png"
 - 权限前缀: system:mail-account: / system:mail-template:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/mail/index.vue(297行,三 Tab 内嵌表单+弹窗)
-- API 封装: mediation-web/src/api/system/mail.ts
+- 主页面: business-web/src/views/system/mail/index.vue(297行,三 Tab 内嵌表单+弹窗)
+- API 封装: business-web/src/api/system/mail.ts
 
 【功能需求】
 1. 三个 Tab:邮箱账号 + 邮件模板 + 发送日志
@@ -1760,7 +1760,7 @@ $B screenshot "after-login.png"
 #### 5.8.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【短信管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【短信管理】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -1769,8 +1769,8 @@ $B screenshot "after-login.png"
 - 权限前缀: system:sms-channel: / system:sms-template:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/sms/index.vue(311行,三 Tab 内嵌弹窗)
-- API 封装: mediation-web/src/api/system/sms.ts
+- 主页面: business-web/src/views/system/sms/index.vue(311行,三 Tab 内嵌弹窗)
+- API 封装: business-web/src/api/system/sms.ts
 
 【功能需求】
 1. 三个 Tab:短信渠道 + 短信模板 + 发送日志
@@ -1881,7 +1881,7 @@ $B screenshot "after-login.png"
 #### 5.9.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【操作日志】模块。
+请基于以下信息,在 business-platform 仓库中实现【操作日志】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -1890,8 +1890,8 @@ $B screenshot "after-login.png"
 - 权限前缀: system:operate-log:
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/operatelog/index.vue(204行)
-- API 封装: mediation-web/src/api/system/operatelog.ts
+- 主页面: business-web/src/views/system/operatelog/index.vue(204行)
+- API 封装: business-web/src/api/system/operatelog.ts
 
 【功能需求】
 1. 日志列表(只读,无增删改)
@@ -1998,7 +1998,7 @@ $B screenshot "after-login.png"
 #### 5.10.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【我的站内信】模块。
+请基于以下信息,在 business-platform 仓库中实现【我的站内信】模块。
 
 【模块信息】
 - 服务: System(:8082)
@@ -2007,9 +2007,9 @@ $B screenshot "after-login.png"
 - 权限: 登录用户即可访问
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/system/notify/my/index.vue(309行)
-- 详情弹窗: mediation-web/src/views/system/notify/NotifyMessageDetailModal.vue
-- API 封装: mediation-web/src/api/system/notify.ts(notifyMessageApi)
+- 主页面: business-web/src/views/system/notify/my/index.vue(309行)
+- 详情弹窗: business-web/src/views/system/notify/NotifyMessageDetailModal.vue
+- API 封装: business-web/src/api/system/notify.ts(notifyMessageApi)
 
 【功能需求】
 1. 消息列表(List组件):头像+Badge、发送人、类型Tag、内容摘要、时间
@@ -2075,14 +2075,14 @@ $B screenshot "after-login.png"
 #### 5.11.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【站内信详情弹窗】组件。
+请基于以下信息,在 business-platform 仓库中实现【站内信详情弹窗】组件。
 
 【模块信息】
 - 组件: NotifyMessageDetailModal
 - 复用位置: 站内信管理 Tab + 我的站内信
 
 【前端文件清单】
-- 详情弹窗: mediation-web/src/views/system/notify/NotifyMessageDetailModal.vue(88行)
+- 详情弹窗: business-web/src/views/system/notify/NotifyMessageDetailModal.vue(88行)
 
 【功能需求】
 1. 弹窗展示消息详情:模板编码、发送人、内容(HTML)、类型、状态、时间
@@ -2663,7 +2663,7 @@ $B screenshot "after-login.png"
 ---
 
 【测试场景 9:发件人昵称】
-1. 填写发件人昵称(如:「调解平台」)
+1. 填写发件人昵称(如:「业务平台」)
 2. 验证保存和回填
 
 预期结果:✅ 昵称字段正常
@@ -3453,11 +3453,11 @@ $B screenshot "after-login.png"
 
 ## 7.模块开发对照与补全清单
 
-本章节对照 tianque-ui(参考项目)与 mediation-platform(当前项目),梳理 System 模块的实现状态与补全建议。
+本章节对照 example-ui(参考项目)与 business-platform(当前项目),梳理 System 模块的实现状态与补全建议。
 
 ### System 模块补全对照表
 
-| 模块 | tianque-ui 路径 | mediation-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
+| 模块 | example-ui 路径 | business-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
 |------|-----------------|----------------------|---------|---------|--------|
 | 参数配置 | system/config/index.vue | system/config/index.vue | ✅ 完整 | ✅ | 对齐:无明显差距 |
 | 字典管理 | system/dict/index.vue + dict/data/ | system/dict/index.vue | ✅ 完整(子组件化) | ✅ | 已完成:DictTypeFormModal + DictDataFormModal 子组件 |
@@ -3473,8 +3473,8 @@ $B screenshot "after-login.png"
 | 短信渠道 | system/sms/channel/index.vue | system/sms/index.vue | ✅ 完整(Tab结构) | ✅ | 当前已是完整 Tab 结构(渠道/模板/日志) |
 | 短信模板 | system/sms/template/index.vue | system/sms/index.vue | ✅ 完整(Tab结构) | ✅ | 当前已是完整 Tab 结构 |
 | 短信日志 | system/sms/log/index.vue | system/sms/index.vue | ✅ 完整(Tab结构) | ✅ | 当前已是完整 Tab 结构 |
-| 文件管理 | infra/file/index.vue | system/file/index.vue | ✅ 完整(列表+网格+预览+拖拽上传) | ✅ | 当前文件管理较 tianque-ui 更完善 |
-| 文件配置 | infra/file/FileForm.vue | system/file/FileConfigFormModal.vue | ✅ 完整(测试连接+主配置+复制) | ✅ | 当前文件配置较 tianque-ui 更完善 |
+| 文件管理 | infra/file/index.vue | system/file/index.vue | ✅ 完整(列表+网格+预览+拖拽上传) | ✅ | 当前文件管理较 example-ui 更完善 |
+| 文件配置 | infra/file/FileForm.vue | system/file/FileConfigFormModal.vue | ✅ 完整(测试连接+主配置+复制) | ✅ | 当前文件配置较 example-ui 更完善 |
 | API 访问日志 | infra/apiAccessLog/index.vue | system/apiAccessLog/index.vue | ✅ 完整(含导出) | ✅ | 已完成:ApiAccessLogDetailModal + 导出 |
 | API 错误日志 | infra/apiErrorLog/index.vue | system/apiErrorLog/index.vue | ✅ 完整(含状态流转) | ✅ | 已完成:处理状态流转 + 导出 |
 | Redis 监控 | infra/redis/index.vue | system/redis/index.vue | ✅ 完整(仪表盘+图表) | ✅ | 已完成:ECharts 饼图 + 仪表盘 |

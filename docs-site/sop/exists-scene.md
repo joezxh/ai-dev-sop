@@ -117,11 +117,11 @@
 
 ```
 /brainstorm
-参照模板 以@mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
--   后端 @mediation-basic/mediation-module-system服务名：system 端口 8082
--   前端 views目录：@mediation-web/src/api/systemapi模块: @mediation-web/src/views/system
+参照模板 以@business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端 @business-basic/business-module-system服务名：system 端口 8082
+-   前端 views目录：@business-web/src/api/systemapi模块: @business-web/src/views/system
 
-输出文件路径：`mediation-web/docs/scene/system-scene.md`
+输出文件路径：`business-web/docs/scene/system-scene.md`
 文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
 特别强调：System 服务测试模块 必须完成所有模块的测试提示词的编写
 ```
@@ -130,11 +130,11 @@
 
 ```
 /brainstorm
-参照模板 以@mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
--   后端  mediation-harness-module 服务名：harness 端口 8087
--   前端 views目录：@mediation-web/src/api/harness  api模块: @mediation-web/src/views/harness
+参照模板 以@business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端  business-harness-module 服务名：harness 端口 8087
+-   前端 views目录：@business-web/src/api/harness  api模块: @business-web/src/views/harness
 
-输出文件路径：`mediation-web/docs/scene/harness-scene.md`
+输出文件路径：`business-web/docs/scene/harness-scene.md`
 特别强调：harness 服务测试模块 必须完成所有模块的测试提示词的编写
 ```
 
@@ -176,7 +176,7 @@
 
 ```
 /brainstorm
-根据页面 @mediation-web/src/views/kms/legal/area 以及常规行政区域管理功能的需求，对 KMS-08 的测试场景进行详细细化和完善。请分析该行政区域管理页面的实际功能特性，包括但不限于列表展示、搜索筛选、新增、编辑、删除等操作，并基于真实的页面交互流程和业务逻辑，制定更加全面和贴近实际使用的测试场景。
+根据页面 @business-web/src/views/kms/legal/area 以及常规行政区域管理功能的需求，对 KMS-08 的测试场景进行详细细化和完善。请分析该行政区域管理页面的实际功能特性，包括但不限于列表展示、搜索筛选、新增、编辑、删除等操作，并基于真实的页面交互流程和业务逻辑，制定更加全面和贴近实际使用的测试场景。
 ```
 
 ### 1.4 测试提示词转换为开发提示词
@@ -186,7 +186,7 @@
 **Prompt**：
 
 ```
-使用 /qa skill 执行测试时，针对模板 @mediation-web/docs/scene/scene-template.md 中 @scene-template.md (246-365) 模块的测试场景，如果发现这些功能尚未开发实现，请将测试流程转换为模块开发流程。
+使用 /qa skill 执行测试时，针对模板 @business-web/docs/scene/scene-template.md 中 @scene-template.md (246-365) 模块的测试场景，如果发现这些功能尚未开发实现，请将测试流程转换为模块开发流程。
 
 请提供一个完整的提示词转换方案，将原本的测试提示词转化为开发提示词，并生成相应的 Skill 配置。
 
