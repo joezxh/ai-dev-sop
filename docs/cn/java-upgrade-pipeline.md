@@ -209,7 +209,7 @@ flowchart LR
 
 | 步骤 | 动作 | 输出 |
 |------|------|------|
-| 1 | 准备源仓库(后端 `mediation-platform` + 前端 `mediation-web`),确认权限与分支策略 | 仓库就绪 |
+| 1 | 准备源仓库(后端 `business-platform` + 前端 `business-web`),确认权限与分支策略 | 仓库就绪 |
 | 2 | 创建升级分支 `upgrade/java21-vue3`(以 main 为基线) | git branch |
 | 3 | **后端盘点**:`mvn -q -DskipTests dependency:tree > inventory/backend-deps.txt`、`mvn -q help:effective-pom > inventory/backend-effective-pom.xml` | `inventory/backend-deps.txt`、`backend-effective-pom.xml` |
 | 4 | **后端 JDK 扫描**:`jdeps --list-deps <module>.jar`(找 JDK 内部 API)、`jdeprscan <module>.jar`(找已弃用 API) | `inventory/backend-jdeps.txt`、`backend-jdeprscan.txt` |
@@ -234,8 +234,8 @@ flowchart LR
 [角色] 你是资深 DevOps + 架构师,擅长 Java/Spring/Vue 全栈工程盘点与升级基线建立。
 
 [输入]
-  1. 后端仓库: {{BACKEND_REPO}} (默认: mediation-platform)
-  2. 前端仓库: {{FRONTEND_REPO}} (默认: mediation-web)
+  1. 后端仓库: {{BACKEND_REPO}} (默认: business-platform)
+  2. 前端仓库: {{FRONTEND_REPO}} (默认: business-web)
   3. 升级目标: Java 8→21 + Vue 2→3 + Ant Design Vue + Vite
   4. 升级分支: {{UPGRADE_BRANCH}} (默认: upgrade/java21-vue3)
   5. 业务背景: 1~3 句说明
@@ -450,10 +450,10 @@ rm -rf docs/upgrade/
   6. **java-upgrade-todo.md**(N2 节点直接消费):
      每条任务:
      ### TASK-J1.1 — 升级 lombok 到 1.18.32
-       - 涉及文件: mediation-dependencies/pom.xml
-       - AI 提示词: "将 mediation-dependencies/pom.xml 中 lombok.version 从 {{OLD}} 升级到 1.18.32,保留 <lombok.version>1.18.32</lombok.version> 格式"
+       - 涉及文件: business-dependencies/pom.xml
+       - AI 提示词: "将 business-dependencies/pom.xml 中 lombok.version 从 {{OLD}} 升级到 1.18.32,保留 <lombok.version>1.18.32</lombok.version> 格式"
        - 验收: mvn -q validate 通过
-       - 回滚: git checkout upgrade-baseline -- mediation-dependencies/pom.xml
+       - 回滚: git checkout upgrade-baseline -- business-dependencies/pom.xml
      必含任务类别:
      - 依赖版本升级(Lombok / MyBatis-Plus / Hutool / Spring 全家桶 / Swagger)
      - 命名空间替换(javax.* → jakarta.*)
@@ -537,12 +537,12 @@ rm -rf docs/upgrade/01-analysis/
 | 步骤 | 动作 | 输出 |
 |------|------|------|
 | 1 | 读取 `java-upgrade-todo.md`,按影响面评分从低到高排序 | 任务队列 |
-| 2 | **任务 T1:升级根 POM 与 BOM**(`mediation-dependencies/pom.xml`) | 修改后 POM |
-| 3 | **任务 T2:升级 Spring Boot Starter 模块**(`mediation-starter-*` 全部 16 个) | 修改后 POM |
-| 4 | **任务 T3:升级基础模块**(`mediation-module-system`、`mediation-module-uaa`) | 修改后代码 + POM |
-| 5 | **任务 T4:业务模块升级**(`mediation-module-mediation`、`mediation-module-case`、`mediation-module-dispatch`) | 修改后代码 + POM |
-| 6 | **任务 T5:AI 模块升级**(`mediation-ai-module`、`mediation-harness-module`) | 修改后代码 + POM |
-| 7 | **任务 T6:网关升级**(`mediation-gateway`) | 修改后代码 + POM |
+| 2 | **任务 T1:升级根 POM 与 BOM**(`business-dependencies/pom.xml`) | 修改后 POM |
+| 3 | **任务 T2:升级 Spring Boot Starter 模块**(`business-starter-*` 全部 16 个) | 修改后 POM |
+| 4 | **任务 T3:升级基础模块**(`business-module-system`、`business-module-uaa`) | 修改后代码 + POM |
+| 5 | **任务 T4:业务模块升级**(`business-module-business`、`business-module-case`、`business-module-dispatch`) | 修改后代码 + POM |
+| 6 | **任务 T5:AI 模块升级**(`business-ai-module`、`business-harness-module`) | 修改后代码 + POM |
+| 7 | **任务 T6:网关升级**(`business-gateway`) | 修改后代码 + POM |
 | 8 | 每个任务完成后,执行 `mvn -q -pl <module> -am -DskipTests compile` 验证 | 编译日志 |
 | 9 | 跑 `mvn -q -pl <module> -am test` 验证 | 测试报告 |
 | 10 | **批量替换 javax → jakarta**:用 IntelliJ Migration Tool / OpenRewrite 或 `sed`(白名单) | `jakarta-migration.log` |
@@ -552,7 +552,7 @@ rm -rf docs/upgrade/01-analysis/
 | 14 | **可选:Java 17+ 新特性适配**(人工决策哪些特性启用) | 代码补丁 |
 | 15 | `mvn -q -DskipTests package` 全模块编译 | `mvn-package.log` |
 | 16 | `mvn -q verify` 全量测试 + 校验 | `mvn-verify.log` |
-| 17 | 运行 Spring Boot 3 启动验证:`mvn -q -pl mediation-module-uaa/mediation-module-uaa-server spring-boot:run`(后台)→ 探活 `/actuator/health` | `startup-probe.log` |
+| 17 | 运行 Spring Boot 3 启动验证:`mvn -q -pl business-module-uaa/business-module-uaa-server spring-boot:run`(后台)→ 探活 `/actuator/health` | `startup-probe.log` |
 | 18 | git commit:每个任务一个 commit,信息遵循 `chore(deps):` / `refactor(java):` / `feat(spring):` | git log |
 | 19 | 更新 `upgrade-state.json.phase = "N2"` + `java_state.completed_tasks` | `upgrade-state.json` |
 | 20 | 触发 N3 | 移交 |
@@ -575,7 +575,7 @@ rm -rf docs/upgrade/01-analysis/
 
   ## 阶段 A:依赖升级(按 BOM 顺序)
   ### TASK-J2.1 — 升级根 POM BOM
-    AI 提示词: "修改 mediation-dependencies/pom.xml 的 <properties>:
+    AI 提示词: "修改 business-dependencies/pom.xml 的 <properties>:
       - spring.boot.version → 3.2.5(或 3.5.x,根据 ADR-0002 决策)
       - spring.cloud.version → 2023.0.1(或 2025.0.x)
       - spring.cloud.alibaba.version → 2023.0.1.0(或 2025.0.0.0)
@@ -586,10 +586,10 @@ rm -rf docs/upgrade/01-analysis/
       - knife4j.version → 4.5.0
       保持原有注释结构。修改后执行 mvn -q validate 验证。"
     验收: mvn -q validate 退出码 0
-    回滚: git checkout HEAD -- mediation-dependencies/pom.xml
+    回滚: git checkout HEAD -- business-dependencies/pom.xml
 
   ### TASK-J2.2 — 升级各 starter 模块 POM
-    对每个 mediation-starter-* 模块,执行:
+    对每个 business-starter-* 模块,执行:
       AI 提示词: "修改 {{starter}}/pom.xml:
         - parent.version → 与新 BOM 一致
         - 移除 javax.* 依赖(如 javax.annotation:javax.annotation-api)
@@ -599,7 +599,7 @@ rm -rf docs/upgrade/01-analysis/
     验收: 所有 starter 编译通过
 
   ### TASK-J2.3 — 升级基础模块
-    对 mediation-module-system、mediation-module-uaa:
+    对 business-module-system、business-module-uaa:
       - pom.xml 同步 BOM 版本
       - 删除 springfox 依赖,添加 springdoc-openapi-starter-webmvc-ui
       - 替换 javax.annotation.PostConstruct → jakarta.annotation.PostConstruct
@@ -608,7 +608,7 @@ rm -rf docs/upgrade/01-analysis/
       - 替换 javax.validation.* → jakarta.validation.*
 
   ### TASK-J2.4 — 升级业务模块
-    对 mediation-module-mediation、mediation-module-case、mediation-module-dispatch、mediation-ai-module、mediation-harness-module、mediation-gateway:
+    对 business-module-business、business-module-case、business-module-dispatch、business-ai-module、business-harness-module、business-gateway:
       - 与 TASK-J2.3 同样的 javax→jakarta 替换
       - 适配 Spring Security 6 新 API(SecurityFilterChain 替代 WebSecurityConfigurerAdapter)
       - 适配 Spring Boot 3 自动配置(移除 spring.factories,使用 AutoConfiguration.imports)
@@ -674,8 +674,8 @@ rm -rf docs/upgrade/01-analysis/
         若失败,记录失败模块与原因,触发 N1 反馈回路。"
 
   ## 阶段 E:启动冒烟
-    AI 提示词: "启动 mediation-module-uaa-server:
-      mvn -q -pl mediation-module-uaa/mediation-module-uaa-server spring-boot:run &> startup.log &
+    AI 提示词: "启动 business-module-uaa-server:
+      mvn -q -pl business-module-uaa/business-module-uaa-server spring-boot:run &> startup.log &
       等待 30s,执行 curl -sf http://localhost:8080/actuator/health 验证
       期望:返回 {\"status\":\"UP\"}
       停止:kill %1
@@ -730,20 +730,20 @@ git push origin upgrade/java21-vue3 --force-with-lease
 
 ### 4.6 后端升级目录与配置模板
 
-升级后的关键文件结构(节选,对照 mediation-platform 当前结构):
+升级后的关键文件结构(节选,对照 business-platform 当前结构):
 
 ```
-mediation-platform/
-├── pom.xml                                    # 根 POM(parent 引用 mediation-dependencies)
-├── mediation-framework/
+business-platform/
+├── pom.xml                                    # 根 POM(parent 引用 business-dependencies)
+├── business-framework/
 │   ├── pom.xml                                # 聚合 POM
-│   ├── mediation-dependencies/
+│   ├── business-dependencies/
 │   │   └── pom.xml                            # 依赖管理 BOM(版本中心)
 │   │       └── <properties>                   # spring.boot=3.2.5 / spring.cloud=2023.0.1 / lombok=1.18.32
-│   ├── mediation-common/
+│   ├── business-common/
 │   │   ├── pom.xml
 │   │   └── src/main/java/                     # 通用工具类
-│   └── mediation-starter-*/
+│   └── business-starter-*/
 │       ├── pom.xml
 │       └── src/main/
 │           ├── java/                           # 自动配置类
@@ -751,15 +751,15 @@ mediation-platform/
 │               └── META-INF/
 │                   └── spring/
 │                       └── org.springframework.boot.autoconfigure.AutoConfiguration.imports
-├── mediation-basic/
-│   ├── mediation-module-uaa/                  # 认证模块
-│   ├── mediation-module-system/               # 系统模块
-│   └── mediation-gateway/                     # Spring Cloud Gateway
-├── mediation-platform-biz/                    # 业务模块
-│   ├── mediation-module-mediation/
-│   ├── mediation-module-case/
-│   └── mediation-module-dispatch/
-├── mediation-ai/                              # AI 模块
+├── business-basic/
+│   ├── business-module-uaa/                  # 认证模块
+│   ├── business-module-system/               # 系统模块
+│   └── business-gateway/                     # Spring Cloud Gateway
+├── business-platform-biz/                    # 业务模块
+│   ├── business-module-business/
+│   ├── business-module-case/
+│   └── business-module-dispatch/
+├── business-ai/                              # AI 模块
 └── docs/upgrade/                              # Pipeline 产物落盘
     ├── 00-baseline/
     ├── 01-analysis/
@@ -816,10 +816,10 @@ mediation-platform/
 **AutoConfiguration.imports 模板**(替代 spring.factories):
 
 ```
-# mediation-starter-mybatis/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
-com.tianque.mediation.starter.mybatis.MybatisAutoConfiguration
-com.tianque.mediation.starter.mybatis.DynamicDataSourceAutoConfiguration
-com.tianque.mediation.starter.mybatis.MybatisPlusAutoConfiguration
+# business-starter-mybatis/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+com.example.business.starter.mybatis.MybatisAutoConfiguration
+com.example.business.starter.mybatis.DynamicDataSourceAutoConfiguration
+com.example.business.starter.mybatis.MybatisPlusAutoConfiguration
 ```
 
 ---
@@ -942,13 +942,13 @@ com.tianque.mediation.starter.mybatis.MybatisPlusAutoConfiguration
 
   13. **vue-upgrade-todo.md**(N4 节点直接消费):
       ### TASK-V4.1 — 新建 Vite 工程骨架(不动旧工程)
-        AI 提示词: "在同级目录创建 mediation-web-vite3,初始化:
-          pnpm create vite@latest mediation-web-vite3 -- --template vue-ts
-          cd mediation-web-vite3
+        AI 提示词: "在同级目录创建 business-web-vite3,初始化:
+          pnpm create vite@latest business-web-vite3 -- --template vue-ts
+          cd business-web-vite3
           pnpm add ant-design-vue@^4 pinia@^2 vue-router@^4 dayjs
           pnpm add -D @vitejs/plugin-vue unplugin-vue-components vite-plugin-style-import
         验收:pnpm dev 能启动空白页"
-        回滚: rm -rf mediation-web-vite3
+        回滚: rm -rf business-web-vite3
 
       ### TASK-V4.2 — 迁移工具链配置
       ### TASK-V4.3 — 迁移路由(router/index.ts)
@@ -998,7 +998,7 @@ com.tianque.mediation.starter.mybatis.MybatisPlusAutoConfiguration
 # N3 主要是文档产出,无代码改动
 rm -rf docs/upgrade/03-frontend-analysis/
 # 若 N3 中错误地初始化了新工程(违反零编码约束)
-rm -rf mediation-web-vite3
+rm -rf business-web-vite3
 ```
 
 ---
@@ -1021,7 +1021,7 @@ rm -rf mediation-web-vite3
 | 步骤 | 动作 | 输出 |
 |------|------|------|
 | 1 | 读取 N3 `vue-upgrade-todo.md`,按依赖顺序排序 | 任务队列 |
-| 2 | **任务 V1:初始化 Vite 工程**(在同级新目录或就地替换) | `mediation-web/` 新结构 |
+| 2 | **任务 V1:初始化 Vite 工程**(在同级新目录或就地替换) | `business-web/` 新结构 |
 | 3 | **任务 V2:迁移配置文件**:`vite.config.ts` / `tsconfig.json` / `.env.*` | 配置文件 |
 | 4 | **任务 V3:迁移入口**:`main.ts` / `App.vue` / `index.html` | 入口文件 |
 | 5 | **任务 V4:迁移路由**:`router/index.ts` | 路由文件 |
@@ -1053,7 +1053,7 @@ rm -rf mediation-web-vite3
   - N3 component-mapping/element-to-antdv.md(组件替换表)
   - N3 vite-migration/webpack-to-vite.md(构建配置迁移)
   - 旧工程目录: {{OLD_PROJECT_DIR}} (默认: src/)
-  - 新工程目录: {{NEW_PROJECT_DIR}} (默认: mediation-web/ 同级替换)
+  - 新工程目录: {{NEW_PROJECT_DIR}} (默认: business-web/ 同级替换)
   - Node ≥ 18,pnpm ≥ 8
 
 [任务 — 零编码,每条任务对应一段 AI 提示词]
@@ -1065,7 +1065,7 @@ rm -rf mediation-web-vite3
       pnpm add ant-design-vue@^4 @ant-design/icons-vue@^7 pinia@^2 pinia-plugin-persistedstate@^4 vue-router@^4 dayjs axios
       pnpm add -D @vitejs/plugin-vue @types/node sass unplugin-vue-components unplugin-auto-import @vue/tsconfig typescript@^5 vue-tsc
       删除 src/components/HelloWorld.vue、src/style.css、src/assets/vue.svg
-      修改 package.json 的 name=mediation-web、version=1.0.0
+      修改 package.json 的 name=business-web、version=1.0.0
       验收:pnpm dev 启动成功,空白首页可见"
     回滚: rm -rf {{NEW_PROJECT_DIR}}/* 恢复 git
 
@@ -1288,10 +1288,10 @@ rm -rf mediation-web-vite3
 
 ### 6.5 前端升级目录与配置模板
 
-升级后的 `mediation-web/` 结构(对照当前结构):
+升级后的 `business-web/` 结构(对照当前结构):
 
 ```
-mediation-web/
+business-web/
 ├── package.json
 ├── pnpm-lock.yaml
 ├── tsconfig.json / tsconfig.node.json
@@ -1317,7 +1317,7 @@ mediation-web/
 │   ├── api/                                 # 全部 API 模块
 │   │   ├── system/
 │   │   ├── uaa/
-│   │   ├── mediation/
+│   │   ├── business/
 │   │   ├── case/
 │   │   ├── dispatch/
 │   │   └── index.ts
@@ -1360,7 +1360,7 @@ mediation-web/
 │   │   ├── dashboard/
 │   │   ├── login/
 │   │   ├── system/
-│   │   ├── mediation/
+│   │   ├── business/
 │   │   ├── case/
 │   │   ├── dispatch/
 │   │   └── error/
@@ -1558,8 +1558,8 @@ git checkout upgrade-baseline -- src/
 
   1. **环境准备**:
      AI 提示词: "启动服务:
-       cd mediation-platform && mvn -q -pl mediation-module-uaa/mediation-module-uaa-server spring-boot:run &> backend.log &
-       cd mediation-web && pnpm preview --port 3000 &> frontend.log &
+       cd business-platform && mvn -q -pl business-module-uaa/business-module-uaa-server spring-boot:run &> backend.log &
+       cd business-web && pnpm preview --port 3000 &> frontend.log &
        等待 30s,健康检查:
          curl -sf {{BACKEND_URL}}/actuator/health
          curl -sf {{FRONTEND_URL}} | grep -q 'div id=\"app\"'
@@ -1600,10 +1600,10 @@ git checkout upgrade-baseline -- src/
        - 关键路径:
          auth/login.spec.ts
          dashboard/home.spec.ts
-         mediation/case-list.spec.ts
-         mediation/case-detail.spec.ts
-         mediation/case-submit.spec.ts
-         mediation/mediation-session.spec.ts
+         business/case-list.spec.ts
+         business/case-detail.spec.ts
+         business/case-submit.spec.ts
+         business/business-session.spec.ts
          system/dict.spec.ts
          system/user.spec.ts
          user/profile.spec.ts
@@ -1788,14 +1788,14 @@ git checkout <N4-末态-commit-sha> -- <失败文件>
      AI 提示词: "执行:
        mvn -q -DskipTests clean package
        产物复制到 deploy/backend/:
-         cp mediation-module-uaa/mediation-module-uaa-server/target/*.jar deploy/backend/mediation-uaa-2.0.0.jar
-         cp mediation-module-system/mediation-module-system-server/target/*.jar deploy/backend/mediation-system-2.0.0.jar
+         cp business-module-uaa/business-module-uaa-server/target/*.jar deploy/backend/business-uaa-2.0.0.jar
+         cp business-module-system/business-module-system-server/target/*.jar deploy/backend/business-system-2.0.0.jar
          ...
        计算 SHA256 → deploy/backend/SHA256SUMS"
 
   4. **前端构建**:
      AI 提示词: "执行:
-       cd mediation-web && pnpm build:prod
+       cd business-web && pnpm build:prod
        产物复制到 deploy/frontend/:
          cp -r dist deploy/frontend/dist-2.0.0
        计算 SHA256 → deploy/frontend/SHA256SUMS"
@@ -2132,12 +2132,12 @@ flowchart TB
 
 ```
 |{{UPGRADE_BRANCH}}       升级分支名,例: upgrade/java21-vue3
-|{{BACKEND_REPO}}         后端仓库路径,例: mediation-platform
-|{{FRONTEND_REPO}}        前端仓库路径,例: mediation-web
+|{{BACKEND_REPO}}         后端仓库路径,例: business-platform
+|{{FRONTEND_REPO}}        前端仓库路径,例: business-web
 |{{BACKEND_COMMIT}}       后端当前 commit SHA
 |{{FRONTEND_COMMIT}}      前端当前 commit SHA
 |{{OLD_PROJECT_DIR}}      旧前端工程目录,例: src/
-|{{NEW_PROJECT_DIR}}      新前端工程目录,例: mediation-web/
+|{{NEW_PROJECT_DIR}}      新前端工程目录,例: business-web/
 |{{JAVA_HOME_21}}         Java 21 安装路径,例: /usr/lib/jvm/temurin-21
 |{{BACKEND_URL}}          后端服务地址,例: http://localhost:8080
 |{{FRONTEND_URL}}         前端预览地址,例: http://localhost:3000
@@ -2204,7 +2204,7 @@ rm -rf deploy/
 
 # 4. 清理构建产物
 mvn -q clean
-cd mediation-web && pnpm store prune && rm -rf node_modules dist
+cd business-web && pnpm store prune && rm -rf node_modules dist
 
 echo "回滚完成,代码已回到 upgrade-baseline"
 echo "如需重新启动 pipeline,执行:/java-upgrade-pipeline run --branch upgrade/java21-vue3"

@@ -1,0 +1,70 @@
+# =============================================================
+# Mem0 远程（服务器）部署 —— 外部数据库模式
+#
+# 数据库/图库为外部实例（由 .env 中的 POSTGRES_HOST / NEO4J_URI 指定，
+# 例如你提供的 192.168.100.80），本 compose 只运行：
+#   - mem0-api       （API:8888 + MCP:8080，supervisord 同容器拉起）
+#   - mem0-dashboard （Dashboard:3001）
+#
+# 启动：docker compose up -d
+# 停止：docker compose down
+# 日志：docker compose logs -f mem0-api
+# =============================================================
+
+name: mem0-remote
+
+services:
+  # -----------------------------------------------------------
+  # Mem0 API + MCP（镜像由本地构建后推送，见 deploy.ps1）
+  # 数据库/图库通过 .env 中的外部地址连接。
+  # -----------------------------------------------------------
+  mem0-api:
+    image: mem0-remote-mem0-api:latest
+    container_name: mem0-api
+    restart: unless-stopped
+    ports:
+      - "8888:8000"   # REST API  (http://<server>:8888/docs)
+      - "8080:8080"   # MCP streamable-http (http://<server>:8080/mcp)
+    env_file:
+      - .env
+    environment:
+      MEM0_DIR: /app/data
+      HISTORY_DB_PATH: /app/data/history.db
+      # MCP 在容器内直连本机 API（与 supervisord.conf 默认值一致）
+      MEM0_API_URL: http://localhost:8000
+      MEM0_MCP_PORT: "8080"
+    volumes:
+      - mem0_data:/app/data
+    networks:
+      - mem0_net
+    # 镜像默认 CMD 即 supervisord（拉起 API + MCP）；
+    # main.py 启动时已自动 create_all + ensure_tenant_schema，无需额外迁移。
+
+  # -----------------------------------------------------------
+  # Dashboard —— 镜像由本地构建后推送（deploy/mem0/dashboard/Dockerfile）
+  # -----------------------------------------------------------
+  mem0-dashboard:
+    image: mem0-remote-mem0-dashboard:latest
+    restart: unless-stopped
+    depends_on:
+      - mem0-api
+    ports:
+      - "3001:3000"
+    environment:
+      # 浏览器从用户机器访问，必须指向服务器可达地址
+      NEXT_PUBLIC_API_URL: http://192.168.110.169:8888
+      API_INTERNAL_URL: http://mem0-api:8000
+      # 必须与实际访问地址一致：非 https 时 refresh 路由会把会话 cookie 的
+      # secure 属性关掉，否则纯 HTTP 下浏览器丢弃 mem0_refresh_token，
+      # middleware 校验不到会话会把登录后的跳转弹回 /login。
+      DASHBOARD_URL: http://192.168.110.169:3001
+      NEXT_PUBLIC_INSTANCE_NAME: Mem0
+    networks:
+      - mem0_net
+
+networks:
+  mem0_net:
+    driver: bridge
+
+volumes:
+  mem0_data:

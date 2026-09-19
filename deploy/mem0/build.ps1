@@ -29,11 +29,11 @@ if (-not (Test-Path "$mem0Source\server\dashboard")) {
 # 2. 检查 PostgreSQL 数据库
 # -----------------------------------------------------------
 Write-Host "[2/4] 检查 PostgreSQL 数据库..." -ForegroundColor Yellow
-$pgReady = docker exec mwb-postgres-pgvector pg_isready -U postgres -d mem0 2>&1
+$pgReady = docker exec ai-sop-postgres-pgvector pg_isready -U postgres -d mem0 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  -> mem0 数据库不存在，请先创建：" -ForegroundColor Red
     Write-Host ""
-    Write-Host "  docker exec -it mwb-postgres-pgvector psql -U postgres \" -ForegroundColor White
+    Write-Host "  docker exec -it ai-sop-postgres-pgvector psql -U postgres \" -ForegroundColor White
     Write-Host '    -c "CREATE DATABASE mem0;" \' -ForegroundColor White
     Write-Host '    -c "\c mem0" \' -ForegroundColor White
     Write-Host '    -c "CREATE EXTENSION IF NOT EXISTS vector;"' -ForegroundColor White

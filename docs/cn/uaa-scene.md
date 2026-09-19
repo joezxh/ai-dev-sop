@@ -28,8 +28,8 @@
   - [UAA-12 社交用户管理](#uaa-12-社交用户管理)
   - [UAA-13 社交客户端管理](#uaa-13-社交客户端管理)
   - [UAA-14 登录日志](#uaa-14-登录日志)
-  - [UAA-15 调解机构管理](#uaa-15-调解机构管理)
-  - [UAA-16 调解员管理](#uaa-16-调解员管理)
+  - [UAA-15 业务机构管理](#uaa-15-业务机构管理)
+  - [UAA-16 业务专员管理](#uaa-16-业务专员管理)
   - [UAA-17 用户导入](#uaa-17-用户导入)
   - [UAA-18 角色数据权限分配](#uaa-18-角色数据权限分配)
   - [UAA-19 登录日志详情](#uaa-19-登录日志详情)
@@ -91,8 +91,8 @@
 | UAA-12 | 社交用户管理 | 8 | 完整 CRUD |
 | UAA-13 | 社交客户端管理 | 9 | 完整 CRUD |
 | UAA-14 | 登录日志 | 7 | 查看 + 详情 |
-| UAA-15 | 调解机构管理 | 4 | 查看 + 导出 |
-| UAA-16 | 调解员管理 | 7 | 查看 + 处理状态流转 |
+| UAA-15 | 业务机构管理 | 4 | 查看 + 导出 |
+| UAA-16 | 业务专员管理 | 7 | 查看 + 处理状态流转 |
 | UAA-17 | 用户导入 | 4 | 仪表盘 + 图表 |
 | UAA-18 | 角色数据权限分配 | 6 | CRUD + 批量删除 |
 | UAA-19 | 登录日志详情 | 1 | iframe 内嵌 |
@@ -141,7 +141,7 @@
 
 # 或导入 Cookie 跳过登录
 /setup-browser-cookies
-选择已登录的 mediation_platform 会话
+选择已登录的 business_platform 会话
 执行测试...
 ```
 
@@ -217,10 +217,10 @@ $B screenshot "after-login.png"
 | 树形不展开 | `handleTree` 函数异常 | `menuTreeUtils.ts` |
 | 表格列错位 | columns 定义顺序与数据不匹配 | index.vue 的 columns 定义 |
 | DictTag 不显示 | 字典类型未注册 / 值为空 | `DictTag.vue`, 后端字典表 |
-| 调解机构审核失败 | 审核状态枚举值不匹配 | `AuditStatusEnum` 定义 |
-| 调解员审核后状态不变 | updateStatus 未调用或未刷新列表 | `mediator/index.vue` |
+| 业务机构审核失败 | 审核状态枚举值不匹配 | `AuditStatusEnum` 定义 |
+| 业务专员审核后状态不变 | updateStatus 未调用或未刷新列表 | `staff/index.vue` |
 | 机构类型下拉为空 | OrgTypeEnum 未正确导入 | `OrgFormModal.vue` |
-| 调解员列表无数据 | page 接口返回空 / 分页参数缺失 | `mediator.ts` API 定义 |
+| 业务专员列表无数据 | page 接口返回空 / 分页参数缺失 | `staff.ts` API 定义 |
 
 ---
 
@@ -354,7 +354,7 @@ $B screenshot "after-login.png"
 #### 5.1.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【登录与登出】模块。
+请基于以下信息,在 business-platform 仓库中实现【登录与登出】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -365,11 +365,11 @@ $B screenshot "after-login.png"
   - 无（公开页面）
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/login/index.vue
-- API 封装: mediation-web/src/api/core/auth.ts
+- 主页面: business-web/src/views/login/index.vue
+- API 封装: business-web/src/api/core/auth.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/auth/AuthController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/auth/AuthController.java
 - Service 接口: .../service/auth/AuthService.java
 - DTO/Request: .../controller/admin/auth/vo/*ReqVO.java
 - DO: .../dal/dataobject/auth/*DO.java
@@ -398,9 +398,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/login/index.vue(登录页主入口)
-- mediation-web/src/api/core/auth.ts(API 封装)
-- 复用 mediation-web/src/components/business 中的业务组件
+- business-web/src/views/login/index.vue(登录页主入口)
+- business-web/src/api/core/auth.ts(API 封装)
+- 复用 business-web/src/components/business 中的业务组件
 
 【测试验证】
 实现完成后,使用 5.1.2 测试提示词中的测试场景验证,重点验证:
@@ -593,7 +593,7 @@ $B screenshot "after-login.png"
 #### 5.2.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【用户管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【用户管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -611,15 +611,15 @@ $B screenshot "after-login.png"
   - system:permission:assign-user-role(分配用户角色)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/user/index.vue
-- 表单弹窗: mediation-web/src/views/uaa/user/UserFormModal.vue
-- 角色授权: mediation-web/src/views/uaa/user/UserRoleModal.vue
-- 导入弹窗: mediation-web/src/views/uaa/user/UserImportForm.vue
-- API 封装: mediation-web/src/api/uaa/user.ts
-- 辅助 API: mediation-web/src/api/uaa/dept.ts, mediation-web/src/api/uaa/post.ts
+- 主页面: business-web/src/views/uaa/user/index.vue
+- 表单弹窗: business-web/src/views/uaa/user/UserFormModal.vue
+- 角色授权: business-web/src/views/uaa/user/UserRoleModal.vue
+- 导入弹窗: business-web/src/views/uaa/user/UserImportForm.vue
+- API 封装: business-web/src/api/uaa/user.ts
+- 辅助 API: business-web/src/api/uaa/dept.ts, business-web/src/api/uaa/post.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/user/UserController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/user/UserController.java
 - Service 接口: .../service/user/AdminUserService.java
 - DTO/Request: .../controller/admin/user/vo/user/*ReqVO.java
 - DO: .../dal/dataobject/user/AdminUserDO.java
@@ -657,9 +657,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/role/index.vue(角色管理,适合作为弹窗交互参考)
-- 复用 mediation-web/src/components/business 中的 DictTag/DictSwitch 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/role/index.vue(角色管理,适合作为弹窗交互参考)
+- 复用 business-web/src/components/business 中的 DictTag/DictSwitch 组件
 
 【测试验证】
 实现完成后,使用 5.2.2 测试提示词中的测试场景验证,重点验证:
@@ -887,7 +887,7 @@ $B screenshot "after-login.png"
 #### 5.3.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【角色管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【角色管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -903,15 +903,15 @@ $B screenshot "after-login.png"
   - system:permission:assign-role-data-scope(分配数据权限)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/role/index.vue
-- 表单弹窗: mediation-web/src/views/uaa/role/RoleForm.vue
-- 菜单赋权: mediation-web/src/views/uaa/role/RoleAssignMenuModal.vue
-- 菜单树: mediation-web/src/views/uaa/role/RoleMenuTree.vue
-- 数据权限: mediation-web/src/views/uaa/role/RoleDataPermissionForm.vue
-- API 封装: mediation-web/src/api/uaa/role.ts, mediation-web/src/api/uaa/menu.ts
+- 主页面: business-web/src/views/uaa/role/index.vue
+- 表单弹窗: business-web/src/views/uaa/role/RoleForm.vue
+- 菜单赋权: business-web/src/views/uaa/role/RoleAssignMenuModal.vue
+- 菜单树: business-web/src/views/uaa/role/RoleMenuTree.vue
+- 数据权限: business-web/src/views/uaa/role/RoleDataPermissionForm.vue
+- API 封装: business-web/src/api/uaa/role.ts, business-web/src/api/uaa/menu.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/permission/RoleController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/permission/RoleController.java
 - Service 接口: .../service/permission/RoleService.java
 - DTO/Request: .../controller/admin/permission/vo/role/*ReqVO.java
 - DO: .../dal/dataobject/permission/RoleDO.java
@@ -948,9 +948,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/menu/index.vue(菜单管理,适合作为树形 CRUD 参考)
-- 复用 mediation-web/src/components/business 中的 DictTag/DictSwitch/DictSelect 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/menu/index.vue(菜单管理,适合作为树形 CRUD 参考)
+- 复用 business-web/src/components/business 中的 DictTag/DictSwitch/DictSelect 组件
 
 【测试验证】
 实现完成后,使用 5.3.2 测试提示词中的测试场景验证,重点验证:
@@ -1116,7 +1116,7 @@ $B screenshot "after-login.png"
 #### 5.4.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【角色菜单赋权】模块。
+请基于以下信息,在 business-platform 仓库中实现【角色菜单赋权】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -1128,13 +1128,13 @@ $B screenshot "after-login.png"
   - system:role:query(查询角色)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/role/index.vue
-- 菜单赋权弹窗: mediation-web/src/views/uaa/role/RoleAssignMenuModal.vue
-- 菜单树组件: mediation-web/src/views/uaa/role/RoleMenuTree.vue
-- API 封装: mediation-web/src/api/uaa/role.ts, mediation-web/src/api/uaa/menu.ts
+- 主页面: business-web/src/views/uaa/role/index.vue
+- 菜单赋权弹窗: business-web/src/views/uaa/role/RoleAssignMenuModal.vue
+- 菜单树组件: business-web/src/views/uaa/role/RoleMenuTree.vue
+- API 封装: business-web/src/api/uaa/role.ts, business-web/src/api/uaa/menu.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/permission/PermissionController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/permission/PermissionController.java
 - Service 接口: .../service/permission/PermissionService.java
 - DTO/Request: .../controller/admin/permission/vo/*ReqVO.java
 - DO: .../dal/dataobject/permission/RoleMenuDO.java
@@ -1162,9 +1162,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/role/RoleAssignMenuModal.vue(本模块目标文件)
-- mediation-web/src/views/uaa/role/RoleMenuTree.vue(本模块目标文件)
-- 复用 mediation-web/src/components/business 中的树形组件
+- business-web/src/views/uaa/role/RoleAssignMenuModal.vue(本模块目标文件)
+- business-web/src/views/uaa/role/RoleMenuTree.vue(本模块目标文件)
+- 复用 business-web/src/components/business 中的树形组件
 
 【测试验证】
 实现完成后,使用 5.4.2 测试提示词中的测试场景验证,重点验证:
@@ -1348,7 +1348,7 @@ $B screenshot "after-login.png"
 #### 5.5.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【菜单管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【菜单管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -1362,12 +1362,12 @@ $B screenshot "after-login.png"
   - system:menu:query(查询菜单)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/menu/index.vue
-- 表单弹窗: mediation-web/src/views/uaa/menu/MenuForm.vue
-- API 封装: mediation-web/src/api/uaa/menu.ts
+- 主页面: business-web/src/views/uaa/menu/index.vue
+- 表单弹窗: business-web/src/views/uaa/menu/MenuForm.vue
+- API 封装: business-web/src/api/uaa/menu.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/permission/MenuController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/permission/MenuController.java
 - Service 接口: .../service/permission/MenuService.java
 - DTO/Request: .../controller/admin/permission/vo/menu/*ReqVO.java
 - DO: .../dal/dataobject/permission/MenuDO.java
@@ -1401,9 +1401,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/role/index.vue(角色管理,适合作为树形 CRUD 参考)
-- 复用 mediation-web/src/components/business 中的 IconSelect 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/role/index.vue(角色管理,适合作为树形 CRUD 参考)
+- 复用 business-web/src/components/business 中的 IconSelect 组件
 
 【测试验证】
 实现完成后,使用 5.5.2 测试提示词中的测试场景验证,重点验证:
@@ -1570,7 +1570,7 @@ $B screenshot "after-login.png"
 #### 5.6.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【部门管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【部门管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -1584,11 +1584,11 @@ $B screenshot "after-login.png"
   - system:dept:query(查询部门)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/dept/index.vue
-- API 封装: mediation-web/src/api/uaa/dept.ts
+- 主页面: business-web/src/views/uaa/dept/index.vue
+- API 封装: business-web/src/api/uaa/dept.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/dept/DeptController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/dept/DeptController.java
 - Service 接口: .../service/dept/DeptService.java
 - DTO/Request: .../controller/admin/dept/vo/*ReqVO.java
 - DO: .../dal/dataobject/dept/DeptDO.java
@@ -1616,14 +1616,14 @@ $B screenshot "after-login.png"
 【UI 规范】
 - UI 库: ant-design-vue
 - 表格列:部门名称、负责人、排序、手机号、邮箱、创建时间、操作
-- 业务组件复用: UserSelect(来自 mediation-web/src/components/business)
+- 业务组件复用: UserSelect(来自 business-web/src/components/business)
 - 操作按钮:新增、编辑、删除
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/menu/index.vue(菜单管理,适合作为树形 CRUD 参考)
-- mediation-web/src/views/uaa/post/index.vue(岗位管理,适合作为下拉选择参考)
-- 复用 mediation-web/src/components/business 中的 UserSelect 组件
+- business-web/src/views/uaa/menu/index.vue(菜单管理,适合作为树形 CRUD 参考)
+- business-web/src/views/uaa/post/index.vue(岗位管理,适合作为下拉选择参考)
+- 复用 business-web/src/components/business 中的 UserSelect 组件
 
 【测试验证】
 实现完成后,使用 5.6.2 测试提示词中的测试场景验证,重点验证:
@@ -1773,7 +1773,7 @@ $B screenshot "after-login.png"
 #### 5.7.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【岗位管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【岗位管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -1787,11 +1787,11 @@ $B screenshot "after-login.png"
   - system:post:query(查询岗位)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/post/index.vue
-- API 封装: mediation-web/src/api/uaa/post.ts
+- 主页面: business-web/src/views/uaa/post/index.vue
+- API 封装: business-web/src/api/uaa/post.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/dept/PostController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/dept/PostController.java
 - Service 接口: .../service/dept/PostService.java
 - DTO/Request: .../controller/admin/dept/vo/post/*ReqVO.java
 - DO: .../dal/dataobject/dept/PostDO.java
@@ -1824,9 +1824,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/dept/index.vue(部门管理,适合作为独立 CRUD 参考)
-- 复用 mediation-web/src/components/business 中的 DictSwitch 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/dept/index.vue(部门管理,适合作为独立 CRUD 参考)
+- 复用 business-web/src/components/business 中的 DictSwitch 组件
 
 【测试验证】
 实现完成后,使用 5.7.2 测试提示词中的测试场景验证,重点验证:
@@ -1956,7 +1956,7 @@ $B screenshot "after-login.png"
 #### 5.8.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【租户管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【租户管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -1970,11 +1970,11 @@ $B screenshot "after-login.png"
   - system:tenant:query(查询租户)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/tenant/index.vue
-- API 封装: mediation-web/src/api/uaa/tenant.ts
+- 主页面: business-web/src/views/uaa/tenant/index.vue
+- API 封装: business-web/src/api/uaa/tenant.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/tenant/TenantController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/tenant/TenantController.java
 - Service 接口: .../service/tenant/TenantService.java
 - DTO/Request: .../controller/admin/tenant/vo/*ReqVO.java
 - DO: .../dal/dataobject/tenant/TenantDO.java
@@ -2007,9 +2007,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/tenantPackage/index.vue(租户套餐,适合作为下拉数据源参考)
-- 复用 mediation-web/src/components/business 中的日期时间选择器组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/tenantPackage/index.vue(租户套餐,适合作为下拉数据源参考)
+- 复用 business-web/src/components/business 中的日期时间选择器组件
 
 【测试验证】
 实现完成后,使用 5.8.2 测试提示词中的测试场景验证,重点验证:
@@ -2140,7 +2140,7 @@ $B screenshot "after-login.png"
 #### 5.9.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【租户套餐管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【租户套餐管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -2154,11 +2154,11 @@ $B screenshot "after-login.png"
   - system:tenant-package:query(查询套餐)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/tenantPackage/index.vue
-- API 封装: mediation-web/src/api/uaa/tenantPackage.ts
+- 主页面: business-web/src/views/uaa/tenantPackage/index.vue
+- API 封装: business-web/src/api/uaa/tenantPackage.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/tenant/TenantPackageController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/tenant/TenantPackageController.java
 - Service 接口: .../service/tenant/TenantPackageService.java
 - DTO/Request: .../controller/admin/tenant/vo/tenantPackage/*ReqVO.java
 - DO: .../dal/dataobject/tenant/TenantPackageDO.java
@@ -2190,9 +2190,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/role/index.vue(角色管理,适合作为菜单权限树参考)
-- mediation-web/src/views/uaa/tenant/index.vue(租户管理,适合作为 CRUD 参考)
-- 复用 mediation-web/src/components/business 中的菜单权限树选择器
+- business-web/src/views/uaa/role/index.vue(角色管理,适合作为菜单权限树参考)
+- business-web/src/views/uaa/tenant/index.vue(租户管理,适合作为 CRUD 参考)
+- 复用 business-web/src/components/business 中的菜单权限树选择器
 
 【测试验证】
 实现完成后,使用 5.9.2 测试提示词中的测试场景验证,重点验证:
@@ -2309,7 +2309,7 @@ $B screenshot "after-login.png"
 #### 5.10.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【OAuth2 客户端管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【OAuth2 客户端管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -2323,12 +2323,12 @@ $B screenshot "after-login.png"
   - system:oauth2-client:query(查询客户端)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/oauth2Client/index.vue
-- 表单弹窗: mediation-web/src/views/uaa/oauth2Client/ClientForm.vue
-- API 封装: mediation-web/src/api/uaa/oauth2Client.ts
+- 主页面: business-web/src/views/uaa/oauth2Client/index.vue
+- 表单弹窗: business-web/src/views/uaa/oauth2Client/ClientForm.vue
+- API 封装: business-web/src/api/uaa/oauth2Client.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/oauth2/OAuth2ClientController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/oauth2/OAuth2ClientController.java
 - Service 接口: .../service/oauth2/OAuth2ClientService.java
 - DTO/Request: .../controller/admin/oauth2/vo/client/*ReqVO.java
 - DO: .../dal/dataobject/oauth2/OAuth2ClientDO.java
@@ -2361,9 +2361,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/oauth2Token/index.vue(OAuth2 Token,适合作为关联模块参考)
-- 复用 mediation-web/src/components/business 中的 DictSwitch 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/oauth2Token/index.vue(OAuth2 Token,适合作为关联模块参考)
+- 复用 business-web/src/components/business 中的 DictSwitch 组件
 
 【测试验证】
 实现完成后,使用 5.10.2 测试提示词中的测试场景验证,重点验证:
@@ -2468,7 +2468,7 @@ $B screenshot "after-login.png"
 #### 5.11.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【OAuth2 Token 管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【OAuth2 Token 管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -2480,11 +2480,11 @@ $B screenshot "after-login.png"
   - system:oauth2-token:query(查询 Token)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/oauth2Token/index.vue
-- API 封装: mediation-web/src/api/uaa/oauth2Token.ts
+- 主页面: business-web/src/views/uaa/oauth2Token/index.vue
+- API 封装: business-web/src/api/uaa/oauth2Token.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/oauth2/OAuth2TokenController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/oauth2/OAuth2TokenController.java
 - Service 接口: .../service/oauth2/OAuth2TokenService.java
 - DTO/Request: .../controller/admin/oauth2/vo/token/*ReqVO.java
 - DO: .../dal/dataobject/oauth2/OAuth2AccessTokenDO.java
@@ -2512,8 +2512,8 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/oauth2Client/index.vue(OAuth2 客户端,适合作为关联模块参考)
-- mediation-web/src/views/uaa/loginLog/index.vue(登录日志,适合作为日志类页面参考)
+- business-web/src/views/uaa/oauth2Client/index.vue(OAuth2 客户端,适合作为关联模块参考)
+- business-web/src/views/uaa/loginLog/index.vue(登录日志,适合作为日志类页面参考)
 
 【测试验证】
 实现完成后,使用 5.11.2 测试提示词中的测试场景验证,重点验证:
@@ -2671,7 +2671,7 @@ $B screenshot "after-login.png"
 #### 5.12.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【社交用户管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【社交用户管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -2683,11 +2683,11 @@ $B screenshot "after-login.png"
   - system:social-user:unbind(解绑社交用户)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/socialUser/index.vue
-- API 封装: mediation-web/src/api/uaa/socialUser.ts
+- 主页面: business-web/src/views/uaa/socialUser/index.vue
+- API 封装: business-web/src/api/uaa/socialUser.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/socail/SocialUserController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/socail/SocialUserController.java
 - Service 接口: .../service/social/SocialUserService.java
 - DTO/Request: .../controller/admin/socail/vo/*ReqVO.java
 - DO: .../dal/dataobject/social/SocialUserDO.java
@@ -2717,9 +2717,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/socialClient/index.vue(社交客户端,适合作为关联模块参考)
-- mediation-web/src/views/uaa/loginLog/index.vue(登录日志,适合作为日志类页面参考)
-- 复用 mediation-web/src/components/business 中的 DictTag/DictSelect 组件
+- business-web/src/views/uaa/socialClient/index.vue(社交客户端,适合作为关联模块参考)
+- business-web/src/views/uaa/loginLog/index.vue(登录日志,适合作为日志类页面参考)
+- 复用 business-web/src/components/business 中的 DictTag/DictSelect 组件
 
 【测试验证】
 实现完成后,使用 5.12.2 测试提示词中的测试场景验证,重点验证:
@@ -2888,7 +2888,7 @@ $B screenshot "after-login.png"
 #### 5.13.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【社交客户端管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【社交客户端管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -2902,11 +2902,11 @@ $B screenshot "after-login.png"
   - system:social-client:query(查询客户端)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/socialClient/index.vue
-- API 封装: mediation-web/src/api/uaa/socialClient.ts
+- 主页面: business-web/src/views/uaa/socialClient/index.vue
+- API 封装: business-web/src/api/uaa/socialClient.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/socail/SocialClientController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/socail/SocialClientController.java
 - Service 接口: .../service/social/SocialClientService.java
 - DTO/Request: .../controller/admin/socail/vo/client/*ReqVO.java
 - DO: .../dal/dataobject/social/SocialClientDO.java
@@ -2939,9 +2939,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/oauth2Client/index.vue(OAuth2 客户端,适合作为关联模块参考)
-- 复用 mediation-web/src/components/business 中的 DictTag/DictSwitch/DictSelect 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/oauth2Client/index.vue(OAuth2 客户端,适合作为关联模块参考)
+- 复用 business-web/src/components/business 中的 DictTag/DictSwitch/DictSelect 组件
 
 【测试验证】
 实现完成后,使用 5.13.2 测试提示词中的测试场景验证,重点验证:
@@ -3096,7 +3096,7 @@ $B screenshot "after-login.png"
 #### 5.14.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【登录日志】模块。
+请基于以下信息,在 business-platform 仓库中实现【登录日志】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -3108,12 +3108,12 @@ $B screenshot "after-login.png"
   - system:login-log:export(导出登录日志)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/loginLog/index.vue
-- 详情弹窗: mediation-web/src/views/uaa/loginLog/LoginLogDetailModal.vue
-- API 封装: mediation-web/src/api/uaa/loginLog.ts
+- 主页面: business-web/src/views/uaa/loginLog/index.vue
+- 详情弹窗: business-web/src/views/uaa/loginLog/LoginLogDetailModal.vue
+- API 封装: business-web/src/api/uaa/loginLog.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/logger/LoginLogController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/logger/LoginLogController.java
 - Service 接口: .../service/logger/LoginLogService.java
 - DTO/Request: .../controller/admin/logger/vo/*ReqVO.java
 - DO: .../dal/dataobject/logger/LoginLogDO.java
@@ -3142,9 +3142,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/role/index.vue(角色管理,适合作为 CRUD 页面参考)
-- mediation-web/src/views/system/operatelog/index.vue(操作日志,适合作为日志类页面参考)
-- 复用 mediation-web/src/components/business 中的 DictTag 组件
+- business-web/src/views/uaa/role/index.vue(角色管理,适合作为 CRUD 页面参考)
+- business-web/src/views/system/operatelog/index.vue(操作日志,适合作为日志类页面参考)
+- 复用 business-web/src/components/business 中的 DictTag 组件
 
 【测试验证】
 实现完成后,使用 5.14.2 测试提示词中的测试场景验证,重点验证:
@@ -3168,9 +3168,9 @@ $B screenshot "after-login.png"
 
 ---
 
-### 5.15 UAA-15 调解机构管理
+### 5.15 UAA-15 业务机构管理
 
-**页面路径**: 左侧菜单「用户中心」→「调解机构」
+**页面路径**: 左侧菜单「用户中心」→「业务机构」
 **源码文件**: `src/views/uaa/org/index.vue`, `src/views/uaa/org/OrgFormModal.vue`
 **API 文件**: `src/api/uaa/org.ts`
 **权限标识**: `system:org:create`, `system:org:update`, `system:org:delete`, `system:org:audit`
@@ -3181,18 +3181,18 @@ $B screenshot "after-login.png"
 
 ```
 /browser 或 /open-gstack-browser
-打开调解机构管理页面,执行完整的调解机构管理功能测试。
+打开业务机构管理页面,执行完整的业务机构管理功能测试。
 
 【前置操作】
-1. 登录后进入「用户中心」→「调解机构」
+1. 登录后进入「用户中心」→「业务机构」
 2. 等待页面加载完成
 
 ---
 
-【测试场景 1:调解机构列表加载】
-1. 验证调解机构列表表格正常加载
+【测试场景 1:业务机构列表加载】
+1. 验证业务机构列表表格正常加载
 2. 检查列:机构名称、机构类型、级别、地区、联系人、审核状态、状态、操作
-3. 验证机构类型使用 DictTag 标签(人民调解委员会/行业性调解组织等)
+3. 验证机构类型使用 DictTag 标签(机构类型A/机构类型B等)
 4. 验证级别使用 DictTag 标签(省级/市级/区县级/街道级)
 5. 验证审核状态使用 DictTag 标签(待审核=橙色/已通过=绿色/已拒绝=红色)
 6. 验证分页器正常工作
@@ -3204,7 +3204,7 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 2:调解机构筛选】
+【测试场景 2:业务机构筛选】
 1. 在「机构名称」输入框输入关键词,点击「搜索」
 2. 在「机构类型」下拉框选择一个类型,点击「搜索」
 3. 在「审核状态」下拉框选择一个状态,点击「搜索」
@@ -3216,10 +3216,10 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 3:新增调解机构】
+【测试场景 3:新增业务机构】
 1. 点击「新增」按钮,验证 OrgFormModal 弹窗弹出
 2. 验证表单字段:机构名称、机构类型、级别、地区编码、地区名称、详细地址、联系人姓名、联系人电话、统一社会信用代码、营业执照URL、机构简介、受理范围、状态
-3. 填写:机构名称(测试机构_001)、机构类型(人民调解委员会)、级别(市级)、联系人、联系电话
+3. 填写:机构名称(测试机构_001)、机构类型(机构类型A)、级别(市级)、联系人、联系电话
 4. 提交并验证 API POST /admin-api/uaa/org/create 成功
 5. 验证弹窗关闭,列表自动刷新,新机构出现在第 1 行
 
@@ -3229,7 +3229,7 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 4:编辑调解机构】
+【测试场景 4:编辑业务机构】
 1. 点击刚创建机构的「编辑」按钮
 2. 验证数据正确回填
 3. 修改机构名称为「测试机构_001_已修改」
@@ -3261,17 +3261,17 @@ $B screenshot "after-login.png"
 【问题诊断】
 - 机构类型下拉为空 → 检查 OrgTypeEnum 是否正确导入,组件是否使用 v-for 渲染
 - 审核状态不变 → 检查 audit API 调用后是否重新加载列表
-- 删除失败 → 检查机构是否关联了调解员
+- 删除失败 → 检查机构是否关联了业务专员
 ```
 
 #### 5.15.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【调解机构管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【业务机构管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
-- 页面路径: 左侧菜单「用户中心」→「调解机构」
+- 页面路径: 左侧菜单「用户中心」→「业务机构」
 - 路由: /uaa/org
 - 权限前缀: system:org
 - 涉及权限码:
@@ -3282,12 +3282,12 @@ $B screenshot "after-login.png"
   - system:org:audit(审核机构)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/org/index.vue
-- 表单弹窗: mediation-web/src/views/uaa/org/OrgFormModal.vue
-- API 封装: mediation-web/src/api/uaa/org.ts
+- 主页面: business-web/src/views/uaa/org/index.vue
+- 表单弹窗: business-web/src/views/uaa/org/OrgFormModal.vue
+- API 封装: business-web/src/api/uaa/org.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/org/OrgController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/org/OrgController.java
 - Service 接口: .../service/org/OrgService.java
 - DTO/Request: .../controller/admin/org/vo/*ReqVO.java
 - DO: .../dal/dataobject/org/OrgDO.java
@@ -3307,25 +3307,25 @@ $B screenshot "after-login.png"
 | 机构精简列表 | GET | /admin-api/uaa/org/simple-list |
 
 【功能需求】
-1. 支持调解机构列表 CRUD
-2. 机构类型(人民调解委员会/行业性调解组织/律所调解工作室等)
+1. 支持业务机构列表 CRUD
+2. 机构类型(机构类型A/机构类型B/机构类型C等)
 3. 级别配置(省级/市级/区县级/街道级)
 4. 地区级联选择(省/市/区/街道)
 5. 审核状态流转(待审核/已通过/已拒绝)
-6. 删除前关联调解员校验
+6. 删除前关联业务专员校验
 
 【UI 规范】
 - UI 库: ant-design-vue
 - 表格列:机构名称、机构类型、级别、地区、联系人、审核状态、状态、操作
-- 字典类型: mediation_org_type(机构类型)、mediation_org_level(级别)、audit_status(审核状态)、common_status(状态)
+- 字典类型: business_org_type(机构类型)、business_org_level(级别)、audit_status(审核状态)、common_status(状态)
 - 业务组件复用: DictTag、DictSelect、RegionCascader(地区级联)
 - 操作按钮:新增、编辑、审核、删除
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/role/index.vue(角色管理,适合作为 CRUD 页面参考)
-- 复用 mediation-web/src/components/business 中的 DictTag/DictSelect/RegionCascader 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/role/index.vue(角色管理,适合作为 CRUD 页面参考)
+- 复用 business-web/src/components/business 中的 DictTag/DictSelect/RegionCascader 组件
 
 【测试验证】
 实现完成后,使用 5.15.2 测试提示词中的测试场景验证,重点验证:
@@ -3342,20 +3342,20 @@ $B screenshot "after-login.png"
 - [ ] 后端 Service 接口 + 实现
 - [ ] 后端 DTO / DO / Mapper
 - [ ] 路由注册(/uaa/org)
-- [ ] 菜单注册(左侧菜单「用户中心」→「调解机构」)
+- [ ] 菜单注册(左侧菜单「用户中心」→「业务机构」)
 - [ ] 权限码注册(system:org:create 等)
-- [ ] 字典数据初始化 SQL(mediation_org_type、mediation_org_level、audit_status)
+- [ ] 字典数据初始化 SQL(business_org_type、business_org_level、audit_status)
 - [ ] 通过 5.15.2 所有测试场景
 ```
 
 ---
 
-### 5.16 UAA-16 调解员管理
+### 5.16 UAA-16 业务专员管理
 
-**页面路径**: 左侧菜单「用户中心」→「调解员」
-**源码文件**: `src/views/uaa/mediator/index.vue`, `src/views/uaa/mediator/MediatorFormModal.vue`
-**API 文件**: `src/api/uaa/mediator.ts`
-**权限标识**: `system:mediator:create`, `system:mediator:update`, `system:mediator:delete`, `system:mediator:audit`
+**页面路径**: 左侧菜单「用户中心」→「业务专员」
+**源码文件**: `src/views/uaa/staff/index.vue`, `src/views/uaa/staff/StaffFormModal.vue`
+**API 文件**: `src/api/uaa/staff.ts`
+**权限标识**: `system:staff:create`, `system:staff:update`, `system:staff:delete`, `system:staff:audit`
 
 #### 5.16.1 测试场景
 
@@ -3363,31 +3363,31 @@ $B screenshot "after-login.png"
 
 ```
 /browser 或 /open-gstack-browser
-打开调解员管理页面,执行完整的调解员管理功能测试。
+打开业务专员管理页面,执行完整的业务专员管理功能测试。
 
 【前置操作】
-1. 登录后进入「用户中心」→「调解员」
+1. 登录后进入「用户中心」→「业务专员」
 2. 等待页面加载完成
 
 ---
 
-【测试场景 1:调解员列表加载】
-1. 验证调解员列表表格正常加载
-2. 检查列:工号、真实姓名、性别、手机号、调解员类型、机构名称、状态、审核状态、操作
-3. 验证调解员类型使用 DictTag 标签(专职/兼职/特邀)
+【测试场景 1:业务专员列表加载】
+1. 验证业务专员列表表格正常加载
+2. 检查列:工号、真实姓名、性别、手机号、业务专员类型、机构名称、状态、审核状态、操作
+3. 验证业务专员类型使用 DictTag 标签(专职/兼职/特邀)
 4. 验证审核状态使用 DictTag 标签(待审核=橙色/已通过=绿色/已拒绝=红色)
 5. 验证分页器正常工作
 
 预期结果:
 ✅ 表格列完整
-✅ 调解员类型和审核状态标签正确
+✅ 业务专员类型和审核状态标签正确
 ✅ 分页正常
 
 ---
 
-【测试场景 2:调解员筛选】
+【测试场景 2:业务专员筛选】
 1. 在「真实姓名」输入框输入关键词,点击「搜索」
-2. 在「调解员类型」下拉框选择一个类型,点击「搜索」
+2. 在「业务专员类型」下拉框选择一个类型,点击「搜索」
 3. 在「审核状态」下拉框选择一个状态,点击「搜索」
 4. 点击「重置」,验证条件清空
 
@@ -3397,11 +3397,11 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 3:新增调解员】
-1. 点击「新增」按钮,验证 MediatorFormModal 弹窗弹出
-2. 验证表单字段:机构ID、真实姓名、性别、手机号、调解员类型、专业领域、从业年限、证书编号、简介等
-3. 填写:真实姓名(测试调解员_001)、性别(男)、手机号、调解员类型(专职)、专业领域
-4. 提交并验证 API POST /admin-api/uaa/mediator/create 成功
+【测试场景 3:新增业务专员】
+1. 点击「新增」按钮,验证 StaffFormModal 弹窗弹出
+2. 验证表单字段:机构ID、真实姓名、性别、手机号、业务专员类型、专业领域、从业年限、证书编号、简介等
+3. 填写:真实姓名(测试业务专员_001)、性别(男)、手机号、业务专员类型(专职)、专业领域
+4. 提交并验证 API POST /admin-api/uaa/staff/create 成功
 5. 验证弹窗关闭,列表自动刷新
 
 预期结果:
@@ -3410,11 +3410,11 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 4:编辑调解员】
-1. 点击刚创建调解员的「编辑」按钮
+【测试场景 4:编辑业务专员】
+1. 点击刚创建业务专员的「编辑」按钮
 2. 验证数据正确回填
 3. 修改真实姓名
-4. 提交并验证 API PUT /admin-api/uaa/mediator/update 成功
+4. 提交并验证 API PUT /admin-api/uaa/staff/update 成功
 5. 验证列表自动刷新,修改生效
 
 预期结果:
@@ -3423,11 +3423,11 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 5:审核调解员 - 通过】
-1. 找到状态为「待审核」的调解员
+【测试场景 5:审核业务专员 - 通过】
+1. 找到状态为「待审核」的业务专员
 2. 点击「审核」按钮,验证审核弹窗弹出
 3. 选择审核结果为「已通过」,填写审核备注
-4. 点击确认,验证 API PUT /admin-api/uaa/mediator/audit 成功
+4. 点击确认,验证 API PUT /admin-api/uaa/staff/audit 成功
 5. 验证审核状态从「待审核」变为「已通过」
 
 预期结果:
@@ -3436,8 +3436,8 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 6:审核调解员 - 拒绝】
-1. 找到另一条待审核调解员
+【测试场景 6:审核业务专员 - 拒绝】
+1. 找到另一条待审核业务专员
 2. 执行审核,选择「已拒绝」,填写拒绝原因
 3. 提交并验证审核状态变为「已拒绝」
 
@@ -3447,11 +3447,11 @@ $B screenshot "after-login.png"
 
 ---
 
-【测试场景 7:删除调解员】
-1. 找到测试调解员,点击「删除」按钮
+【测试场景 7:删除业务专员】
+1. 找到测试业务专员,点击「删除」按钮
 2. 验证弹出确认弹窗
-3. 点击确认,验证 API DELETE /admin-api/uaa/mediator/delete?id=X 成功
-4. 验证列表自动刷新,调解员消失
+3. 点击确认,验证 API DELETE /admin-api/uaa/staff/delete?id=X 成功
+4. 验证列表自动刷新,业务专员消失
 
 预期结果:
 ✅ 删除确认正常
@@ -3463,111 +3463,111 @@ $B screenshot "after-login.png"
 
 | 操作 | API 方法 | 路径 |
 |------|---------|------|
-| 调解员分页 | GET | /admin-api/uaa/mediator/page |
-| 调解员列表 | GET | /admin-api/uaa/mediator/list |
-| 调解员详情 | GET | /admin-api/uaa/mediator/get?id=X |
-| 创建调解员 | POST | /admin-api/uaa/mediator/create |
-| 更新调解员 | PUT | /admin-api/uaa/mediator/update |
-| 删除调解员 | DELETE | /admin-api/uaa/mediator/delete?id=X |
-| 批量删除 | DELETE | /admin-api/uaa/mediator/delete-list |
-| 更新状态 | PUT | /admin-api/uaa/mediator/update-status |
-| 审核调解员 | PUT | /admin-api/uaa/mediator/audit |
-| 调解员统计 | GET | /admin-api/uaa/mediator/statistics?id=X |
+| 业务专员分页 | GET | /admin-api/uaa/staff/page |
+| 业务专员列表 | GET | /admin-api/uaa/staff/list |
+| 业务专员详情 | GET | /admin-api/uaa/staff/get?id=X |
+| 创建业务专员 | POST | /admin-api/uaa/staff/create |
+| 更新业务专员 | PUT | /admin-api/uaa/staff/update |
+| 删除业务专员 | DELETE | /admin-api/uaa/staff/delete?id=X |
+| 批量删除 | DELETE | /admin-api/uaa/staff/delete-list |
+| 更新状态 | PUT | /admin-api/uaa/staff/update-status |
+| 审核业务专员 | PUT | /admin-api/uaa/staff/audit |
+| 业务专员统计 | GET | /admin-api/uaa/staff/statistics?id=X |
 
 ---
 
 【问题诊断】
-- 调解员类型下拉为空 → 检查 MediatorTypeEnum 是否正确导入和渲染
+- 业务专员类型下拉为空 → 检查 StaffTypeEnum 是否正确导入和渲染
 - 审核状态不更新 → 检查 audit API 调用后是否调用 loadData() 刷新列表
 - 机构名称不显示 → 检查 orgId 字段是否正确关联 org 表并显示 orgName
-- 删除失败 → 检查调解员是否关联了案件
+- 删除失败 → 检查业务专员是否关联了案件
 ```
 
 #### 5.16.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【调解员管理】模块。
+请基于以下信息,在 business-platform 仓库中实现【业务专员管理】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
-- 页面路径: 左侧菜单「用户中心」→「调解员」
-- 路由: /uaa/mediator
-- 权限前缀: system:mediator
+- 页面路径: 左侧菜单「用户中心」→「业务专员」
+- 路由: /uaa/staff
+- 权限前缀: system:staff
 - 涉及权限码:
-  - system:mediator:create(新增调解员)
-  - system:mediator:update(编辑调解员)
-  - system:mediator:delete(删除调解员)
-  - system:mediator:query(查询调解员)
-  - system:mediator:audit(审核调解员)
+  - system:staff:create(新增业务专员)
+  - system:staff:update(编辑业务专员)
+  - system:staff:delete(删除业务专员)
+  - system:staff:query(查询业务专员)
+  - system:staff:audit(审核业务专员)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/mediator/index.vue
-- 表单弹窗: mediation-web/src/views/uaa/mediator/MediatorFormModal.vue
-- API 封装: mediation-web/src/api/uaa/mediator.ts
+- 主页面: business-web/src/views/uaa/staff/index.vue
+- 表单弹窗: business-web/src/views/uaa/staff/StaffFormModal.vue
+- API 封装: business-web/src/api/uaa/staff.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/mediator/MediatorController.java
-- Service 接口: .../service/mediator/MediatorService.java
-- DTO/Request: .../controller/admin/mediator/vo/*ReqVO.java
-- DO: .../dal/dataobject/mediator/MediatorDO.java
-- Mapper: .../dal/mapper/mediator/MediatorMapper.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/staff/StaffController.java
+- Service 接口: .../service/staff/StaffService.java
+- DTO/Request: .../controller/admin/staff/vo/*ReqVO.java
+- DO: .../dal/dataobject/staff/StaffDO.java
+- Mapper: .../dal/mapper/staff/StaffMapper.java
 
 【API 端点】
 | 操作 | 方法 | 路径 |
 |------|------|------|
-| 调解员分页 | GET | /admin-api/uaa/mediator/page |
-| 调解员列表 | GET | /admin-api/uaa/mediator/list |
-| 调解员详情 | GET | /admin-api/uaa/mediator/get?id=X |
-| 创建调解员 | POST | /admin-api/uaa/mediator/create |
-| 更新调解员 | PUT | /admin-api/uaa/mediator/update |
-| 删除调解员 | DELETE | /admin-api/uaa/mediator/delete?id=X |
-| 批量删除 | DELETE | /admin-api/uaa/mediator/delete-list |
-| 更新状态 | PUT | /admin-api/uaa/mediator/update-status |
-| 审核调解员 | PUT | /admin-api/uaa/mediator/audit |
-| 调解员统计 | GET | /admin-api/uaa/mediator/statistics?id=X |
+| 业务专员分页 | GET | /admin-api/uaa/staff/page |
+| 业务专员列表 | GET | /admin-api/uaa/staff/list |
+| 业务专员详情 | GET | /admin-api/uaa/staff/get?id=X |
+| 创建业务专员 | POST | /admin-api/uaa/staff/create |
+| 更新业务专员 | PUT | /admin-api/uaa/staff/update |
+| 删除业务专员 | DELETE | /admin-api/uaa/staff/delete?id=X |
+| 批量删除 | DELETE | /admin-api/uaa/staff/delete-list |
+| 更新状态 | PUT | /admin-api/uaa/staff/update-status |
+| 审核业务专员 | PUT | /admin-api/uaa/staff/audit |
+| 业务专员统计 | GET | /admin-api/uaa/staff/statistics?id=X |
 
 【功能需求】
-1. 支持调解员列表 CRUD
-2. 调解员类型(专职/兼职/特邀)
+1. 支持业务专员列表 CRUD
+2. 业务专员类型(专职/兼职/特邀)
 3. 机构关联(OrgSelect 下拉,来自 /uaa/org/simple-list)
 4. 专业领域多选/从业年限配置
 5. 审核状态流转(待审核/已通过/已拒绝)
 6. 删除前案件关联校验
-7. 调解员统计信息(案件数/成功率等)
+7. 业务专员统计信息(案件数/成功率等)
 
 【UI 规范】
 - UI 库: ant-design-vue
-- 表格列:工号、真实姓名、性别、手机号、调解员类型、机构名称、状态、审核状态、操作
-- 字典类型: mediator_type(调解员类型)、audit_status(审核状态)、common_status(状态)
+- 表格列:工号、真实姓名、性别、手机号、业务专员类型、机构名称、状态、审核状态、操作
+- 字典类型: staff_type(业务专员类型)、audit_status(审核状态)、common_status(状态)
 - 业务组件复用: DictTag、DictSelect、OrgSelect
 - 操作按钮:新增、编辑、审核、删除
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
-- mediation-web/src/views/uaa/role/index.vue(角色管理,适合作为 CRUD 页面参考)
-- mediation-web/src/views/uaa/org/index.vue(调解机构,适合作为关联模块参考)
-- 复用 mediation-web/src/components/business 中的 DictTag/DictSelect/OrgSelect 组件
+- business-web/src/views/system/dict/index.vue(字典管理,适合作为表单+下拉选择参考)
+- business-web/src/views/uaa/role/index.vue(角色管理,适合作为 CRUD 页面参考)
+- business-web/src/views/uaa/org/index.vue(业务机构,适合作为关联模块参考)
+- 复用 business-web/src/components/business 中的 DictTag/DictSelect/OrgSelect 组件
 
 【测试验证】
 实现完成后,使用 5.16.2 测试提示词中的测试场景验证,重点验证:
-1. 表格列完整,调解员类型和审核状态标签正确
+1. 表格列完整,业务专员类型和审核状态标签正确
 2. 机构下拉正常,机构名称正确显示
 3. 审核通过/拒绝流程完整
 4. 删除前关联校验生效
 5. 7 个测试场景全部通过
 
 【交付物清单】
-- [ ] 前端主页面 .vue(mediator/index.vue)
-- [ ] 前端表单弹窗 .vue(MediatorFormModal.vue)
+- [ ] 前端主页面 .vue(staff/index.vue)
+- [ ] 前端表单弹窗 .vue(StaffFormModal.vue)
 - [ ] 前端 API 封装 .ts(含 TypeScript 类型)
 - [ ] 后端 Controller(含 Swagger @Operation 注解)
 - [ ] 后端 Service 接口 + 实现
 - [ ] 后端 DTO / DO / Mapper
-- [ ] 路由注册(/uaa/mediator)
-- [ ] 菜单注册(左侧菜单「用户中心」→「调解员」)
-- [ ] 权限码注册(system:mediator:create 等)
-- [ ] 字典数据初始化 SQL(mediator_type、audit_status)
+- [ ] 路由注册(/uaa/staff)
+- [ ] 菜单注册(左侧菜单「用户中心」→「业务专员」)
+- [ ] 权限码注册(system:staff:create 等)
+- [ ] 字典数据初始化 SQL(staff_type、audit_status)
 - [ ] 通过 5.16.2 所有测试场景
 ```
 
@@ -3662,7 +3662,7 @@ $B screenshot "after-login.png"
 #### 5.17.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【用户导入】模块。
+请基于以下信息,在 business-platform 仓库中实现【用户导入】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -3674,12 +3674,12 @@ $B screenshot "after-login.png"
   - system:user:query(查询用户)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/user/index.vue
-- 导入弹窗: mediation-web/src/views/uaa/user/UserImportForm.vue
-- API 封装: mediation-web/src/api/uaa/user.ts
+- 主页面: business-web/src/views/uaa/user/index.vue
+- 导入弹窗: business-web/src/views/uaa/user/UserImportForm.vue
+- API 封装: business-web/src/api/uaa/user.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/user/UserController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/user/UserController.java
 - Service 接口: .../service/user/AdminUserService.java
 - DTO/Request: .../controller/admin/user/vo/user/UserImportExcelVO.java
 - DO: .../dal/dataobject/user/AdminUserDO.java
@@ -3707,9 +3707,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/user/UserImportForm.vue(本模块目标文件)
-- mediation-web/src/views/system/user/UserImportForm.vue(如存在)
-- 复用 mediation-web/src/components/business 中的 a-upload 组件
+- business-web/src/views/uaa/user/UserImportForm.vue(本模块目标文件)
+- business-web/src/views/system/user/UserImportForm.vue(如存在)
+- 复用 business-web/src/components/business 中的 a-upload 组件
 
 【测试验证】
 实现完成后,使用 5.17.2 测试提示词中的测试场景验证,重点验证:
@@ -3852,7 +3852,7 @@ $B screenshot "after-login.png"
 #### 5.18.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【角色数据权限分配】模块。
+请基于以下信息,在 business-platform 仓库中实现【角色数据权限分配】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -3865,12 +3865,12 @@ $B screenshot "after-login.png"
   - system:dept:query(查询部门)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/role/index.vue
-- 数据权限表单: mediation-web/src/views/uaa/role/RoleDataPermissionForm.vue
-- API 封装: mediation-web/src/api/uaa/role.ts, mediation-web/src/api/uaa/dept.ts
+- 主页面: business-web/src/views/uaa/role/index.vue
+- 数据权限表单: business-web/src/views/uaa/role/RoleDataPermissionForm.vue
+- API 封装: business-web/src/api/uaa/role.ts, business-web/src/api/uaa/dept.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/permission/PermissionController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/permission/PermissionController.java
 - Service 接口: .../service/permission/PermissionService.java
 - DTO/Request: .../controller/admin/permission/vo/dataScope/*ReqVO.java
 - DO: .../dal/dataobject/permission/RoleDataScopeDO.java
@@ -3898,9 +3898,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/role/RoleDataPermissionForm.vue(本模块目标文件)
-- mediation-web/src/views/system/role/RoleDataPermissionForm.vue(如存在)
-- 复用 mediation-web/src/components/business 中的部门树选择器
+- business-web/src/views/uaa/role/RoleDataPermissionForm.vue(本模块目标文件)
+- business-web/src/views/system/role/RoleDataPermissionForm.vue(如存在)
+- 复用 business-web/src/components/business 中的部门树选择器
 
 【测试验证】
 实现完成后,使用 5.18.2 测试提示词中的测试场景验证,重点验证:
@@ -4011,7 +4011,7 @@ $B screenshot "after-login.png"
 #### 5.19.3 开发提示词
 
 ```
-请基于以下信息,在 mediation-platform 仓库中实现【登录日志详情】模块。
+请基于以下信息,在 business-platform 仓库中实现【登录日志详情】模块。
 
 【模块信息】
 - 服务: UAA(:8081)
@@ -4022,12 +4022,12 @@ $B screenshot "after-login.png"
   - system:login-log:query(查询登录日志)
 
 【前端文件清单】
-- 主页面: mediation-web/src/views/uaa/loginLog/index.vue
-- 详情弹窗: mediation-web/src/views/uaa/loginLog/LoginLogDetailModal.vue
-- API 封装: mediation-web/src/api/uaa/loginLog.ts
+- 主页面: business-web/src/views/uaa/loginLog/index.vue
+- 详情弹窗: business-web/src/views/uaa/loginLog/LoginLogDetailModal.vue
+- API 封装: business-web/src/api/uaa/loginLog.ts
 
 【后端文件清单】
-- Controller: mediation-platform-basic/mediation-module-uaa/mediation-module-uaa-server/src/main/java/com/tianque/uaa/controller/admin/logger/LoginLogController.java
+- Controller: business-platform-basic/business-module-uaa/business-module-uaa-server/src/main/java/com/example/uaa/controller/admin/logger/LoginLogController.java
 - Service 接口: .../service/logger/LoginLogService.java
 - DTO/Request: .../controller/admin/logger/vo/LoginLogVO.java
 - DO: .../dal/dataobject/logger/LoginLogDO.java
@@ -4053,9 +4053,9 @@ $B screenshot "after-login.png"
 
 【参考实现】
 请参考以下已实现模块:
-- mediation-web/src/views/uaa/loginLog/LoginLogDetailModal.vue(本模块目标文件)
-- mediation-web/src/views/system/operatelog/index.vue(操作日志,适合作为详情弹窗参考)
-- 复用 mediation-web/src/components/business 中的 DictTag 组件
+- business-web/src/views/uaa/loginLog/LoginLogDetailModal.vue(本模块目标文件)
+- business-web/src/views/system/operatelog/index.vue(操作日志,适合作为详情弹窗参考)
+- 复用 business-web/src/components/business 中的 DictTag 组件
 
 【测试验证】
 实现完成后,使用 5.19.2 测试提示词中的测试场景验证,重点验证:
@@ -4120,8 +4120,8 @@ $B screenshot "after-login.png"
 | UAA-12 社交用户管理 | 8 | 8 | 0 | 0 | 100% |
 | UAA-13 社交客户端管理 | 9 | 9 | 0 | 0 | 100% |
 | UAA-14 登录日志 | 7 | 7 | 0 | 0 | 100% |
-| UAA-15 调解机构管理 | 4 | 4 | 0 | 0 | 100% |
-| UAA-16 调解员管理 | 7 | 7 | 0 | 0 | 100% |
+| UAA-15 业务机构管理 | 4 | 4 | 0 | 0 | 100% |
+| UAA-16 业务专员管理 | 7 | 7 | 0 | 0 | 100% |
 | UAA-17 用户导入 | 4 | 4 | 0 | 0 | 100% |
 | UAA-18 角色数据权限分配 | 6 | 6 | 0 | 0 | 100% |
 | UAA-19 登录日志详情 | 4 | 4 | 0 | 0 | 100% |
@@ -4152,17 +4152,17 @@ $B screenshot "after-login.png"
 
 ## 7.模块开发对照与补全清单
 
-本章节对照 tianque-ui(参考项目)与 mediation-platform(当前项目),梳理 UAA 模块的实现状态与补全建议。
+本章节对照 example-ui(参考项目)与 business-platform(当前项目),梳理 UAA 模块的实现状态与补全建议。
 
-前端已有页面:user、role、menu、dept、post、tenant、tenantPackage、oauth2Client、oauth2Token、socialUser、socialClient、loginLog、org、mediator 共 14 个页面。
+前端已有页面:user、role、menu、dept、post、tenant、tenantPackage、oauth2Client、oauth2Token、socialUser、socialClient、loginLog、org、staff 共 14 个页面。
 
-后端已有端点:UserController、RoleController、MenuController、DeptController、PostController、TenantController、TenantPackageController、OAuth2ClientController、OAuth2TokenController、SocialUserController、SocialClientController、LoginLogController、OrgController、MediatorController、PermissionController 共 15 个 Controller。
+后端已有端点:UserController、RoleController、MenuController、DeptController、PostController、TenantController、TenantPackageController、OAuth2ClientController、OAuth2TokenController、SocialUserController、SocialClientController、LoginLogController、OrgController、StaffController、PermissionController 共 15 个 Controller。
 
-对比参考项目,当前项目已覆盖所有核心 UAA 模块,并额外实现了调解机构和调解员两个业务模块。
+对比参考项目,当前项目已覆盖所有核心 UAA 模块,并额外实现了业务机构和业务专员两个业务模块。
 
 ### UAA 模块补全对照表
 
-| 模块 | tianque-ui 路径 | mediation-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
+| 模块 | example-ui 路径 | business-platform 路径 | 前端状态 | 后端状态 | 补全建议 |
 |------|-----------------|----------------------|---------|---------|---------|
 | 用户管理 | system/user/index.vue | uaa/user/index.vue | ✅ 完整 | ✅ | 对齐:增加导入用户、角色分配详情页 |
 | 角色管理 | system/role/index.vue | uaa/role/index.vue | ✅ 完整(菜单权限树) | ✅ | 已完成:RoleForm + RoleMenuTree + RoleAssignMenuModal |
@@ -4177,8 +4177,8 @@ $B screenshot "after-login.png"
 | 社交用户管理 | system/social/user/index.vue | uaa/socialUser/index.vue | ✅ 完整 | ✅ | 对齐:增加详情查看弹窗 |
 | 社交客户端管理 | system/social/client/index.vue | uaa/socialClient/index.vue | ✅ 完整 | ✅ | 对齐:无明显差距 |
 | 登录日志 | system/loginlog/index.vue | uaa/loginLog/index.vue | ✅ 完整(含详情弹窗) | ✅ | 已完成:LoginLogDetailModal.vue |
-| **调解机构管理** | ❌ 无(业务模块) | 后端 OrgController.java | ✅ 前端已创建 | ✅ 完整 | 已完成:org/index.vue + org/OrgFormModal.vue + org.ts API |
-| **调解员管理** | ❌ 无(业务模块) | 后端 MediatorController.java | ✅ 前端已创建 | ✅ 完整 | 已完成:mediator/index.vue + mediator/MediatorFormModal.vue + mediator.ts API |
+| **业务机构管理** | ❌ 无(业务模块) | 后端 OrgController.java | ✅ 前端已创建 | ✅ 完整 | 已完成:org/index.vue + org/OrgFormModal.vue + org.ts API |
+| **业务专员管理** | ❌ 无(业务模块) | 后端 StaffController.java | ✅ 前端已创建 | ✅ 完整 | 已完成:staff/index.vue + staff/StaffFormModal.vue + staff.ts API |
 | 用户导入 | system/user/UserImportForm.vue | uaa/user/UserImportForm.vue | ✅ 已创建 | ✅ | 已完成:UserImportForm.vue Excel导入功能 |
 | 角色数据权限分配 | system/role/RoleDataPermissionForm.vue | uaa/role/RoleDataPermissionForm.vue | ✅ 已创建 | ✅ | 已完成:部门树+数据权限范围选择 |
 | 登录日志详情 | system/loginlog/LoginLogDetail.vue | uaa/loginLog/LoginLogDetailModal.vue | ✅ 已创建 | ✅ | 已完成:详情弹窗完整字段 |

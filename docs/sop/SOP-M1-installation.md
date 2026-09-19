@@ -38,7 +38,7 @@
 ### 1.3 前置条件
 
 - Docker & Docker Compose
-- 复用 `mwb-infra-network` 网络中的 `mwb-postgres-pgvector` 与 `mwb-neo4j` 容器
+- 复用 `ai-sop-infra-network` 网络中的 `ai-sop-postgres-pgvector` 与 `ai-sop-neo4j` 容器
 
 ---
 
@@ -165,14 +165,14 @@ curl -s http://localhost:3001 > /dev/null && echo "Dashboard OK"
 
 | 现象 | 原因 | 解决 |
 |------|------|------|
-| 连接拒绝 | mem0-api 未启动 | `docker compose up -d`；确认 `mwb-postgres-pgvector` / `mwb-neo4j` healthy |
+| 连接拒绝 | mem0-api 未启动 | `docker compose up -d`；确认 `ai-sop-postgres-pgvector` / `ai-sop-neo4j` healthy |
 | 401 | Key 无效/未传 | 重新创建 Key；检查 Bearer 头格式 |
 | MCP 404 | URL 少 `/mcp` | 使用 `http://127.0.0.1:8080/mcp` |
 | 图记忆报错 | Neo4j 不可达 | 检查 `.env` 中 `NEO4J_URI/USERNAME/PASSWORD` |
 | 检索为空 | Key/Project 不匹配 | 确认 Key 属于同一 Project；user_id 一致 |
 | Dashboard 无法登录 | JWT_SECRET 变更 | 清浏览器缓存重新登录 |
 
-更多排障见 [quick-ref/mem0-ai-tools-config-guide.md §10](../quick-ref/mem0-ai-tools-config-guide.md)。
+更多排障见 [quick-ref/mem0-manual.md §18](../quick-ref/mem0-manual.md)。
 
 ---
 

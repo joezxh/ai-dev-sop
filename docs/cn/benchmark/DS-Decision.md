@@ -14,7 +14,7 @@
 
 **示例 query**：
 - "我们为什么选择 PostgreSQL 而不是 MySQL？"
-- "调解平台的前端框架是什么？"
+- "业务平台的前端框架是什么？"
 - "Redis 缓存过期的策略是怎么定的？"
 
 **Ground truth**：人工标注的、与该 query 强相关的 drawer_id 列表（1-N 条）。

@@ -1,490 +1,98 @@
-# Task 1 (extracted from implementation plan)
+# Task 1 — 规则模板（scripts/templates/mem0-rules.md）
+
+> 摘自实现计划 `docs/superpowers/plans/2026-09-19-mem0-one-step-setup.md`（Task 1）。本文件是本次任务的**唯一需求来源**，其中的内容需逐字使用。
+
+## 背景（一句话）
+
+本项目要把 mem0 记忆系统的接入从"3 步手工配置"简化为"一条命令"。规则模板是 Windows 脚本（`scripts/mem0-setup.ps1`）与 bash 脚本（`scripts/mem0-setup.sh`）**共用**的唯一规则文本来源；两个脚本读取本文件、替换占位符后按 IDE 写入各自的规则文件。
+
+## Task 1: 规则模板（scripts/templates/mem0-rules.md）
 
 **Files:**
-- Create: `mem0/server/graph_memory.py`
-- Create: `mem0/server/tests/test_graph_memory.py`
+- Create: `scripts/templates/mem0-rules.md`
 
-- [ ] **Step 1: Write the failing test** — `mem0/server/tests/test_graph_memory.py`:
+- [ ] **Step 1: 创建模板文件（完整内容如下）**
 
-```python
-"""Unit tests for the self-built graph memory layer (1.x-aligned semantics).
-All externals (Neo4j, LLM, embedder) are fakes; no service calls."""
+````markdown
+<!-- mem0:rules:begin -->
 
-from types import SimpleNamespace
+## mem0 项目记忆（自动加载与留痕）
 
-import pytest
+本项目使用自托管 **mem0** 服务作为长期记忆，通过当前 IDE 的 MCP 服务 `mem0` 访问
+（服务名约定为 `mem0`；实际以 IDE 配置文件 `mcp.json`/`config.toml` 中的条目为准）。
+凭证文件：`{{CRED_FILE}}`（git-ignored，含 api_key / git_remote / project_id）。
 
-import graph_memory as gm
+### 1. 加载记忆（会话开始时主动执行，不等用户开口）
 
+1. 从 `{{CRED_FILE}}` 读取 `api_key`、`git_remote`、`project_id`。
+2. `get_memories(api_key=..., git_remote=...)` 拉取项目共享池（跨用户），给用户 2–3 行召回摘要。
+3. 配置缺失或 MCP 不可达 → 告知用户并停止，**不得臆造记忆**。
 
-class FakeLLM:
-    def __init__(self, responses):
-        self.responses = list(responses)
-        self.calls = []
-
-    def generate_response(self, messages, **_kw):
-        self.calls.append(messages)
-        return self.responses.pop(0)
-
-
-class FakeEmbedder:
-    def __init__(self):
-        self.n = 0
-
-    def embed(self, text, **_kw):
-        self.n += 1
-        return [float(len(text) % 7 + self.n), 1.0, 0.0]
-
-
-class FakeNeo4j:
-    """Records queries; returns canned results keyed by a substring."""
-    def __init__(self, canned=None):
-        self.queries = []
-        self.canned = canned or []
-
-    def query(self, cypher, params=None):
-        self.queries.append((cypher, params or {}))
-        for marker, rows in self.canned:
-            if marker in cypher:
-                return rows
-        return []
-
-
-def make_graph(llm_responses, neo4j=None, threshold=0.7):
-    neo4j = neo4j or FakeNeo4j()
-    g = gm.GraphMemory(
-        embedder=FakeEmbedder(),
-        llm=FakeLLM(llm_responses),
-        driver=neo4j,
-        threshold=threshold,
-    )
-    return g, neo4j
-
-
-FILTERS = {"user_id": "u1", "project_id": "p1"}
-
-
-def test_disabled_when_env_off(monkeypatch):
-    monkeypatch.setenv("GRAPH_ENABLED", "false")
-    g, _ = make_graph([])
-    assert g.enabled is False
-    assert g.add("hello", FILTERS) == {"added_entities": [], "deleted_entities": []}
-    assert g.search("hello", FILTERS) == []
-
-
-def test_degrades_when_driver_init_fails(monkeypatch):
-    monkeypatch.setenv("GRAPH_ENABLED", "true")
-    # Neo4jGraph import failure path: simulate by pointing url at an unreachable
-    # bolt endpoint is slow; instead verify the degrade contract directly —
-    # GraphMemory must never raise from the constructor.
-    try:
-        g = gm.GraphMemory(embedder=FakeEmbedder(), llm=FakeLLM([]), driver=None, url="bolt://invalid.invalid:7687")
-        assert isinstance(g.enabled, bool)
-    except Exception:  # noqa: BLE001
-        pytest.fail("GraphMemory constructor must not raise on driver failure")
-
-
-def test_extract_entities_normalizes():
-def test_extract_entities_normalizes():
-    llm = FakeLLM(['```json\n{"entities":[{"entity":"Alice Smith","entity_type":"Person"},'
-                   '{"entity":"I","entity_type":"Self"}]}\n```'])
-    neo4j = FakeNeo4j()
-    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
-    ents = g._extract_entities("I work with Alice Smith", FILTERS)
-    assert ents == [{"entity": "alice_smith", "entity_type": "person"}] or ents == [
-        {"entity": "alice_smith", "entity_type": "person"},
-        {"entity": "u1", "entity_type": "self"},
-    ]
-    # Either shape is acceptable; the binding rule: names are normalized
-    # (lowercase, spaces→underscore) and self reference "I" maps to the user_id entity.
-    names = [e["entity"] for e in ents]
-    assert "alice_smith" in names
-    assert "i" not in names
-
-
-def test_add_merges_nodes_and_relationship():
-    llm = FakeLLM([
-        '{"entities":[{"entity":"alice","entity_type":"person"}]}',
-        '{"entities":[{"source":"alice","relationship":"WORKS_ON","destination":"payments"}]}',
-    ])
-    neo4j = FakeNeo4j([("vector.similarity", [])])  # no similar node → create
-    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
-    out = g.add("alice works on payments", FILTERS)
-    assert out["added_entities"]  # triples recorded
-    cyphers = " || ".join(c for c, _ in neo4j.queries)
-    assert "MERGE" in cyphers
-    assert "alice" in "".join(str(p) for _, p in neo4j.queries)
-    # relationship type must be sanitized into the cypher label
-    assert "WORKS_ON" in cyphers
-
-
-def test_relationship_type_is_sanitized():
-    assert gm.sanitize_relationship("works  on!") == "WORKS_ON"
-
-
-def test_search_returns_bm25_top_triples():
-    rows = [
-        {"source": "alice", "relationship": "WORKS_ON", "destination": "payments", "sim": 0.9},
-        {"source": "alice", "relationship": "LIVES_IN", "destination": "berlin", "sim": 0.8},
-        {"source": "bob", "relationship": "WORKS_ON", "destination": "infra", "sim": 0.7},
-    ]
-    neo4j = FakeNeo4j([("vector.similarity", rows)])
-    llm = FakeLLM(['{"entities":[{"entity":"alice","entity_type":"person"}]}'])
-    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
-    out = g.search("alice", FILTERS)
-    assert isinstance(out, list) and out
-    assert all(set(t) >= {"source", "relationship", "destination"} for t in out)
-    # cypher must be scoped by user_id
-    last = neo4j.queries[-1][1]
-    assert last.get("user_id") == "u1"
-
-
-def test_project_scope_uses_project_id_predicate():
-    neo4j = FakeNeo4j([("vector.similarity", [])])
-    llm = FakeLLM(['{"entities":[]}'])
-    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
-    g.search("anything", {"user_id": "u1", "project_id": "p1", "scope": "project"})
-    last_cypher, last_params = neo4j.queries[-1]
-    assert last_params.get("project_id") == "p1"
-    assert "project_id" in last_cypher
-
-
-def test_soft_delete_marks_invalid():
-    neo4j = FakeNeo4j([("relation extraction", [])])
-    llm = FakeLLM([
-        '{"entities":[{"entity":"alice","entity_type":"person"}]}',
-        '{"entities":[{"source":"alice","relationship":"WORKS_ON","destination":"payments"}]}',
-    ])
-    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=llm, driver=neo4j, threshold=0.7)
-    g.soft_delete_for_text("alice works on payments", FILTERS)
-    cyphers = " || ".join(c for c, _ in neo4j.queries)
-    assert "valid = false" in cyphers or "valid=false" in cyphers
-
-
-def test_hard_delete_uses_detach_delete():
-    neo4j = FakeNeo4j()
-    g = gm.GraphMemory(embedder=FakeEmbedder(), llm=FakeLLM([]), driver=neo4j, threshold=0.7)
-    g.hard_delete({"project_id": "p1"})
-    cyphers = " || ".join(c for c, _ in neo4j.queries)
-    assert "DETACH DELETE" in cyphers
-```
-
-- [ ] **Step 2: Run to verify it fails** — `docker compose -f deploy/mem0/docker-compose.yaml cp mem0/server/tests/test_graph_memory.py mem0-api:/app/tests/ ; docker compose -f deploy/mem0/docker-compose.yaml exec -T mem0-api python -m pytest tests/test_graph_memory.py -q`
-  Expected: FAIL (`ModuleNotFoundError: graph_memory`).
-
-- [ ] **Step 3: Implement** — `mem0/server/graph_memory.py`:
+### 2. 保存记忆（出现持久事实时：决策 / 偏好 / 约束 / 人员）
 
 ```python
-"""Self-built graph memory layer, aligning mem0 v1.0.11 MemoryGraph semantics
-with a project dimension. All failures degrade to disabled + log (spec §1)."""
-
-import json
-import logging
-import os
-import re
-from datetime import datetime, timezone
-
-logger = logging.getLogger(__name__)
-
-DEFAULT_THRESHOLD = 0.7
-BASE_LABEL = "__Entity__"
-SEARCH_TOP_K = 5
-
-EXTRACT_ENTITIES_SYSTEM = (
-    "You are a smart assistant that extracts entities and their types from text. "
-    "If the text contains self reference such as 'I', 'me', 'my', use '{user_id}' "
-    "as the entity name instead. Do NOT answer the text itself. "
-    'Respond ONLY with JSON: {"entities": [{"entity": "...", "entity_type": "..."}]}'
+add_memory(
+    text="<事实的自然语言描述>",
+    api_key="<来自凭证文件>",
+    git_remote="<来自凭证文件>",
+    project_id="<来自凭证文件>",
+    metadata={"type": "fact|decision|preference|note", "created_at": "<ISO8601>"},
 )
-
-EXTRACT_RELATIONS_SYSTEM = (
-    "You are a smart assistant that extracts relationship triples from text. "
-    "The source/destination MUST be chosen from the given entity list (or the "
-    "user entity '{user_id}'). Extract the relationship between them. "
-    'Respond ONLY with JSON: {"entities": [{"source": "...", "relationship": "...", '
-    '"destination": "..."}]}. Rules: 1. Extract only what the text states. '
-    "2. Use the entity names verbatim. 3. Relationship is 1-3 words. {custom_rules}"
-)
-
-
-def _norm(value: str) -> str:
-    return (value or "").strip().lower().replace(" ", "_")
-
-
-def sanitize_relationship(value: str) -> str:
-    return re.sub(r"[^A-Z0-9_]", "", (value or "").strip().upper().replace(" ", "_"))
-
-
-def _parse_json(text: str) -> dict:
-    """Parse an LLM response that may be wrapped in markdown fences."""
-    if not text:
-        return {}
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE)
-    try:
-        parsed = json.loads(cleaned)
-        return parsed if isinstance(parsed, dict) else {}
-    except (ValueError, TypeError):
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if match:
-            try:
-                parsed = json.loads(match.group(0))
-                return parsed if isinstance(parsed, dict) else {}
-            except (ValueError, TypeError):
-                return {}
-        return {}
-
-
-def _is_enabled_flag() -> bool:
-    return os.environ.get("GRAPH_ENABLED", "true").strip().lower() in ("1", "true", "yes")
-
-
-class GraphMemory:
-    """Neo4j-backed entity-relation graph. Externals are injectable for tests."""
-
-    def __init__(self, embedder=None, llm=None, driver=None, url=None,
-                 username=None, password=None, threshold=None):
-        self.enabled = _is_enabled_flag()
-        self.graph = driver
-        if not self.enabled:
-            logger.info("GraphMemory disabled by GRAPH_ENABLED env")
-            return
-        try:
-            if self.graph is None:
-                from langchain_neo4j import Neo4jGraph
-                self.graph = Neo4jGraph(
-                    url=url or os.environ.get("NEO4J_URI", "bolt://localhost:7687"),
-                    username=username or os.environ.get("NEO4J_USERNAME", "neo4j"),
-                    password=password or os.environ.get("NEO4J_PASSWORD", ""),
-                    refresh_schema=False,
-                    driver_config={"notifications_min_severity": "OFF"},
-                )
-            self._ensure_indexes()
-        except Exception:
-            logger.exception("GraphMemory degraded: Neo4j unavailable")
-            self.enabled = False
-            return
-        self.embedder = embedder
-        self.llm = llm
-        self.threshold = float(
-            threshold if threshold is not None else os.environ.get("GRAPH_THRESHOLD", DEFAULT_THRESHOLD)
-        )
-        self.custom_prompt = os.environ.get("GRAPH_CUSTOM_PROMPT") or None
-
-    # ---- internals -------------------------------------------------------
-
-    def _ensure_indexes(self) -> None:
-        for statement in (
-            f"CREATE INDEX graph_user IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.user_id)",
-            f"CREATE INDEX graph_project IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.project_id)",
-            f"CREATE INDEX graph_name_user IF NOT EXISTS FOR (n:{BASE_LABEL}) ON (n.name, n.user_id)",
-        ):
-            try:
-                self.graph.query(statement)
-            except Exception:  # noqa: BLE001 — index creation is best-effort
-                logger.debug("graph index statement skipped: %s", statement)
-
-    def _scope_match(self, filters: dict, alias: str = "n") -> str:
-        """Cypher property predicate for the active scope (personal vs project)."""
-        if filters.get("scope") == "project" and filters.get("project_id"):
-            return f"{alias}.project_id = $project_id"
-        return f"{alias}.user_id = $user_id"
-
-    def _scope_params(self, filters: dict) -> dict:
-        if filters.get("scope") == "project" and filters.get("project_id"):
-            return {"project_id": filters["project_id"]}
-        return {"user_id": filters.get("user_id")}
-
-    def _extract_entities(self, data: str, filters: dict) -> list[dict]:
-        user_id = filters.get("user_id") or "unknown"
-        messages = [
-            {"role": "system", "content": EXTRACT_ENTITIES_SYSTEM.replace("{user_id}", user_id)},
-            {"role": "user", "content": data},
-        ]
-        parsed = _parse_json(self.llm.generate_response(messages))
-        entities = []
-        for item in parsed.get("entities") or []:
-            name = _norm(item.get("entity"))
-            if not name:
-                continue
-            if name == _norm(user_id) or name == "i":
-                name = user_id
-            entities.append({"entity": name, "entity_type": _norm(item.get("entity_type")) or "entity"})
-        return entities
-
-    def _extract_relations(self, data: str, filters: dict, entities: list[dict]) -> list[dict]:
-        user_id = filters.get("user_id") or "unknown"
-        rules = "4. " + self.custom_prompt if self.custom_prompt else ""
-        system = EXTRACT_RELATIONS_SYSTEM.replace("{user_id}", user_id).replace("{custom_rules}", rules)
-        user_content = f"List of entities: {[e['entity'] for e in entities]}\n\nText: {data}"
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": user_content}]
-        parsed = _parse_json(self.llm.generate_response(messages))
-        triples = []
-        for item in parsed.get("entities") or []:
-            source, destination = _norm(item.get("source")), _norm(item.get("destination"))
-            rel = sanitize_relationship(item.get("relationship"))
-            if not (source and destination and rel):
-                continue
-            triples.append({"source": source, "relationship": rel, "destination": destination})
-        return triples
-
-    def _find_similar_node(self, name: str, filters: dict) -> dict | None:
-        embedding = self.embedder.embed(name)
-        scope = self._scope_match(filters)
-        extra = "" if filters.get("scope") == "project" else (
-            " AND (n.project_id = $project_id OR n.project_id IS NULL)"
-            if filters.get("project_id") else ""
-        )
-        cypher = (
-            f"MATCH (n:{BASE_LABEL}) WHERE {scope}{extra} AND n.embedding IS NOT NULL "
-            "WITH n, vector.similarity.cosine(n.embedding, $embedding) AS similarity "
-            "WHERE similarity >= $threshold "
-            "RETURN elementId(n) AS eid, n.name AS name, n.type AS type "
-            "ORDER BY similarity DESC LIMIT 1"
-        )
-        params = self._scope_params(filters)
-        params.update({"embedding": embedding, "threshold": self.threshold})
-        rows = self.graph.query(cypher, params) or []
-        return rows[0] if rows else None
-
-    # ---- public API ------------------------------------------------------
-
-    def add(self, data: str, filters: dict) -> dict:
-        if not self.enabled:
-            return {"added_entities": [], "deleted_entities": []}
-        try:
-            entities = self._extract_entities(data, filters)
-            triples = self._extract_relations(data, filters, entities)
-            added = []
-            for t in triples:
-                src = self._find_similar_node(t["source"], filters) or {"name": t["source"], "type": "entity"}
-                dst = self._find_similar_node(t["destination"], filters) or {"name": t["destination"], "type": "entity"}
-                src_emb = self.embedder.embed(src["name"])
-                dst_emb = self.embedder.embed(dst["name"])
-                cypher = (
-                    f"MERGE (a:{BASE_LABEL} {{name: $source, user_id: $user_id}}) "
-                    "ON CREATE SET a.created = timestamp(), a.mentions = 1, a.type = $source_type "
-                    "ON MATCH SET a.mentions = coalesce(a.mentions, 0) + 1 "
-                    "SET a.project_id = $project_id "
-                    "CALL db.create.setNodeVectorProperty(a, 'embedding', $source_embedding) "
-                    f"MERGE (b:{BASE_LABEL} {{name: $destination, user_id: $user_id}}) "
-                    "ON CREATE SET b.created = timestamp(), b.mentions = 1, b.type = $destination_type "
-                    "ON MATCH SET b.mentions = coalesce(b.mentions, 0) + 1 "
-                    "SET b.project_id = $project_id "
-                    "CALL db.create.setNodeVectorProperty(b, 'embedding', $destination_embedding) "
-                    f"MERGE (a)-[r:{t['relationship']}]->(b) "
-                    "ON CREATE SET r.created = timestamp(), r.mentions = 1, r.valid = true, "
-                    "r.user_id = $user_id, r.project_id = $project_id "
-                    "ON MATCH SET r.mentions = coalesce(r.mentions, 0) + 1, "
-                    "r.updated_at = timestamp(), r.valid = true "
-                    "RETURN coalesce(a.name, '') AS source, type(r) AS relationship, "
-                    "coalesce(b.name, '') AS destination"
-                )
-                params = {
-                    "source": src["name"], "destination": dst["name"],
-                    "source_type": src.get("type", "entity"), "destination_type": dst.get("type", "entity"),
-                    "source_embedding": src_emb, "destination_embedding": dst_emb,
-                    "user_id": filters.get("user_id"), "project_id": filters.get("project_id"),
-                }
-                rows = self.graph.query(cypher, params) or []
-                added.extend(rows or [t])
-            return {"added_entities": added, "deleted_entities": []}
-        except Exception:
-            logger.exception("GraphMemory.add failed (degraded, main flow unaffected)")
-            return {"added_entities": [], "deleted_entities": []}
-
-    def search(self, query: str, filters: dict, limit: int = 100) -> list[dict]:
-        if not self.enabled:
-            return []
-        try:
-            entities = self._extract_entities(query, filters)
-            if not entities:
-                return []
-            all_triples: list[dict] = []
-            for entity in entities:
-                embedding = self.embedder.embed(entity["entity"])
-                cypher = (
-                    f"MATCH (n:{BASE_LABEL}) WHERE {self._scope_match(filters)} "
-                    "AND n.embedding IS NOT NULL "
-                    "WITH n, vector.similarity.cosine(n.embedding, $embedding) AS similarity "
-                    "WHERE similarity >= $threshold "
-                    "MATCH (n)-[r]-(m) WHERE (r.valid IS NULL OR r.valid = true) "
-                    "AND (" + self._scope_match(filters, "m") + ") "
-                    "RETURN coalesce(n.name, '') AS source, type(r) AS relationship, "
-                    "coalesce(m.name, '') AS destination, similarity "
-                    "ORDER BY similarity DESC LIMIT $limit"
-                )
-                params = self._scope_params(filters)
-                params.update({"embedding": embedding, "threshold": self.threshold, "limit": limit})
-                all_triples.extend(self.graph.query(cypher, params) or [])
-            if not all_triples:
-                return []
-            try:
-                from rank_bm25 import BM25Okapi
-                corpus = [
-                    [str(t.get("source", "")), str(t.get("relationship", "")), str(t.get("destination", ""))]
-                    for t in all_triples
-                ]
-                bm25 = BM25Okapi(corpus)
-                scores = bm25.get_scores(query.split())
-                ranked = sorted(zip(all_triples, scores), key=lambda pair: pair[1], reverse=True)
-                return [{k: t.get(k, "") for k in ("source", "relationship", "destination")}
-                        for t, _ in ranked[:SEARCH_TOP_K]]
-            except ImportError:
-                return all_triples[:SEARCH_TOP_K]
-        except Exception:
-            logger.exception("GraphMemory.search failed (degraded)")
-            return []
-
-    def get_all(self, filters: dict, limit: int = 100) -> list[dict]:
-        if not self.enabled:
-            return []
-        try:
-            cypher = (
-                f"MATCH (n:{BASE_LABEL})-[r]->(m) "
-                f"WHERE {self._scope_match(filters)} AND ({self._scope_match(filters, 'm')}) "
-                "AND (r.valid IS NULL OR r.valid = true) "
-                "RETURN coalesce(n.name, '') AS source, type(r) AS relationship, "
-                "coalesce(m.name, '') AS destination LIMIT $limit"
-            )
-            return self.graph.query(cypher, {**self._scope_params(filters), "limit": limit}) or []
-        except Exception:
-            logger.exception("GraphMemory.get_all failed (degraded)")
-            return []
-
-    def soft_delete_for_text(self, data: str, filters: dict) -> None:
-        if not self.enabled:
-            return
-        try:
-            entities = self._extract_entities(data, filters)
-            triples = self._extract_relations(data, filters, entities)
-            for t in triples:
-                cypher = (
-                    f"MATCH (a:{BASE_LABEL} {{name: $source, user_id: $user_id}})-[r]->"
-                    f"(b:{BASE_LABEL} {{name: $destination, user_id: $user_id}}) "
-                    f"WHERE type(r) = $rel "
-                    "SET r.valid = false, r.invalidated_at = datetime()"
-                )
-                self.graph.query(cypher, {
-                    "source": t["source"], "destination": t["destination"],
-                    "rel": t["relationship"], "user_id": filters.get("user_id"),
-                })
-        except Exception:
-            logger.exception("GraphMemory.soft_delete_for_text failed (degraded)")
-
-    def hard_delete(self, filters: dict) -> None:
-        if not self.enabled:
-            return
-        try:
-            cypher = f"MATCH (n:{BASE_LABEL}) WHERE {self._scope_match(filters)} DETACH DELETE n"
-            self.graph.query(cypher, self._scope_params(filters))
-        except Exception:
-            logger.exception("GraphMemory.hard_delete failed (degraded)")
 ```
 
-- [ ] **Step 4: Run to verify pass** (copy `graph_memory.py` + test). Expected: `8+ passed` (adjust count to the final test list; the three malformed sketches in Step 1 must be replaced by the six concrete tests).
-- [ ] **Step 5: Commit** — `cd d:/projects/ai-dev-sop/mem0 && git add server/graph_memory.py server/tests/test_graph_memory.py && git commit --no-verify -m "feat(server): self-built graph memory core (1.x-aligned, project-dim extension)"`
+- 始终传 `git_remote`（服务端解析为 project_id 并写入共享池）。
+- 相关事实合并成一条；mem0 按内容哈希去重，重提安全。
 
----
+### 3. 会话留痕（每轮回复完成时固定触发，寒暄也入库）
 
+- **session_id**：格式 `{{SESSION_PREFIX}}-<YYYYMMDD>-<6位hex>`，持久化到 `{{SESSION_FILE}}`
+  （git-ignored）。已存在**且日期为当天**→复用；**日期与当天不一致或用户明确开启新会话
+  → 必须重新生成并覆写**。
+- 每轮提交：
+
+```python
+add_memory(
+    text="Q: <用户本轮原话，逐字>\n\nA: <完整执行转录>",
+    api_key="<来自凭证文件>",
+    git_remote="<来自凭证文件>",
+    project_id="<来自凭证文件>",
+    metadata={
+        "type": "conversation",
+        "session_id": "{{SESSION_PREFIX}}-<YYYYMMDD>-<6hex>",
+        "agent": "{{AGENT}}",
+        "role": "turn",
+        "turn_seq": "<会话内从 1 递增>",
+        "created_at": "<ISO8601>",
+    },
+)
+```
+
+- **A 部分五层，与 IDE 界面全选复制得到的 Markdown 逐字节一致**：
+  ① 过程叙述行（界面可见的全部过渡叙述，逐字按序）
+  ② 最终回复原文（完整 Markdown，含标题/表格/代码块）
+  ③ Deep Thinking 全文（不得压缩改写）
+  ④ Tool 调用逐条（工具名 + 关键参数 + 执行结果，失败也记录）
+  ⑤ 完成结果（状态 + 交付物 + 验证结论）
+  提交前自检：界面复制文本必须能在 ①② 中**原样找到**。
+
+<!-- mem0:rules:end -->
+````
+
+- [ ] **Step 2: 校验占位符**
+
+Run: `Select-String -Path scripts/templates/mem0-rules.md -Pattern '\{\{[^}]+\}\}' | ForEach-Object { $_.Matches.Value } | Sort-Object -Unique`
+Expected: `{{AGENT}}` `{{CRED_FILE}}` `{{SESSION_FILE}}` `{{SESSION_PREFIX}}`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add scripts/templates/mem0-rules.md
+git commit -m "feat(mem0-setup): add shared mem0 rules template"
+```
+
+## 全局约束（后续任务也要遵守，本任务只需满足相关部分）
+
+1. MCP 服务名统一约定为 `mem0`（所有 IDE）——模板中出现的服务名必须是 `mem0`。
+2. 凭证文件路径统一为 `<repo>/.mem0/mem0.config.json`；模板中用 `{{CRED_FILE}}` 占位符，由脚本替换。
+3. 模板必须被 `<!-- mem0:rules:begin -->` 与 `<!-- mem0:rules:end -->` 包裹（脚本靠这对标记做幂等更新）。
+4. 只创建这一个文件；不要修改仓库其他任何文件。

@@ -5,7 +5,7 @@
 
 - 参考基线：mem0 v1.0.11 `mem0/memory/graph_memory.py`（`MemoryGraph`）与 `mem0/graphs/configs.py`（`GraphStoreConfig`）
 - 范围：`mem0/server`（后端）；Dashboard 仅 P1 的 relations 展示
-- 背景：mem0ai 2.0.20 OSS 已移除图引擎（无 `graph_store` 配置、无 `mem0.graphs` 模块；Dockerfile 的 `mem0ai[graph]` 为无效安装）；Neo4j 5.26 容器（`mwb-neo4j`，端口 7687 已发布宿主机）现成可用
+- 背景：mem0ai 2.0.20 OSS 已移除图引擎（无 `graph_store` 配置、无 `mem0.graphs` 模块；Dockerfile 的 `mem0ai[graph]` 为无效安装）；Neo4j 5.26 容器（`ai-sop-neo4j`，端口 7687 已发布宿主机）现成可用
 
 ## 1. 已确认决策
 

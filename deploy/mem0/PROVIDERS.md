@@ -40,7 +40,7 @@ server 以容器运行（`mem0-api` 服务），访问宿主机上的 Ollama / v
    `embedding_dims` 变化（例如从 OpenAI 1536 切到百炼 1024 或 Ollama 768），已存向量会维度不匹配。
    清理命令（按实际容器名调整）：
    ```bash
-   docker exec -it mwb-postgres-pgvector psql -U postgres -d mem0 -c "DROP TABLE IF EXISTS vectors;"
+   docker exec -it ai-sop-postgres-pgvector psql -U postgres -d mem0 -c "DROP TABLE IF EXISTS vectors;"
    ```
    之后重启 `mem0-api` 让其按新维度重建表。
 

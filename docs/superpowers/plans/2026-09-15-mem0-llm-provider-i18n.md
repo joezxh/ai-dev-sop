@@ -548,7 +548,7 @@ Linux 裸 Docker 若不支持 `host.docker.internal`，在 compose 的 mem0-api 
 
 1. 若环境变量存在 `OPENROUTER_API_KEY`，OpenAILLM 会强制走 OpenRouter 覆盖 base_url（mem0/llms/openai.py）。请勿误设。
 2. 切换 embedder 导致 embedding_dims 变化，pgvector 已存向量维度不匹配需清库重建：
-   `docker exec -it mwb-postgres-pgvector psql -U postgres -d mem0 -c "DROP TABLE IF EXISTS vectors;"`
+   `docker exec -it ai-sop-postgres-pgvector psql -U postgres -d mem0 -c "DROP TABLE IF EXISTS vectors;"`
 3. 百炼 text-embedding-v4 默认维度 1024；Ollama nomic-embed-text 为 768；与 pgvector 表维度须一致。
 ```
 

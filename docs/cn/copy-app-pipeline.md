@@ -109,7 +109,7 @@ flowchart LR
   - `N6 → N5`(发布后监控发现严重 Bug 触发回滚)
 - **可并发**:
   - N3 中"H5 端脚手架"与"小程序端脚手架"可并行(均为 Vue SFC,差异在 `manifest.json` 条件编译)
-  - N4 中"当事人端"与"调解员端"页面族可并行
+  - N4 中"当事人端"与"业务专员端"页面族可并行
   - N5 中"单元测试"与"H5 E2E"与"小程序 E2E"可并行
   - N6 中"Android 打包"与"iOS 打包"可并行
 
@@ -279,7 +279,7 @@ flowchart LR
 [输入]
   - N1 产出的 reverse-spec.md、feature-catalog.md、api-mapping.md、data-model.md、screen-blueprints.md
   - 目标平台清单: {{TARGET_PLATFORMS}}
-  - 既有架构约束(若复用现有 mediation-platform 工程)
+  - 既有架构约束(若复用现有 business-platform 工程)
 
 [任务]
   1. **平台支持矩阵** `platform-matrix.md`:
@@ -408,7 +408,7 @@ flowchart LR
 | 7 | 生成 `utils/request.ts`(参考源 APP 的网络层) | `utils/request.ts` |
 | 8 | 生成 `utils/platform.ts` 平台差异适配层 | `utils/platform.ts` |
 | 9 | 生成 `api/*` 接口桩(N1 的 `api-mapping.md`) | `api/` |
-| 10 | 生成 `store/*` Pinia 骨架(用户/案件/调解/应用) | `store/` |
+| 10 | 生成 `store/*` Pinia 骨架(用户/案件/业务/应用) | `store/` |
 | 11 | 生成 `components/*` 公共组件骨架(NavBar/CaseCard/EmptyState/FileUploader) | `components/` |
 | 12 | 生成 CI 模板(`.github/workflows/{ci,build-h5,build-mp,build-android,build-ios}.yml`) | YAML |
 | 13 | 生成 Docker 配置(H5 端:`Dockerfile` + `nginx.conf`) | Docker 文件 |
@@ -443,8 +443,8 @@ flowchart LR
        - @playwright/test
        - eslint / prettier / stylelint
 
-  2. **预置目录结构**(对齐 mediation-app 的 11 个子域):
-     mediation-{{APP}}/
+  2. **预置目录结构**(对齐 business-app 的 11 个子域):
+     business-{{APP}}/
      ├── src/
      │   ├── api/
      │   │   ├── uaa/             # 认证服务
@@ -454,21 +454,21 @@ flowchart LR
      │   ├── components/
      │   │   ├── common/          # NavBar / CaseCard / EmptyState / FileUploader / StatusBar
      │   │   ├── party/           # 当事人端组件
-     │   │   └── mediator/        # 调解员端组件
+     │   │   └── staff/        # 业务专员端组件
      │   ├── pages/
      │   │   ├── party/
      │   │   │   ├── login/
      │   │   │   ├── register/
      │   │   │   ├── index/       # 首页
      │   │   │   ├── case/        # 案件列表/详情/提交
-     │   │   │   ├── mediation/   # 调解会话
+     │   │   │   ├── business/   # 业务会话
      │   │   │   ├── knowledge/
      │   │   │   ├── notice/
      │   │   │   └── mine/
-     │   │   └── mediator/        # 工作台/待签收/案件/调解会话/我的
-     │   ├── store/               # Pinia:user/case/mediation/app
+     │   │   └── staff/        # 工作台/待签收/案件/业务会话/我的
+     │   ├── store/               # Pinia:user/case/business/app
      │   ├── utils/               # request.ts / platform.ts / index.ts
-     │   ├── websocket/           # mediation.ts
+     │   ├── websocket/           # business.ts
      │   ├── styles/base.css      # CSS Variables
      │   ├── App.vue
      │   ├── main.ts              # createSSRApp + Pinia
@@ -499,7 +499,7 @@ flowchart LR
 
   3. **pages.json 预置**:
      - pages 数组按 N1 feature-catalog.md 顺序生成
-     - tabBar 4 项(首页/案件/调解/我的)
+     - tabBar 4 项(首页/案件/业务/我的)
      - easycom 自动引入 uview-plus
 
   4. **manifest.json 多端配置**:
@@ -551,7 +551,7 @@ flowchart LR
 ### 4.5 UniApp 复刻项目目录模板
 
 ```
-mediation-{{APP}}/
+business-{{APP}}/
 ├── README.md
 ├── CHANGELOG.md
 ├── LICENSE
@@ -595,28 +595,28 @@ mediation-{{APP}}/
 ├── src/
 │   ├── api/
 │   │   ├── index.ts                    # 统一导出
-│   │   ├── uaa/                        # auth.ts / user.ts / mediator.ts
+│   │   ├── uaa/                        # auth.ts / user.ts / staff.ts
 │   │   ├── system/                     # dict.ts / file.ts / notify.ts / notice.ts
-│   │   └── modules/                    # case.ts / mediation.ts
+│   │   └── modules/                    # case.ts / business.ts
 │   ├── components/
 │   │   ├── common/                     # NavBar / CaseCard / EmptyState / FileUploader / StatusBar
 │   │   ├── party/
-│   │   └── mediator/
+│   │   └── staff/
 │   ├── pages/
-│   │   ├── party/                      # login / register / index / case / mediation / knowledge / notice / mine
-│   │   └── mediator/                   # login / index / case / mediation / mine
+│   │   ├── party/                      # login / register / index / case / business / knowledge / notice / mine
+│   │   └── staff/                   # login / index / case / business / mine
 │   ├── store/
 │   │   ├── index.ts
 │   │   ├── user.ts
 │   │   ├── case.ts
-│   │   ├── mediation.ts
+│   │   ├── business.ts
 │   │   └── app.ts
 │   ├── utils/
 │   │   ├── index.ts                    # dayjs / 验证 / 导航 / UI 提示
 │   │   ├── request.ts                  # 拦截器 / Token 刷新 / 文件上传
 │   │   └── platform.ts                 # 平台差异适配
 │   ├── websocket/
-│   │   └── mediation.ts
+│   │   └── business.ts
 │   ├── styles/
 │   │   └── base.css                    # CSS Variables + 工具类
 │   ├── static/
@@ -702,10 +702,10 @@ mediation-{{APP}}/
   4. **平台适配**:为每个差异点用条件编译或 platform.ts 处理。
   5. **类型完备**:所有 API 都有 TS 类型定义,避免 any。
 
-[必含功能模块 — 复刻 mediation-app 登录/账号体系]
+[必含功能模块 — 复刻 business-app 登录/账号体系]
   ### M1 — 账号密码登录
     - pages/party/login/index.vue:手机号+密码登录、记住密码、忘记密码入口
-    - pages/mediator/login/index.vue:调解员登录(含审核状态提示)
+    - pages/staff/login/index.vue:业务专员登录(含审核状态提示)
     - store/user.ts:login/logout/getUserInfo actions
     - api/uaa/auth.ts:login/logout/refresh
     - utils/request.ts:Token 自动附加 + 401 刷新 + 并发合并
@@ -742,7 +742,7 @@ mediation-{{APP}}/
     - 案件列表:Tab 分组(待处理/进行中/已结案)
     - 测试:表单校验、文件上传进度
 
-  ### M8 — 在线调解(WebSocket)
+  ### M8 — 在线业务(WebSocket)
     - 文字消息、图片/文件
     - 输入状态提示 TYPING
     - 自动重连(指数退避,最多 5 次)
@@ -819,7 +819,7 @@ mediation-{{APP}}/
 
   2. **H5 E2E**(Playwright):
      - 配置浏览器矩阵:Chromium / WebKit(Safari) / Firefox
-     - 用例:登录/注册/重置密码/首页加载/案件列表/案件详情/调解会话/个人中心
+     - 用例:登录/注册/重置密码/首页加载/案件列表/案件详情/业务会话/个人中心
      - 视觉回归:对比基准截图(Pixelmatch)
      - 性能:Lighthouse CI ≥ 90 分
 
@@ -1097,19 +1097,19 @@ flowchart TB
 ### 10.2 占位符说明
 
 ```
-{{APP_NAME}}            复刻目标 APP 短名,例: mediation / reverse-app
-{{APP_TITLE}}           中文标题,例: 矛盾纠纷调解平台
+{{APP_NAME}}            复刻目标 APP 短名,例: business / reverse-app
+{{APP_TITLE}}           中文标题,例: 矛盾纠纷业务平台
 {{SOURCE_TYPE}}         源类型,例: apk / ipa / h5-link / mp-package / flutter
 {{TARGET_PLATFORMS}}    目标平台数组,例: ["h5","mp-weixin","app-android","app-ios"]
 {{PORT}}                后端端口,例: 8080
 {{SOURCE_DIR}}          源 APP 物料目录,例: reverse-raw/
-{{OUTPUT_DIR}}          复刻工程输出目录,例: mediation-{{APP_NAME}}/
+{{OUTPUT_DIR}}          复刻工程输出目录,例: business-{{APP_NAME}}/
 {{H5_CDN_URL}}          H5 CDN 地址,例: https://h5.example.com
 {{MP_APPID}}            微信小程序 AppID
 {{MP_PRIVATE_KEY}}      微信小程序私钥路径
 {{MP_VERSION}}          微信小程序体验版版本号
 {{ANDROID_KEYSTORE}}    Android 签名 keystore 路径
-{{ANDROID_PACKAGE_NAME}} Android 包名,例: com.example.mediation
+{{ANDROID_PACKAGE_NAME}} Android 包名,例: com.example.business
 {{IOS_BUNDLE_ID}}       iOS Bundle ID
 {{IOS_TEAM_ID}}         Apple Developer Team ID
 {{DATE}}                当前日期,例: 2026-06-17
@@ -1121,4 +1121,4 @@ flowchart TB
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| v1.0.0 | 2026-06-17 | gstack + GSD | 初版,基于 mediation-app(UniApp 3 + Vue 3 + TS)作为复刻目标样本 |
+| v1.0.0 | 2026-06-17 | gstack + GSD | 初版,基于 business-app(UniApp 3 + Vue 3 + TS)作为复刻目标样本 |

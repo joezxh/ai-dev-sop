@@ -98,6 +98,46 @@ curl -s http://localhost:3001 > /dev/null && echo "Dashboard OK"
 
 ### 1.4 IDE 接入
 
+> ⚡ **推荐：一键配置**（`scripts/mem0-setup.ps1` / `mem0-setup.sh`）
+> 下面的手工 MCP 配置、规则文件、凭证文件、端到端校验，均可由一条命令自动完成，
+> 服务名自动约定为 `mem0`（环境只用 URL 区分本地/远程）。手工配置保留用于理解原理与特殊场景。
+
+```powershell
+# Windows（PowerShell）
+cd <仓库根目录>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mem0-setup.ps1
+```
+
+```bash
+# macOS / Linux / WSL
+cd <仓库根目录>
+bash scripts/mem0-setup.sh
+```
+
+**常用参数**：
+
+| 作用 | PowerShell | bash | 说明 |
+|------|-----------|------|------|
+| 指定 IDE | `-Ide codebuddy,cursor,qoder,codex,claude` | `-i ...` | 缺省自动探测已安装 IDE |
+| MCP 端点 | `-Url http://host:8080/mcp` | `-u ...` | 本地/远程只用 URL 区分 |
+| REST 地址 | `-RestUrl http://host:8888` | `-s ...` | 校验用；缺省由 MCP URL 换端口 8888 |
+| API 密钥 | `-ApiKey m0sk_xxx` | `-k m0sk_xxx` | 缺省读 `MEM0_API_KEY`，再缺省交互粘贴 |
+| 目标仓库 | `-Repo <path>` | `-r <path>` | 缺省当前目录 |
+| 预演 | `-DryRun` | `-n` | 只打印将写入的内容，不落盘 |
+
+**脚本做了什么（对应手工 5 步）**：
+1. 探测并**合并写**各 IDE 的 MCP 配置（保留已有其他 MCP 服务，含 `transport: streamable-http`）
+2. 按 IDE 写规则文件（`CODEBUDDY.md` / `.cursor/rules/mem0.mdc` / `.qoder/rules/mem0.md` / `AGENTS.md` / `CLAUDE.md`），标记区间幂等更新
+3. 生成凭证文件 `<repo>/.mem0/mem0.config.json`（自动取 `git remote get-url origin` 得 `git_remote`/`project_id`）
+4. **端到端校验**：MCP 端点存活（GET `/mcp` 返回 406 即正常）→ REST 密钥写读往返 → 测试记忆自动清理
+5. 输出逐项 ✓/✗ 报告与失败修复指引
+
+**校验输出解读**：`HTTP 406` = 端点正常；`REST 写入/查回成功` = 密钥与链路闭环；`401` = 密钥无效需重建；`无法连接 8888` = 用 `-RestUrl` 指定实际 REST 地址。配完重启 IDE 即生效。
+
+---
+
+**手工配置**（`~/.codebuddy/mcp.json` 或对应 IDE 的 MCP 配置）：
+
 ```json
 {
   "mcpServers": {

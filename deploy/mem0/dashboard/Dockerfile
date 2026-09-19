@@ -5,6 +5,12 @@ WORKDIR /app
 
 # Dependencies
 FROM base AS deps
+# npm registry 镜像源：国内网络官方源(registry.npmjs.org) IPv6 ENETUNREACH，
+# 默认走 npmmirror(IPv4)，可用 --build-arg NPM_REGISTRY=... 覆盖。
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ENV npm_config_registry=${NPM_REGISTRY} \
+    YARN_REGISTRY=${NPM_REGISTRY} \
+    COREPACK_NPM_REGISTRY=${NPM_REGISTRY}
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile --network-timeout 600000; \

@@ -1,7 +1,7 @@
 # AI IDE MCP 配置模板（mem0）
 
 > 旧双轨记忆系统（cbmem-team / mempalace）已于 2026-09 移除，统一接入自托管 mem0。
-> 云端 / 多工具 / 进阶选项详见 [quick-ref/mem0-ai-tools-config-guide.md](../quick-ref/mem0-ai-tools-config-guide.md)。
+> 云端 / 多工具 / 进阶选项详见 [quick-ref/mem0-manual.md](../quick-ref/mem0-manual.md)。
 
 ---
 

@@ -5,7 +5,7 @@
 > **变更说明**: 旧双轨工具（MemPalace / codebase-mem-mcp）已移除。自动化不再依赖
 > Cursor rules JSON 等工具路由配置，统一改为 **Agent 规则文件**（CODEBUDDY.md 模式）
 > + mem0 MCP 工具，行为见根 `CODEBUDDY.md` 与
-> [quick-ref/mem0-ai-tools-config-guide.md §9](../quick-ref/mem0-ai-tools-config-guide.md)。
+> [quick-ref/mem0-manual.md §9](../quick-ref/mem0-manual.md)。
 
 ---
 

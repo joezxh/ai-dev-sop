@@ -4,7 +4,7 @@
 
 ### 0.1 SOP 目标与用途
 
-本 SOP（Standard Operating Procedure，标准操作流程）文档面向 **mediation-platform** 项目的全栈开发者、测试工程师及产品经理，旨在为「从需求到交付」的完整研发链路提供一套**可复用、可度量、可自动化**的标准操作指南。
+本 SOP（Standard Operating Procedure，标准操作流程）文档面向 **business-platform** 项目的全栈开发者、测试工程师及产品经理，旨在为「从需求到交付」的完整研发链路提供一套**可复用、可度量、可自动化**的标准操作指南。
 
 具体而言，本 SOP 用于解决以下三类问题：
 
@@ -12,11 +12,11 @@
 - **AI 协作口径不统一**：不同开发者使用 Cursor / Qoder / CodeBuddy 等 AI IDE 时，提示词模板、模型选型、上下文注入方式各异，产出质量波动大。
 - **知识资产沉淀困难**：测试场景、开发提示词、自动化脚本、运营需求等关键资产未能结构化沉淀，复用率低。
 
-本 SOP 文档以**提示词模板 + 流程编排 + 自动化脚本**为载体，让任何一位成员（无论是否熟悉 mediation-platform 现有架构）都能在短时间内，按图索骥地完成从环境准备到测试交付、再到文档与运营需求自动化的全流程工作。
+本 SOP 文档以**提示词模板 + 流程编排 + 自动化脚本**为载体，让任何一位成员（无论是否熟悉 business-platform 现有架构）都能在短时间内，按图索骥地完成从环境准备到测试交付、再到文档与运营需求自动化的全流程工作。
 
 ### 0.2 人员角色与 SOP 推广阶段
 
-mediation-platform 的 SOP 推广按组织成熟度划分为两个阶段：先以**多角色分阶段协作**跑通链路，再随客户场景复杂度上升收敛到**全 FDE**。本节先讲清楚三类角色的职责边界，再讲两个推广阶段的差异。
+business-platform 的 SOP 推广按组织成熟度划分为两个阶段：先以**多角色分阶段协作**跑通链路，再随客户场景复杂度上升收敛到**全 FDE**。本节先讲清楚三类角色的职责边界，再讲两个推广阶段的差异。
 
 #### 一、三类人员角色与职责边界
 
@@ -39,7 +39,7 @@ mediation-platform 的 SOP 推广按组织成熟度划分为两个阶段：先�
 
 ### 0.3 开发流程整体视图
 
-mediation-platform 的开发流程可被抽象为「**七大阶段、串行推进**」的流水线。每一阶段都以前序阶段的产出物为输入，并向后续阶段交付标准化的中间制品，形成可追溯的研发链路：
+business-platform 的开发流程可被抽象为「**七大阶段、串行推进**」的流水线。每一阶段都以前序阶段的产出物为输入，并向后续阶段交付标准化的中间制品，形成可追溯的研发链路：
 
 ```
 安装  →  理解  ┌─ 提示词生成  →  场景选择  →  各场景  →  测试自动化  ─┐
@@ -125,7 +125,7 @@ flowchart LR
 
 作为整条流水线的**终点与回流出口**，「运营需求自动化」并非独立的内容生产环节，而是对前六个阶段能力的**复用与外延**，并最终**回流回研发闭环（场景交付）父环节**驱动下一轮需求实现：
 
-- **运营视角（需求入口）**：运营同学深入客户业务一线，采集并归集客户在使用 mediation-platform 过程中提出的真实需求、痛点与定制化场景，沉淀为结构化的需求清单与场景描述。
+- **运营视角（需求入口）**：运营同学深入客户业务一线，采集并归集客户在使用 business-platform 过程中提出的真实需求、痛点与定制化场景，沉淀为结构化的需求清单与场景描述。
 - **FDE 视角（执行闭环）**：由 FDE（Forward Deployed Engineer，前线部署工程师）角色承接这些运营需求，将客户场景套用回本 SOP 的 **§0 准备 → §1 提示词生成 → §2 测试 → §3 场景 SOP → §4 文档** 全流程，按七大阶段完成从「客户原话」到「可交付、可测试、可文档化」产品的端到端落地。
 - **场景复用**：FDE 执行的每一个客户场景，反过来又沉淀为 §3 场景开发 SOP 下的新 pipeline 模板（如 `copy-web-pipeline.md` / `copy-app-pipeline.md` / `java-upgrade-pipeline.md`），形成"客户场景 → 流程模板 → 后续场景复用"的正循环。
 - **回流机制**：执行过程中产生的提示词、测试用例、文档与运营分析材料，回填至 `docs/scene/` 资产库，使后续运营采需与 FDE 执行有据可依、越用越准。
@@ -139,7 +139,7 @@ flowchart LR
 | 阶段 | 验证状态 | 验证负责人 | 验证说明 | 最近验证时间 |
 |------|---------|---------|-------------|-------------|
 | 1 · 安装 | ✅ 已验证 | — | Skill 工具链安装流程已写入文档，尚未在真实项目中完整执行并记录结果 | — |
-| 2 · 理解 | ✅ 已验证 | — | `/gsd-map-codebase` 已在本项目（mediation-platform）中执行，7 份认知文件已产出并存于 `.planning/codecase/` | 2026-06-18 |
+| 2 · 理解 | ✅ 已验证 | — | `/gsd-map-codebase` 已在本项目（business-platform）中执行，7 份认知文件已产出并存于 `.planning/codecase/` | 2026-06-18 |
 | 3 · 提示词生成 | ✅ 已验证 | — | 已参照 `scene-template.md` 生成 `<service>-scene.md` 等提示词文档，实际用于开发 / 测试 / 文档各环节 | 2026-06-18 |
 | 4 · 场景选择 | ⏳ 待验证 | — | 以下 6 个场景分支尚未逐一在真实需求中完整跑通 | — |
 | 4.1 · 基线脚手架开发 | ⏳ 待验证 | — | 参照 `copy-web-pipeline.md` 初始化基线工程结构，路由与依赖链路待验证 | — |
@@ -260,7 +260,7 @@ flowchart LR
 ### 1.3 Project Rules 安装
 
 ```
-根据当前的后端代码模块 @mediation-basic/mediation-module-uaa 与前端代码模块 @mediation-web 的现有架构和技术栈，为整个调解平台工程项目制定并实施一套统一的开发约束和代码规范，并生成为当前开发工具cursor的Project Rules,并安装。
+根据当前的后端代码模块 @business-basic/business-module-uaa 与前端代码模块 @business-web 的现有架构和技术栈，为整个业务平台工程项目制定并实施一套统一的开发约束和代码规范，并生成为当前开发工具cursor的Project Rules,并安装。
 
 具体要求：
 1. 分析现有代码结构，识别当前使用的编码规范、技术栈和最佳实践
@@ -337,35 +337,35 @@ flowchart LR
 系统模块
 ```
 /brainstorm
-参照模板 以@mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
--   后端 @mediation-basic/mediation-module-system服务名：system 端口 8082
--   前端 views目录：@mediation-web/src/api/systemapi模块: @mediation-web/src/views/system
+参照模板 以@business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端 @business-basic/business-module-system服务名：system 端口 8082
+-   前端 views目录：@business-web/src/api/systemapi模块: @business-web/src/views/system
 
-输出文件路径：`mediation-web/docs/scene/system-scene.md`
+输出文件路径：`business-web/docs/scene/system-scene.md`
 文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
 特别强调：System 服务测试模块 必须完成所有模块的测试提示词的编写
 ```
 
 AI模块
 ```
-参照模板 以@mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
--   后端  mediation-harness-module 服务名：harness 端口 8087
--   前端 views目录：@mediation-web/src/api/harness  api模块: @mediation-web/src/views/harness
+参照模板 以@business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端  business-harness-module 服务名：harness 端口 8087
+-   前端 views目录：@business-web/src/api/harness  api模块: @business-web/src/views/harness
 
 文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
-输出文件路径：`mediation-web/docs/scene/harness-scene.md`
+输出文件路径：`business-web/docs/scene/harness-scene.md`
 特别强调：harness 服务测试模块 必须完成所有模块的测试提示词的编写
 ```
 
 单个模块测试提示词
 ```
 /brainstorm
-根据页面 @mediation-web/src/views/kms/legal/area 以及常规行政区域管理功能的需求，对 KMS-08 的测试场景进行详细细化和完善。请分析该行政区域管理页面的实际功能特性，包括但不限于列表展示、搜索筛选、新增、编辑、删除等操作，并基于真实的页面交互流程和业务逻辑，制定更加全面和贴近实际使用的测试场景。
+根据页面 @business-web/src/views/kms/legal/area 以及常规行政区域管理功能的需求，对 KMS-08 的测试场景进行详细细化和完善。请分析该行政区域管理页面的实际功能特性，包括但不限于列表展示、搜索筛选、新增、编辑、删除等操作，并基于真实的页面交互流程和业务逻辑，制定更加全面和贴近实际使用的测试场景。
 ```
 
 测试提示词转换为开发提示词
 ```
-使用 /qa skill 执行测试时，针对模板 ​ @mediation-web/docs/scene/scene-template.md ​ 中   @scene-template.md (246-365)  模块的测试场景，如果发现这些功能尚未开发实现，请将测试流程转换为模块开发流程。
+使用 /qa skill 执行测试时，针对模板 ​ @business-web/docs/scene/scene-template.md ​ 中   @scene-template.md (246-365)  模块的测试场景，如果发现这些功能尚未开发实现，请将测试流程转换为模块开发流程。
 
 请提供一个完整的提示词转换方案，将原本的测试提示词转化为开发提示词，并生成相应的 Skill 配置。
 
@@ -538,7 +538,7 @@ Skill 文件: `@.claude/skills/qa-to-dev/SKILL.md`
 
 ```
 # 角色
-你是 mediation-platform 资深产品经理 + 架构师,负责将一句话需求转换为 PRD。
+你是 business-platform 资深产品经理 + 架构师,负责将一句话需求转换为 PRD。
 
 # 输入
 - 一句话需求:`{{USER_INPUT}}`
@@ -548,7 +548,7 @@ Skill 文件: `@.claude/skills/qa-to-dev/SKILL.md`
 - 输出路径:`{{PRD_FILE}}`
 
 # 任务
-生成完整 PRD 文档,章节结构 **1:1 对齐** `mediation-web/docs/scene/scene-template.md` 的 §1 ~ §8 骨架。
+生成完整 PRD 文档,章节结构 **1:1 对齐** `business-web/docs/scene/scene-template.md` 的 §1 ~ §8 骨架。
 本 PRD 是后续 N2~N5 的唯一数据源,请最大化信息密度。
 
 # 输出文档骨架(必须严格遵循)
@@ -625,7 +625,7 @@ Skill 文件: `@.claude/skills/qa-to-dev/SKILL.md`
 # 规则
 1. 章节顺序、命名、子节编号、表格列 **不得改动**。
 2. 信息不全时,使用 `<待定>` 占位,**不要省略章节**。
-3. 字段命名、字典类型、权限码命名遵循 mediation-platform 现有规范(case:manage:* / system:config:* / ai:model:*)。
+3. 字段命名、字典类型、权限码命名遵循 business-platform 现有规范(case:manage:* / system:config:* / ai:model:*)。
 4. 完成后输出文件路径与字节数。
 ```
 
@@ -959,16 +959,16 @@ Pipeline需要能够：
 4.OpenSpec
 5.awesome-design-md 
 
-目标：实现从一句话需求生成完整PRD文档，并根据文档按照最小级别子模块，生成 在ai coding 工具cursor 可以使用的提示词，包括完整测试提示词语开发提示词，结构参考@mediation-web/docs/scene/scene-template.md。
+目标：实现从一句话需求生成完整PRD文档，并根据文档按照最小级别子模块，生成 在ai coding 工具cursor 可以使用的提示词，包括完整测试提示词语开发提示词，结构参考@business-web/docs/scene/scene-template.md。
 输出： pipeline实现的流程与各个节点的操作，包括提示词
 
 
 范例提示词：
-参照模板 以@mediation-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
--   后端 @mediation-basic/mediation-module-system服务名：system 端口 8082
--   前端 views目录：@mediation-web/src/api/systemapi模块: @mediation-web/src/views/system
+参照模板 以@business-web/docs/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端 @business-basic/business-module-system服务名：system 端口 8082
+-   前端 views目录：@business-web/src/api/systemapi模块: @business-web/src/views/system
 
-输出文件路径：`mediation-web/docs/scene/system-scene.md`
+输出文件路径：`business-web/docs/scene/system-scene.md`
 特别强调：System 服务测试模块 必须完成所有模块的测试提示词、开发提示词的编写
 ```
 
@@ -1009,7 +1009,7 @@ Pipeline需要能够：
 ```
 实现目标：
 已知线上系统，包括登录账号密码，复制其功能实现一样系统；
-整理一个通用的pipeline实现以上目标,包括各节点的操作与提示词，整理内容写入文档：@mediation-web/docs/scene  copy-web-pipeline.md。
+整理一个通用的pipeline实现以上目标,包括各节点的操作与提示词，整理内容写入文档：@business-web/docs/scene  copy-web-pipeline.md。
 
 具体要求：
 1. 基于现有线上系统进行逆向工程分析，包括但不限于：
@@ -1058,7 +1058,7 @@ Pipeline需要能够：
 - 基于uniapp框架实现相同功能，确保各端体验一致
 - 设计Pipeline包含以下节点：需求分析(N1) → 架构设计(N2) → 代码生成(N3) → 功能实现(N4) → 测试验证(N5) → 部署发布(N6)
 - 每个节点需定义具体操作步骤和AI提示词模板
-- 将完整的Pipeline文档写入文件：mediation-web/docs/scene/copy-app-pipeline.md
+- 将完整的Pipeline文档写入文件：business-web/docs/scene/copy-app-pipeline.md
 
 可使用的Skills工具集：
 1. Superpowers - 用于头脑风暴、TDD开发、系统化调试
@@ -1104,7 +1104,7 @@ Pipeline需要能够：
 - 错误处理和回滚机制
 - 升级前后对比验证步骤
 
-将整理好的 pipeline 内容详细写入文档：@mediation-web/docs/scene/java-upgrade-pipeline.md
+将整理好的 pipeline 内容详细写入文档：@business-web/docs/scene/java-upgrade-pipeline.md
 文档应包含完整的升级流程、技术栈变更说明、注意事项和最佳实践。
 ```
 [java-upgrade-pipeline.md](java-upgrade-pipeline.md)
@@ -1187,7 +1187,7 @@ curl -s http://localhost:8888/docs > /dev/null && echo "API OK"
   [SOP-M4: 知识沉淀指南](../sop/SOP-M4-knowledge.md)
 - 团队协作（共享池、ADR 管理、Onboarding）：[SOP-M5: 团队协作指南](../sop/SOP-M5-collaboration.md)
 - 各 IDE 配置模板：[IDE MCP 配置模板](../ide-config/ide-mcp-templates.md)
-- 完整接入手册（云端/自托管/多工具共享）：[mem0 AI 工具配置手册](../quick-ref/mem0-ai-tools-config-guide.md)
+- 完整接入手册（云端/自托管/多工具共享）：[mem0 AI 工具配置手册](../quick-ref/mem0-manual.md)
 
 ### 5.7 历史版本说明
 

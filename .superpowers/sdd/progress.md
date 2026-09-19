@@ -40,3 +40,14 @@ Graph Task 10: complete (commit 6295b8e9, py_compile OK + test pass). mcp_server
 Graph Task 11: complete (commit 3e1c62e6, container pytest 122 passed = 116 baseline+graph + 6 new). graph_memory.py 增加内存重试队列（add 失败→_enqueue_retry→守护线程 _retry_loop 按指数退避重试 MAX_RETRIES=5，_backoff 上限 30s；提供 retry_pending()/stop()）；新增 export(filters,limit) 导出节点+边 JSON。routers/graph.py 新增 GET /graph/export（scope 契约同 get_all）。dashboard 增"导出数据"按钮（GRAPH_ENDPOINTS.EXPORT 下载 JSON）。新增 test_graph_retry_queue.py、test_graph_export.py。
 
 Graph Task 12: complete (commit 85421872, 单独提交). server/dev.Dockerfile `RUN pip install -e .[graph]` → `RUN pip install -e .`（mem0ai 2.x 无 graph extra，图能力由 graph_memory.py + langchain-neo4j 提供，后者已在 requirements.txt）。requirements.txt 仍含 langchain-neo4j>=0.4，依赖完整。
+
+== mem0 一键接入 plan (branch feat/mem0-llm-provider-i18n, plan 2026-09-19-mem0-one-step-setup) ==
+Task 1: complete (commits e248aff+0e278c1, review spec ✅ / quality issues resolved by controller: MI-01 归一化已修；IM-01 由 Task 7 .gitignore 覆盖（已跑 git check-ignore 断言通过）；IM-02 由 Task 7 服务名表述更新覆盖；MI-02 CR 容忍作为 Task 3 约束下发；MI-03 计划校验命令已加 -AllMatches)
+Task 2: complete (commits 1348617+ddef51c; 控制器实测修复两处真实缺陷：ConvertFrom-Json -AsHashtable 为 PS6+ 参数在 PS5.1 抛错被误判为 JSON 损坏；-DryRun 仍执行 REST 写入。DryRun 全绿：4 IDE 识别、端点 406 存活、DryRun 跳过 REST)
+Task 3: complete (commit 1be5717; bash 版内置 CR 容忍（python3 渲染模板）、python3 做 JSON 合并；bash -n 通过；临时 HOME 下 -i cursor,codex 矩阵验证通过；WSL 无法访问 Windows localhost 服务属环境限制)
+Task 4: complete (commit 7973b24; 5 模板 + 5 表格 + 故障表共 11 处跨天条款，验证 '当天不一致'=11)
+Task 5: complete (commit 3cd2901; 121 处替换：服务名统一 mem0（保护 ~/mem0-remote/ 部署目录名）、凭证路径统一 .mem0/mem0.config.json、session 路径按 IDE 统一；验证 0/0/0/0/1/0 全绿)
+Task 6: complete (commit 含在 3cd2901 之后的提交；§4.2–4.6 各章一键脚本提示 + §5.3.1 校验项)
+Task 7: complete (commit 5982da9; CODEBUDDY.md 路径/服务名约定、.gitignore 增 .mem0/（check-ignore 生效）、install-all 双脚本指引、凭证与会话文件迁至 .mem0/)
+Task 8: verification (T1 合并写保留 Playwright/sqlbot ✓；T2 幂等 marker 唯一 ✓；T3 cursor .mdc frontmatter + codex TOML ✓；T4/T5 错误分支提示正确 ✓；REST 往返在本机不可验证：REST 实例(8000/8002)与 MCP(8080) 非同一实例，同密钥 MCP 通而 REST 401——环境差异，非脚本缺陷；已加 -RestUrl/-s 覆盖参数 e2d0cd0)
+执行方式备注：Task 1-2 用 subagent；自 Task 3 起因 gsd-executor(31KB)/gsd-code-reviewer(15KB) 定义过重、单调用 15-22s 且长任务被 abort(code=10003)，改为内联执行 + grep 断言验证。

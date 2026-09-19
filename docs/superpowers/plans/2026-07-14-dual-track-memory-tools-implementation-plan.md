@@ -1,5 +1,5 @@
 > [!WARNING]
-> **已废弃（2026-09-18）**：本文档描述的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，记忆功能统一替换为自托管 mem0（见 docs/quick-ref/mem0-ai-tools-config-guide.md）。本文仅作历史归档保留，内容不再维护。
+> **已废弃（2026-09-18）**：本文档描述的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，记忆功能统一替换为自托管 mem0（见 docs/quick-ref/mem0-manual.md）。本文仅作历史归档保留，内容不再维护。
 
 # 双轨记忆系统工具最佳实践 - 实施计划
 
@@ -420,7 +420,7 @@ Phase 5: 验证与优化 (Day 9-10)
 | Cursor MCP 配置指南 | `tools/cbmem-team/cursor-mcp-config.md` | ✅ |
 | AI IDE 自动化配置 | `docs/automation/ai-ide-automation.md` | ✅ |
 | 验证检查清单 | `docs/verification/VERIFICATION-CHECKLIST.md` | ✅ |
-| 工具速查表 | `docs/quick-ref/tools-quick-ref.md` | ✅ |
+| 工具速查表 | `docs/quick-ref/mem0-manual.md` | ✅ |
 | 一键安装脚本 (Bash) | `scripts/install-all.sh` | ✅ |
 | 一键安装脚本 (PowerShell) | `scripts/install-all.ps1` | ✅ |
 
@@ -437,14 +437,14 @@ Phase 5: 验证与优化 (Day 9-10)
 - [x] `SOP-M5-collaboration.md` 包含 onboarding 流程
 - [x] `cursor-mcp-config.md` 包含配置指南
 - [x] `ai-ide-automation.md` 包含自动调用规则
-- [x] `tools-quick-ref.md` 可打印为速查卡
+- [x] `mem0-manual.md` 可打印为速查卡
 
 ### 10.2 工具验收
 
 - [x] `install-all.sh` 脚本已创建
 - [x] `install-all.ps1` 脚本已创建
 - [x] `ai-ide-automation.md` 包含自动调用规则
-- [x] `tools-quick-ref.md` 包含完整工具速查
+- [x] `mem0-manual.md` 包含完整工具速查
 
 ---
 

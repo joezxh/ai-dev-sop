@@ -1,5 +1,5 @@
 > [!WARNING]
-> **已废弃（2026-09-18）**：本文档描述的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，记忆功能统一替换为自托管 mem0（见 docs/quick-ref/mem0-ai-tools-config-guide.md）。本文仅作历史归档保留，内容不再维护。
+> **已废弃（2026-09-18）**：本文档描述的双轨记忆系统（MemPalace / cbmem-team / codebase-memory-mcp）已移除，记忆功能统一替换为自托管 mem0（见 docs/quick-ref/mem0-manual.md）。本文仅作历史归档保留，内容不再维护。
 
 # docs-site / cbmem-team 独立部署 + Ant Design 迁移 — 实施计划
 
@@ -222,7 +222,7 @@ In `tools/cbmem-team/deploy/cbmem-team.service.minimal`:
   ExecStart=/usr/local/bin/cbmem-team \
       -listen :8787 \
       -data /var/lib/cbmem-team \
-      -mcp-bin /home/tianque/codebase-memory-mcp \
+      -mcp-bin /home/deploy/codebase-memory-mcp \
       -jwt-secret ${JWT_SECRET} \
       -admin-token ${ADMIN_TOKEN} \
 +     -cors-allow-origins ${CORS_ALLOW_ORIGINS} \
@@ -347,7 +347,7 @@ In `cbmem-team.service.minimal`:
   ExecStart=/usr/local/bin/cbmem-team \
       -listen :8787 \
       -data /var/lib/cbmem-team \
-      -mcp-bin /home/tianque/codebase-memory-mcp \
+      -mcp-bin /home/deploy/codebase-memory-mcp \
       -jwt-secret ${JWT_SECRET} \
       -admin-token ${ADMIN_TOKEN} \
 -     -console-dist /var/www/docs/console \
