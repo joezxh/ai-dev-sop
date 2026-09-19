@@ -408,25 +408,14 @@ async function postMemory(text, meta) {
   return res.json();
 }
 
-// 嵌入模型输入长度上限（安全阈值；实测 ~7167 字符可正常嵌入，远超限者会被截断落库）
-const EMBED_CAP = 8000;
-function fitForEmbed(text) {
-  if (text.length <= EMBED_CAP) return text;
-  return (
-    text.slice(0, EMBED_CAP) +
-    `\n…(原文 ${text.length} 字符超出嵌入长度上限 ${EMBED_CAP}，已截断以完成落库；完整内容见本地会话文件)`
-  );
-}
-
-// 提交；先截断到嵌入上限再发（避免超大负载卡死 embedding），被 502 拒绝时重试一次，确保会话不丢。
+// 全量上送：零 LLM 直投，不做任何字符截断，完整原文入库（mem0 服务端按内容哈希去重）。被 502 拒绝时重试一次，确保会话不丢。
 async function postMemorySafe(text, meta) {
-  const send = fitForEmbed(text); // 预截断：绝不上送 >EMBED_CAP 的巨型负载
   try {
-    return await postMemory(send, meta);
+    return await postMemory(text, meta);
   } catch (e) {
     if (/502|provider_bad_request|malformed/i.test(e.message)) {
       console.error(`[ide-poster] 提交被拒(${e.message})，重试一次`);
-      return await postMemory(send, meta);
+      return await postMemory(text, meta);
     }
     throw e;
   }
