@@ -55,7 +55,6 @@ AI开发原则： AI-First </span>
 ```
 
 
-## 1. 记忆体安装  
 ## 1. 记忆体安装（mem0）
 
 <span style="color: #d32f2f; font-size: 1em; font-weight: 700;">强烈建议安装记忆，这样不同的 AI Coding 工具的记忆可以共享，善用 mem0 的项目共享池与团队协作功能。</span>
@@ -134,6 +133,12 @@ bash scripts/mem0-setup.sh
 
 **校验输出解读**：`HTTP 406` = 端点正常；`REST 写入/查回成功` = 密钥与链路闭环；`401` = 密钥无效需重建；`无法连接 8888` = 用 `-RestUrl` 指定实际 REST 地址。配完重启 IDE 即生效。
 
+> ⚡ 一键安装同时会**自动接线转录直投 hook**（仅 codebuddy）：复制
+> `mem0-transcript-poster.mjs` 到 `~/.codebuddy/hooks/` 并合并 `settings.json` 的
+> `SessionStart`——会话结束后 IDE 落盘的转录 JSONL 会被纯脚本零 LLM 逐字入库
+> （`metadata.source=transcript-poster`，Dashboard 详情显示绿色徽标）。详见
+> `scripts/README-mem0-poster.md` 与 mem0-manual §4.11。
+
 ---
 
 **手工配置**（`~/.codebuddy/mcp.json` 或对应 IDE 的 MCP 配置）：
@@ -169,6 +174,126 @@ docker compose -f deploy/mem0/docker-compose.yaml ps   # 全部 healthy
 | 401 | Key 无效/未传 | 重新创建 Key；检查 Bearer 头 |
 | 工具列表空 | 客户端未重启 | 重启 IDE；确认 URL 以 `/mcp` 结尾 |
 | 检索为空 | Key/Project 不匹配 | 统一 `.codebuddy/mem0.config.json` 中的作用域配置 |
+
+### 1.7 codebase-mem-mcp 安装（Codebase Memory MCP，代码结构智能）
+
+> 与 mem0 互补：mem0 负责**团队记忆**（事实/决策/会话流），
+> codebase-mem-mcp 负责**代码结构智能**（AST 图谱/语义检索/调用链）。
+> 两者可同时安装、同时使用。
+
+codebase-memory-mcp 是纯 C 实现的代码智能引擎：单静态二进制、158 种语言 tree-sitter AST + Hybrid LSP 语义解析、15 个 MCP 工具、零依赖。全索引 Linux 内核（28M LOC）仅需 3 分钟，查询 < 1ms。
+
+#### 方式 A：Qoder Lite 提示词安装（推荐本地开发）
+
+**环境要求**
+- 无（单二进制，零运行时依赖）
+- 支持 macOS / Linux / Windows（amd64 + arm64）
+
+**安装提示词**（直接粘贴给 Qoder / Cursor / Claude Code）
+```
+请帮我安装 codebase-memory-mcp：
+1. Linux/macOS 一行命令：
+   curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash
+   - 需要带图可视化 UI：在末尾加 --ui
+   - 自定义安装目录：加 --dir=/usr/local/bin
+2. Windows PowerShell：
+   Invoke-WebRequest -Uri https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.ps1 -OutFile install.ps1
+   Unblock-File .\install.ps1
+   .\install.ps1
+3. 安装脚本会自动：
+   - 下载对应平台的最新 release 二进制
+   - 写入 ~/.local/bin/codebase-memory-mcp（Linux/macOS）或 %LOCALAPPDATA%\Programs\codebase-memory-mcp\（Windows）
+   - 检测已安装的 AI IDE（Qoder/Cursor/Claude Code 等）并自动写入 MCP 配置
+4. 验证：codebase-memory-mcp --version
+5. 在当前项目说 "Index this project" 触发首次索引。
+```
+
+**配置说明**
+- 安装器自动在 `.qoder/mcp.json` 写入 stdio 配置，无需手动编辑
+- 手动配置示例：
+  ```json
+  {
+    "mcpServers": {
+      "codebase-memory-mcp": {
+        "command": "/home/you/.local/bin/codebase-memory-mcp",
+        "args": []
+      }
+    }
+  }
+  ```
+- 图可视化 UI（可选）：`codebase-memory-mcp --ui=true --port=9749`，访问 `http://localhost:9749`
+
+**验证安装**
+```bash
+codebase-memory-mcp --version       # 应打印版本号
+codebase-memory-mcp --help          # 查看所有可用 MCP 工具
+# 在 IDE 中说 "Index this project" 或 "list all functions in this repo"
+```
+
+#### 方式 B：Docker 完整部署（推荐 CI / 隔离环境）
+
+**环境要求**
+- Docker 20.10+
+- 项目源码需挂载进容器
+
+**docker run**
+```bash
+docker run -i --rm \
+  -v /path/to/project:/workspace \
+  -v cbm-data:/data \
+  ghcr.io/deusdata/codebase-memory-mcp:latest
+```
+注意 `-i` 标志是 MCP stdio 协议必需的。
+
+**docker-compose.yml**（作为 stdio MCP 服务）
+```yaml
+version: "3.9"
+services:
+  cbm:
+    image: ghcr.io/deusdata/codebase-memory-mcp:latest
+    stdin_open: true     # 等价 docker run -i，MCP stdio 必需
+    tty: false
+    volumes:
+      - ./my-project:/workspace:ro
+      - cbm-data:/data
+    working_dir: /workspace
+
+volumes:
+  cbm-data:
+```
+
+**Qoder / Cursor MCP 配置**（让 IDE 通过 docker 启动）
+```json
+{
+  "mcpServers": {
+    "codebase-memory-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "mempalace-data:/data",
+        "-v", "/path/to/project:/workspace",
+        "ghcr.io/deusdata/codebase-memory-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**验证安装**
+```bash
+docker run -i --rm ghcr.io/deusdata/codebase-memory-mcp:latest --version
+# 在 IDE 中测试："list all functions in this repo"
+```
+
+**常见问题**
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| `exec format error` | 二进制架构与平台不匹配 | 确认下载的是 amd64 还是 arm64 版本；Apple Silicon Mac 用 arm64 |
+| Windows 报 "Mark-of-the-Web" 拦截 | 浏览器给下载文件加了安全标记 | `Unblock-File .\install.ps1` 后再执行 |
+| 索引大仓库时 OOM | 仓库过大（> 30M LOC）且容器内存受限 | 调高 `deploy.resources.limits.memory` 或使用宿主机安装版 |
+| IDE 看不到 MCP 工具 | 配置未写入或路径错误 | 重启 IDE；检查 `.qoder/mcp.json` 中 command 路径是否可执行 |
+
+工具速查见 [mem-tools.md §4 Codebase 工具](./mem-tools.md)；使用指南见 [SOP-M2: 项目理解指南](./SOP-M2-understanding.md)。
 
 ## 2. Skill 安装
 

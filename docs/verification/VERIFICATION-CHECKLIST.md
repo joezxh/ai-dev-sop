@@ -73,6 +73,9 @@
 | 自动提交 | 陈述一个持久事实，观察是否自动 `add_memory` | CODEBUDDY.md §2 行为触发 |
 | 每轮留痕 | 任意一轮对话后查询 | type=conversation 记录存在 |
 | 失败降级 | 停止 mem0-api 后会话 | Agent 告知服务不可达且不编造记忆 |
+| 转录直投 hook | 查看用户级 `settings.json` SessionStart | 含 `mem0-transcript-poster` 条目 |
+| 原样校验 | `node scripts/mem0-transcript-poster.mjs --workspace . --verify` | 退出码 0（服务端回读与本地组装字节级一致） |
+| 来源徽标 | poster 入库的记忆在 Dashboard 详情查看 | `metadata.source=transcript-poster` + 绿色"零 LLM 原文留痕"徽标 |
 
 ---
 

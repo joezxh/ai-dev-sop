@@ -11,7 +11,8 @@
 #   --skip-mem0    跳过 mem0 服务安装
 #   --help         显示帮助
 #
-# 仅负责 mem0 服务端安装/启动；IDE 接入（MCP 配置 + 规则文件 + 凭证）
+# 仅负责 mem0 服务端安装/启动；IDE 接入（MCP 配置 + 规则文件 + 凭证
+# + 转录直投 SessionStart hook，零 LLM 逐字留痕）
 # 请运行 scripts/mem0-setup.sh。
 
 set -e

@@ -6,7 +6,8 @@
 # 使用方法:
 #   .\install-all.ps1 [-SkipMem0]
 #
-# 仅负责 mem0 服务端安装/启动；IDE 接入（MCP 配置 + 规则文件 + 凭证）
+# 仅负责 mem0 服务端安装/启动；IDE 接入（MCP 配置 + 规则文件 + 凭证
+# + 转录直投 / IDE 会话转录直投 SessionStart hook + 工具捕获 PostToolUse hook，均零 LLM 逐字留痕）
 # 请运行 scripts\mem0-setup.ps1。
 
 param(

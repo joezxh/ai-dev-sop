@@ -4,9 +4,25 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="c7904d69-263f-4631-b0af-73aa9721d5aa" name="Changes" comment="docs(graph-engineering): 添加 Graph Engineering 从 0 到 1 完整教程文档&#10;&#10;- 详细介绍 Graph Engineering 概念及其与 Loop Engineering 区别&#10;- 阐述 Graph Engineering 三大核心组件：节点、边、状态&#10;- 提供写文章、写代码、做调研三个实用 Graph 模板&#10;- 分享从新手到进阶的学习路径和常见陷阱避免方法&#10;- 包含实际操作练习指导和最佳实践建议">
+    <list default="true" id="c7904d69-263f-4631-b0af-73aa9721d5aa" name="Changes" comment="docs: 更新废弃文档中的引用链接和平台名称&#10;&#10;- 将 mem0-ai-tools-config-guide.md 引用更新为 mem0-manual.md&#10;- 将调解平台相关描述统一替换为业务平台&#10;- 更新容器名称从 mwb-* 到 ai-sop-*&#10;- 修改当事人端与调解员端为当事人端与业务专员端&#10;- 更新复制应用流水线中的调解相关术语为业务相关术语&#10;- 修正复制网页流水线中的平台名称和目录结构&#10;- 更新开发标准操作流程中的项目名称和职责描述">
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs-site/sop/exists-scene.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/sop/exists-scene.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CODEBUDDY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CODEBUDDY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs-site/guide/mem-tools.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/guide/mem-tools.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs-site/guide/mem0-manual.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/guide/mem0-manual.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs-site/guide/ready.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs-site/guide/ready.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/awesome-design-md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/awesome-design-md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/awesome-design-md/mem0-cloud-dashboard-requirements-spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/awesome-design-md/mem0-cloud-dashboard-requirements-spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/quick-ref/mem0-manual.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/quick-ref/mem0-manual.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/verification/VERIFICATION-CHECKLIST.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/verification/VERIFICATION-CHECKLIST.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mem0" beforeDir="false" afterPath="$PROJECT_DIR$/mem0" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mem0/server/dashboard/src/app/(root)/dashboard/memories/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mem0/server/dashboard/src/app/(root)/dashboard/memories/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install-all.ps1" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install-all.ps1" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install-all.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install-all.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/mem0-setup.ps1" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mem0-setup.ps1" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/mem0-setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mem0-setup.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/templates/mem0-rules.md" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/templates/mem0-rules.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -45,42 +61,46 @@
     <option name="showLibraryContents" value="true" />
     <option name="showMembers" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Go Build.cbmem-team.executor&quot;: &quot;Run&quot;,
-    &quot;Go Build.go build cbmem-team/cmd/cbmem-team.executor&quot;: &quot;Debug&quot;,
-    &quot;Go Build.go build main.go.executor&quot;: &quot;Debug&quot;,
-    &quot;Go Build.mcp-stub.executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.GoLinterPluginOnboardingV2&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.GoLinterPluginStorageMigration&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.analysis.ui.options.defaults&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;bazel.project.detector.is.bazel.project&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/projects/ai-dev-sop/docs-site/guide&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.stylelint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.stylelint&quot;: &quot;&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;pnpm&quot;,
-    &quot;npm.dev.executor&quot;: &quot;Run&quot;,
-    &quot;run.configurations.included.in.services&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;ts.external.directory.path&quot;: &quot;D:\\devtools\\GoLand 2025.3.3\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Go Build.cbmem-team.executor": "Run",
+    "Go Build.go build cbmem-team/cmd/cbmem-team.executor": "Debug",
+    "Go Build.go build main.go.executor": "Debug",
+    "Go Build.mcp-stub.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.mem0-mcp.executor": "Run",
+    "Python.mem0-server.executor": "Run",
+    "RunOnceActivity.GoLinterPluginOnboardingV2": "true",
+    "RunOnceActivity.GoLinterPluginStorageMigration": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.go.analysis.ui.options.defaults": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "bazel.project.detector.is.bazel.project": "true",
+    "git-widget-placeholder": "feat/mem0-llm-provider-i18n",
+    "go.import.settings.migrated": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "D:/projects/ai-dev-sop",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.stylelint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.stylelint": "",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "pnpm",
+    "npm.ai-dev-sop.executor": "Run",
+    "npm.dev.executor": "Run",
+    "npm.mem0-dashboard.executor": "Run",
+    "run.configurations.included.in.services": "true",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "ts.external.directory.path": "D:\\devtools\\GoLand 2025.3.3\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\projects\ai-dev-sop\docs-site\guide" />
@@ -90,46 +110,58 @@
       <recent name="D:\projects\ai-dev-sop\docs-site\reference\16-coding-skill" />
     </key>
   </component>
-  <component name="RunManager" selected="npm.dev">
-    <configuration name="cbmem-team" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
+  <component name="RunManager" selected="npm.ai-dev-sop">
+    <configuration name="mem0-mcp" type="PythonConfigurationType" factoryName="Python">
       <module name="ai-dev-sop" />
-      <working_directory value="$PROJECT_DIR$/tools/cbmem-team" />
-      <parameters value="-listen &quot;:8787&quot; -data &quot;./bin/data-dev&quot; -mcp-bin &quot;codebase-memory-mcp&quot; -jwt-secret myjwtsecret -admin-token myadmintoken -log &quot;debug&quot; -llm-provider &quot;fake&quot; -mysql-dsn &quot;root:root_password@tcp(127.0.0.1:3306)/cbmem?parseTime=true&amp;loc=Local&amp;charset=utf8mb4&quot;" />
-      <EXTENSION ID="net.ashald.envfile">
-        <option name="IS_ENABLED" value="false" />
-        <option name="IS_SUBST" value="false" />
-        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
-        <option name="IS_IGNORE_MISSING_FILES" value="false" />
-        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
-        <ENTRIES>
-          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
-        </ENTRIES>
-      </EXTENSION>
-      <kind value="PACKAGE" />
-      <package value="cbmem-team/cmd/cbmem-team" />
-      <directory value="$PROJECT_DIR$" />
+      <option name="ENV_FILES" value="$PROJECT_DIR$/mem0/server/.env" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.11 (SQLBot)" />
+      <option name="WORKING_DIRECTORY" value="D:\projects\ai-dev-sop\mem0\server" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/mem0/server/mcp_server.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="mcp-stub" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
+    <configuration name="mem0-server" type="PythonConfigurationType" factoryName="Python">
       <module name="ai-dev-sop" />
-      <working_directory value="$PROJECT_DIR$/tools/cbmem-team" />
-      <EXTENSION ID="net.ashald.envfile">
-        <option name="IS_ENABLED" value="false" />
-        <option name="IS_SUBST" value="false" />
-        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
-        <option name="IS_IGNORE_MISSING_FILES" value="false" />
-        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
-        <ENTRIES>
-          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
-        </ENTRIES>
-      </EXTENSION>
-      <kind value="FILE" />
-      <package value="cbmem-team" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$/tools/cbmem-team/cmd/mcp-stub/main.go" />
+      <option name="ENV_FILES" value="$PROJECT_DIR$/mem0/server/.env" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.14 (mem0)" />
+      <option name="WORKING_DIRECTORY" value="D:\projects\ai-dev-sop\mem0\server" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="uvicorn" />
+      <option name="PARAMETERS" value="main:app  --log-level debug --host 0.0.0.0  --port 8002" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="dev" type="js.build_tools.npm" nameIsGenerated="true">
+    <configuration name="ai-dev-sop" type="js.build_tools.npm">
       <package-json value="$PROJECT_DIR$/docs-site/package.json" />
       <command value="run" />
       <scripts>
@@ -140,24 +172,28 @@
       <envs />
       <method v="2" />
     </configuration>
+    <configuration name="mem0-dashboard" type="js.build_tools.npm">
+      <package-json value="$PROJECT_DIR$/mem0/server/dashboard/package.json" />
+      <command value="run" />
+      <scripts>
+        <script value="dev" />
+      </scripts>
+      <node-interpreter value="project" />
+      <envs />
+      <method v="2" />
+    </configuration>
     <list>
-      <item itemvalue="Go Build.cbmem-team" />
-      <item itemvalue="Go Build.mcp-stub" />
-      <item itemvalue="npm.dev" />
+      <item itemvalue="npm.mem0-dashboard" />
+      <item itemvalue="npm.ai-dev-sop" />
+      <item itemvalue="Python.mem0-mcp" />
+      <item itemvalue="Python.mem0-server" />
     </list>
-    <recent_temporary>
-      <list>
-        <item itemvalue="Go Build.cbmem-team" />
-        <item itemvalue="Go Build.mcp-stub" />
-        <item itemvalue="Go Build.cbmem-team" />
-      </list>
-    </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-gosdk-72a9cf600ed8-dfa3e7267ae0-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-253.31033.129" />
-        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-GO-253.31033.129" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-PY-253.31033.139" />
+        <option value="bundled-python-sdk-2653e85de345-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.31033.139" />
       </set>
     </attachedChunks>
   </component>
@@ -175,7 +211,26 @@
       <workItem from="1783472959240" duration="1321000" />
       <workItem from="1783994649690" duration="4050000" />
       <workItem from="1784089135758" duration="598000" />
+      <workItem from="1789747041603" duration="690000" />
+      <workItem from="1789784824591" duration="6974000" />
     </task>
+    <task id="LOCAL-00001" summary="fix(db): 解决密码中特殊字符导致的数据库连接问题&#10;&#10;- 在数据库URL中对用户名和密码进行URL编码，防止特殊字符破坏URL解析&#10;- 添加quote_plus函数用于处理用户名和密码中的特殊字符&#10;- 使用预编码的连接字符串替代单独的参数配置&#10;- 移除不再需要的EMBEDDER_SEND_DIMENSIONS配置选项">
+      <option name="closed" value="true" />
+      <created>1789797318680</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1789797318680</updated>
+    </task>
+    <task id="LOCAL-00002" summary="docs: 更新废弃文档中的引用链接和平台名称&#10;&#10;- 将 mem0-ai-tools-config-guide.md 引用更新为 mem0-manual.md&#10;- 将调解平台相关描述统一替换为业务平台&#10;- 更新容器名称从 mwb-* 到 ai-sop-*&#10;- 修改当事人端与调解员端为当事人端与业务专员端&#10;- 更新复制应用流水线中的调解相关术语为业务相关术语&#10;- 修正复制网页流水线中的平台名称和目录结构&#10;- 更新开发标准操作流程中的项目名称和职责描述">
+      <option name="closed" value="true" />
+      <created>1789799236982</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1789799236982</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -276,7 +331,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
     <option name="CHECK_NEW_TODO" value="false" />
     <MESSAGE value="init" />
     <MESSAGE value="chore(config): 添加项目配置文件和基础组件&#10;&#10;- 添加 .editorconfig 文件配置代码风格&#10;- 添加多环境配置文件 (.env, .env.dev, .env.local, .env.prod, .env.stage, .env.test)&#10;- 添加 ESLint 自动导入配置文件&#10;- 添加 Git 忽略文件配置&#10;- 添加 Prettier 和 StyleLint 忽略配置&#10;- 添加错误页面组件 (403, 404, 500)&#10;- 添加文件客户端抽象基类&#10;- 添加 Redis 消息队列相关抽象类&#10;- 添加数据脱敏处理器抽象类&#10;- 添加短信客户端抽象基类" />
@@ -294,7 +348,10 @@
     <MESSAGE value="feat(docs): 添加文档站点配置和控制台API客户端&#10;&#10;- 更新.gitignore文件以允许GitHub工作流和VitePress配置&#10;- 添加AITools页面组件&#10;- 创建API客户端模块实现JWT认证和自动刷新功能&#10;- 配置VitePress站点支持多语言和搜索功能&#10;- 添加dayjs插件垫片解决浏览器兼容性问题&#10;- 集成GitHub Pages部署工作流实现自动化发布" />
     <MESSAGE value="docs(agentic): 添加智能体设计模式文档&#10;&#10;- 新增简介章节，阐述智能体系统基本概念和特性&#10;- 添加前言部分，介绍智能体开发画布理念&#10;- 增加译者序，说明书籍翻译背景和在线阅读地址&#10;- 添加智能体特征详细介绍，包含五步循环工作原理&#10;- 新增智能体未来发展五大假设分析&#10;- 添加AI编码技能插件包完整查询字典文档&#10;- 包含Superpowers、GSD、OpenSpec等多个插件包详细指南&#10;- 提供16个Vibe Coding实战技巧分享内容" />
     <MESSAGE value="docs(graph-engineering): 添加 Graph Engineering 从 0 到 1 完整教程文档&#10;&#10;- 详细介绍 Graph Engineering 概念及其与 Loop Engineering 区别&#10;- 阐述 Graph Engineering 三大核心组件：节点、边、状态&#10;- 提供写文章、写代码、做调研三个实用 Graph 模板&#10;- 分享从新手到进阶的学习路径和常见陷阱避免方法&#10;- 包含实际操作练习指导和最佳实践建议" />
-    <option name="LAST_COMMIT_MESSAGE" value="docs(graph-engineering): 添加 Graph Engineering 从 0 到 1 完整教程文档&#10;&#10;- 详细介绍 Graph Engineering 概念及其与 Loop Engineering 区别&#10;- 阐述 Graph Engineering 三大核心组件：节点、边、状态&#10;- 提供写文章、写代码、做调研三个实用 Graph 模板&#10;- 分享从新手到进阶的学习路径和常见陷阱避免方法&#10;- 包含实际操作练习指导和最佳实践建议" />
+    <MESSAGE value="去原有双轨记忆改为mem0、文档更新" />
+    <MESSAGE value="fix(db): 解决密码中特殊字符导致的数据库连接问题&#10;&#10;- 在数据库URL中对用户名和密码进行URL编码，防止特殊字符破坏URL解析&#10;- 添加quote_plus函数用于处理用户名和密码中的特殊字符&#10;- 使用预编码的连接字符串替代单独的参数配置&#10;- 移除不再需要的EMBEDDER_SEND_DIMENSIONS配置选项" />
+    <MESSAGE value="docs: 更新废弃文档中的引用链接和平台名称&#10;&#10;- 将 mem0-ai-tools-config-guide.md 引用更新为 mem0-manual.md&#10;- 将调解平台相关描述统一替换为业务平台&#10;- 更新容器名称从 mwb-* 到 ai-sop-*&#10;- 修改当事人端与调解员端为当事人端与业务专员端&#10;- 更新复制应用流水线中的调解相关术语为业务相关术语&#10;- 修正复制网页流水线中的平台名称和目录结构&#10;- 更新开发标准操作流程中的项目名称和职责描述" />
+    <option name="LAST_COMMIT_MESSAGE" value="docs: 更新废弃文档中的引用链接和平台名称&#10;&#10;- 将 mem0-ai-tools-config-guide.md 引用更新为 mem0-manual.md&#10;- 将调解平台相关描述统一替换为业务平台&#10;- 更新容器名称从 mwb-* 到 ai-sop-*&#10;- 修改当事人端与调解员端为当事人端与业务专员端&#10;- 更新复制应用流水线中的调解相关术语为业务相关术语&#10;- 修正复制网页流水线中的平台名称和目录结构&#10;- 更新开发标准操作流程中的项目名称和职责描述" />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
   <component name="VgoProject">
@@ -305,15 +362,8 @@
       </map>
     </environment>
   </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/tools/cbmem-team/internal/console/auth_handler.go</url>
-          <line>119</line>
-          <option name="timeStamp" value="1" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/ai_dev_sop$mem0_server.coverage" NAME="mem0-server Coverage Results" MODIFIED="1789785874079" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="D:\projects\ai-dev-sop\mem0\server" />
+    <SUITE FILE_PATH="coverage/ai_dev_sop$mem0_mcp.coverage" NAME="mem0-mcp Coverage Results" MODIFIED="1789785161961" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="D:\projects\ai-dev-sop\mem0\server" />
   </component>
 </project>

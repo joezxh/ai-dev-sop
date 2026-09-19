@@ -7,13 +7,26 @@ streamable-http）实际端点由该配置文件决定——此处切勿硬编�
 
 > 保密说明：mem0 的 `api_key` 与管理员 `user_id` 存储在长期记忆中
 > （knowledge："本地 mem0 MCP 服务配置与凭据"），并镜像保存在本地、
-> 已被 git 忽略的 `.mem0/mem0.config.json`。请始终从那里读取，切勿在代码中硬编码。
+> 已被 git 忽略的凭证文件中。请始终按下方查找顺序从凭证文件读取，切勿在代码中硬编码。
+>
+> **凭证文件查找顺序（先找到先用；更近的文件字段优先）**：
+> 1. 本工程 `.mem0/mem0.config.json`（工程级——绑定本仓库的 `git_remote`/`project_id`）
+> 2. 本工程 `.codebuddy/mem0.config.json`（工程级兼容位置）
+> 3. 用户级 `~/.mem0/mem0.config.json`（由 `scripts/mem0-setup -Scope user` 写入，
+>    只含 `api_key` 等公共字段；`git_remote`/`project_id` 由 Agent 按当前工程运行时现取）
+>
+> 工程级文件**可选**：只想隔离记忆池时无需重复创建（运行时 git_remote 已按工程隔离）；
+> 需要覆盖 api_key 或指定非 git remote 的 project_id 时才建一份。
 
 ## 1. 加载记忆（自动，会话开始时）
 
 在本仓库的每轮会话首次开始时，通过 `~/.codebuddy/mcp.json` 中实际配置的 mem0 MCP
 服务（约定名 `mem0`）加载项目记忆池。
-从 `.mem0/mem0.config.json` 读取 `api_key`、`git_remote`、`project_id`——切勿硬编码。（兼容：若 `.mem0/mem0.config.json` 不存在，回退读取 `.codebuddy/mem0.config.json`。）
+从凭证文件（按上方查找顺序）读取 `api_key`、`git_remote`、`project_id`——切勿硬编码。
+若最终回退到用户级文件（其中未写 `git_remote`/`project_id`），则以本工程
+`git remote get-url origin` 的输出作为 `git_remote`、去 `.git` 后缀作为
+`project_id`——每个工程各自绑定自己的记忆池，不会因共用用户级凭证而被迫同池。
+（兼容：若 `.mem0/mem0.config.json` 不存在，回退读取 `.codebuddy/mem0.config.json`。）
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`——服务端会将 git remote
@@ -29,8 +42,8 @@ streamable-http）实际端点由该配置文件决定——此处切勿硬编�
 ## 2. 保存记忆（自动——通过 MCP，无需脚本，无需手动命令）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时，通过
-`~/.codebuddy/mcp.json` 中实际配置的 mem0 MCP 服务保存。不要保存临时性的任务状态。每次都从
-`.mem0/mem0.config.json` 读取 `api_key` / `git_remote` / `user_id`。
+`~/.codebuddy/mcp.json` 中实际配置的 mem0 MCP 服务保存。不要保存临时性的任务状态。每次都按
+§1 的凭证文件查找顺序读取 `api_key` / `git_remote` / `user_id`。
 
 ```python
 add_memory(
@@ -52,6 +65,15 @@ add_memory(
 - mem0 按内容哈希去重，因此重新保存/回填是安全的。
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
+
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：CodeBuddy 会话转录**实际落盘本地**，
+> 由纯脚本（零 LLM）逐字组装 Q/A Markdown 直投 mem0 REST（infer=false）：
+> - **CLI 会话**写 `~/.codebuddy/projects/<munged-cwd>/<session-uuid>.jsonl` → `scripts/mem0-transcript-poster.mjs`；
+> - **IDE 会话**写 `%LOCALAPPDATA%/CodeBuddyExtension/Data/<userId>/CodeBuddyIDE/<userId>/history/<workspaceHash>/<sessionId>/messages/<msgId>.json`
+>   （消息/思考/工具调用/工具结果 全部原文，`index.json` 给出顺序）→ `scripts/mem0-ide-session-poster.mjs`（零 LLM，无需任何 LLM 调用）。
+> 两者均由 `SessionStart` hook 触发 flush 上一会话（见 `scripts/README-mem0-poster.md`）。
+> **本节下述 Agent 逐字转录规则降级为兜底**：仅当 poster 未运行/失败时才由 Agent
+> 按原规则手工补录；两者按内容哈希去重，可安全并存。
 
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端（dashboard）能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
@@ -278,6 +300,15 @@ add_memory(
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
 
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：CodeBuddy 会话转录**实际落盘本地**，
+> 由纯脚本（零 LLM）逐字组装 Q/A Markdown 直投 mem0 REST（infer=false）：
+> - **CLI 会话**写 `~/.codebuddy/projects/<munged-cwd>/<session-uuid>.jsonl` → `scripts/mem0-transcript-poster.mjs`；
+> - **IDE 会话**写 `%LOCALAPPDATA%/CodeBuddyExtension/Data/<userId>/CodeBuddyIDE/<userId>/history/<workspaceHash>/<sessionId>/messages/<msgId>.json`
+>   （消息/思考/工具调用/工具结果 全部原文，`index.json` 给出顺序）→ `scripts/mem0-ide-session-poster.mjs`（零 LLM，无需任何 LLM 调用）。
+> 两者均由 `SessionStart` hook 触发 flush 上一会话（见 `scripts/README-mem0-poster.md`）。
+> **本节下述 Agent 逐字转录规则降级为兜底**：仅当 poster 未运行/失败时才由 Agent
+> 按原规则手工补录；两者按内容哈希去重，可安全并存。
+
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端（dashboard）能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
 回复**完成时固定触发** `add_memory`，不得跳过。
@@ -389,6 +420,7 @@ add_memory(
     git_remote="<来自凭证文件>",
     user_id="admin@mem0.dev",
     project_id="<project_id>",
+    infer=false,
     metadata={
         "type":"conversation",
         "session_id":"cb-<YYYYMMDD>-<6位hex>",   # 同会话恒定

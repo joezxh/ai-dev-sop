@@ -14,7 +14,15 @@
 ### 1. 加载记忆（自动，会话开始时）
 
 在本仓库的每轮会话首次开始时，加载项目记忆池。
-从 `{{CRED_FILE}}` 读取 `api_key`、`git_remote`、`project_id`——切勿硬编码。
+**凭证文件查找顺序（先找到先用；更近的文件字段优先）**：
+1. 本工程 `.mem0/mem0.config.json`（工程级，绑定本仓库的 `git_remote`/`project_id`）
+2. 本工程 `.codebuddy/mem0.config.json`（工程级兼容位置）
+3. 用户级 `{{CRED_FILE}}`（user 级安装时由 `scripts/mem0-setup` 写入）
+从中读取 `api_key`、`git_remote`、`project_id`——切勿硬编码。
+（若最终落到用户级文件且其中未写 `git_remote`/`project_id`，则以**当前项目**
+`git remote get-url origin` 的输出作为 `git_remote`、去 `.git` 后缀作为
+`project_id`——每个项目各自绑定自己的记忆池，不会因共享用户级凭证而被迫同池。
+工程级文件可选：需要覆盖 api_key 或指定非 git remote 的 project_id 时才建。）
 
 1. 用一次 MCP 调用拉取**整个项目共享池**（包含所有用户）：
    `get_memories(api_key=..., git_remote="<git_remote>")`——服务端会将 git remote
@@ -29,7 +37,7 @@
 ### 2. 保存记忆（自动——通过 MCP，无需脚本，无需手动命令）
 
 当用户透露关于某人、项目或团队的**持久**事实、决策、偏好或约束时保存。
-不要保存临时性的任务状态。每次都从 `{{CRED_FILE}}` 读取
+不要保存临时性的任务状态。每次都按 §1 的凭证文件查找顺序读取
 `api_key` / `git_remote` / `user_id`。
 
 ```python
@@ -52,6 +60,15 @@ add_memory(
 - mem0 按内容哈希去重，因此重新保存/回填是安全的。
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
+
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：CodeBuddy 会话转录**实际落盘本地**，
+> 由纯脚本（零 LLM）逐字组装 Q/A Markdown 直投 mem0 REST（infer=false）：
+> - **CLI 会话**写 `~/.codebuddy/projects/<munged-cwd>/<session-uuid>.jsonl` → `scripts/mem0-transcript-poster.mjs`；
+> - **IDE 会话**写 `%LOCALAPPDATA%/CodeBuddyExtension/Data/<userId>/CodeBuddyIDE/<userId>/history/<workspaceHash>/<sessionId>/messages/<msgId>.json`
+>   （消息/思考/工具调用/工具结果 全部原文，`index.json` 给出顺序）→ `scripts/mem0-ide-session-poster.mjs`（零 LLM，无需任何 LLM 调用）。
+> 两者均由 `SessionStart` hook 触发 flush 上一会话（见 `scripts/README-mem0-poster.md`）。
+> **本节下述 Agent 逐字转录规则降级为兜底**：仅当 poster 未运行/失败时才由 Agent
+> 按原规则手工补录；两者按内容哈希去重，可安全并存。
 
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端（dashboard）能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮

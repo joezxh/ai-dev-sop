@@ -1,7 +1,7 @@
 # Mem0（二开版）完整手册
 
-> **版本**: v1.1（由四份文档合并而成：接入手册 / 控制台用户文档 / 会话自动提交配置 / 工具速查表）
-> **最后更新**: 2026-09-18
+> **版本**: v1.2（v1.1 基础上新增 §4.11 转录直投管道、metadata.source 通道溯源、dashboard 来源徽标）
+> **最后更新**: 2026-09-19
 > **适用范围**: 本仓库二开自托管 mem0（本地 `127.0.0.1:8080/mcp`；远程 `192.168.110.169:8080/mcp`）。环境用 URL 区分，**MCP 服务名约定为 `mem0`**（以各 IDE 配置文件实际条目为准）
 > **目标读者**: 快速上手的普通用户 → 深入配置/二次研究的管理员
 
@@ -10,7 +10,7 @@
 - 第一部分 系统概览与部署：[1.1 定位](#11-定位与核心能力) · [1.2 架构与端点](#12-系统架构与端点) · [1.3 部署](#13-部署) · [1.4 凭证与鉴权](#14-凭证与鉴权)
 - 第二部分 AI 工具接入：[2.1 工具矩阵](#21-支持的-ai-开发工具) · [2.2 各工具配置](#22-各工具接入配置) · [2.3 MCP 工具清单](#23-mcp-工具清单与关键参数) · [2.4 跨工具共享](#24-跨工具共享记忆)
 - 第三部分 控制台使用：[3.1 登录与导航](#31-登录与界面导航) · [3.2 功能页详解](#32-核心功能页详解)
-- 第四部分 会话自动提交：[4.1 机制总览](#41-机制总览) · [4.2 一键落地（脚本）](#42-一键落地配置推荐mem0-setup-脚本) · [4.3 CodeBuddy 落地](#43-codebuddy-落地配置5-步) · [4.4 Qoder 落地](#44-qoder-落地配置5-步) · [4.5 Cursor 落地](#45-cursor-落地配置5-步) · [4.6 Codex CLI 与 IDE 落地](#46-codex-cli-与-ide-落地配置5-步) · [4.7 Claude Code 落地](#47-claude-code-落地配置5-步) · [4.8 其他工具 Rule 对照](#48-其他开发工具的-rule-文件对照) · [4.9 数据格式规范](#49-数据格式规范) · [4.10 触发时序与传输](#410-触发时序与传输链路)
+- 第四部分 会话自动提交：[4.1 机制总览](#41-机制总览) · [4.2 一键落地（脚本）](#42-一键落地配置推荐mem0-setup-脚本) · [4.3 CodeBuddy 落地](#43-codebuddy-落地配置5-步) · [4.4 Qoder 落地](#44-qoder-落地配置5-步) · [4.5 Cursor 落地](#45-cursor-落地配置5-步) · [4.6 Codex CLI 与 IDE 落地](#46-codex-cli-与-ide-落地配置5-步) · [4.7 Claude Code 落地](#47-claude-code-落地配置5-步) · [4.8 其他工具 Rule 对照](#48-其他开发工具的-rule-文件对照) · [4.9 数据格式规范](#49-数据格式规范) · [4.10 触发时序与传输](#410-触发时序与传输链路) · [4.11 转录直投管道](#411-转录直投管道零-llm-逐字留痕2026-09-19-起)
 - 第五部分 场景与运维：[5.1 典型场景](#51-典型使用场景) · [5.2 速查表](#52-工具与参数速查) · [5.3 验证与排错](#53-配置验证与故障排查) · [5.4 安全](#54-安全与权限注意事项) · [5.5 深入研究](#55-深入研究指引)
 - [附录 A 最小配置速拷](#附录-a各工具最小可用配置速拷) · [附录 B 参数速取命令](#附录-b参数速取命令) · [附录 C 参考链接](#附录-c参考链接)
 
@@ -463,6 +463,11 @@ sequenceDiagram
 | ② | **每轮回复完成时**（固定触发，寒暄也入库） | `add_memory` 提交本轮完整执行转录 | `conversation` |
 | ③ | **出现持久事实时**（决策/偏好/约束/人员） | `add_memory` 提炼事实 | `fact` / `decision` / `preference` / `note` |
 
+> **⚡ 通道优先级（2026-09-19 起）**：会话留痕的首选通道是**转录直投管道**（§4.11，
+> 零 LLM、100% 逐字）；Agent 规则驱动的每轮 `add_memory` 降级为兜底通道（LLM 转录，
+> 可能含摘要改写）。两条通道以 `metadata.source` 区分：poster 写入带
+> `source=transcript-poster`；dashboard 记忆详情标题有对应来源徽标。
+
 ## 4.2 一键落地配置（推荐：mem0-setup 脚本）
 
 本章是**默认推荐路径**：§4.3–§4.7 的手工 5 步流程，均可用一条命令完成，并内置端到端校验。
@@ -501,6 +506,9 @@ bash scripts/mem0-setup.sh
 3. **生成凭证文件** `<repo>/.mem0/mem0.config.json`：写入 api_key，并自动执行 `git remote get-url origin` 得到 `git_remote` / `project_id`（无 remote 时由目录名派生并提示）
 4. **端到端校验**：MCP 端点存活（GET `/mcp` 返回 406）→ REST 写读往返（`:8888/memories`，`X-API-Key` 头）→ 测试记忆自动清理
 5. **输出报告**：逐项 ✓/✗ + 失败项的精确修复指引
+6. **转录直投 Hook（2026-09-19 起，仅 codebuddy）**：复制
+   `mem0-transcript-poster.mjs` 到 `~/.codebuddy/hooks/` 并幂等合并
+   `settings.json` 的 `SessionStart` hook（详见 §4.11）
 
 ### 4.2.4 校验输出解读
 
@@ -638,6 +646,13 @@ add_memory(
 - 相关事实合并成一条，避免逐句刷屏；mem0 按内容哈希去重，重复提交安全
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
+
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：IDE 会话转录以 JSONL
+> 形式落盘（含消息/思考/工具调用全部原文）。仓库 `scripts/mem0-transcript-poster.mjs`
+> 以纯脚本（零 LLM）从落盘 JSONL 逐字组装 Q/A Markdown 并直投 mem0 REST（infer=false），
+> 由 `SessionStart` hook 触发 flush 上一会话（详见 §4.11）。**下述 Agent 逐字转录
+> 规则降级为兜底**：仅当 poster 未运行/失败时才按原规则手工补录；两者按内容哈希
+> 去重，可安全并存。
 
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端 dashboard 能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
@@ -929,6 +944,13 @@ add_memory(
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
 
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：IDE 会话转录以 JSONL
+> 形式落盘（含消息/思考/工具调用全部原文）。仓库 `scripts/mem0-transcript-poster.mjs`
+> 以纯脚本（零 LLM）从落盘 JSONL 逐字组装 Q/A Markdown 并直投 mem0 REST（infer=false），
+> 由 `SessionStart` hook 触发 flush 上一会话（详见 §4.11）。**下述 Agent 逐字转录
+> 规则降级为兜底**：仅当 poster 未运行/失败时才按原规则手工补录；两者按内容哈希
+> 去重，可安全并存。
+
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端 dashboard 能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
 回复**完成时固定触发** `add_memory`，不得跳过。
@@ -1215,6 +1237,13 @@ add_memory(
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
 
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：IDE 会话转录以 JSONL
+> 形式落盘（含消息/思考/工具调用全部原文）。仓库 `scripts/mem0-transcript-poster.mjs`
+> 以纯脚本（零 LLM）从落盘 JSONL 逐字组装 Q/A Markdown 并直投 mem0 REST（infer=false），
+> 由 `SessionStart` hook 触发 flush 上一会话（详见 §4.11）。**下述 Agent 逐字转录
+> 规则降级为兜底**：仅当 poster 未运行/失败时才按原规则手工补录；两者按内容哈希
+> 去重，可安全并存。
+
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端 dashboard 能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
 回复**完成时固定触发** `add_memory`，不得跳过。
@@ -1490,6 +1519,13 @@ add_memory(
 - 相关事实合并成一条，避免逐句刷屏；mem0 按内容哈希去重，重复提交安全
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
+
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：IDE 会话转录以 JSONL
+> 形式落盘（含消息/思考/工具调用全部原文）。仓库 `scripts/mem0-transcript-poster.mjs`
+> 以纯脚本（零 LLM）从落盘 JSONL 逐字组装 Q/A Markdown 并直投 mem0 REST（infer=false），
+> 由 `SessionStart` hook 触发 flush 上一会话（详见 §4.11）。**下述 Agent 逐字转录
+> 规则降级为兜底**：仅当 poster 未运行/失败时才按原规则手工补录；两者按内容哈希
+> 去重，可安全并存。
 
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端 dashboard 能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
@@ -1781,6 +1817,13 @@ add_memory(
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
 
+> **⚡ 逐字权威通道（转录直投管道，2026-09-19 起优先）**：IDE 会话转录以 JSONL
+> 形式落盘（含消息/思考/工具调用全部原文）。仓库 `scripts/mem0-transcript-poster.mjs`
+> 以纯脚本（零 LLM）从落盘 JSONL 逐字组装 Q/A Markdown 并直投 mem0 REST（infer=false），
+> 由 `SessionStart` hook 触发 flush 上一会话（详见 §4.11）。**下述 Agent 逐字转录
+> 规则降级为兜底**：仅当 poster 未运行/失败时才按原规则手工补录；两者按内容哈希
+> 去重，可安全并存。
+
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端 dashboard 能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
 回复**完成时固定触发** `add_memory`，不得跳过。
@@ -2021,6 +2064,7 @@ A:
 | `turn_seq` | string | 会话内从 1 递增 | 会话内排序 |
 | `people` | string[] | 相关人员（对齐 roster） | 按人检索 |
 | `created_at` | string | 该轮完成时 ISO8601（如 `2026-09-18T06:00:01Z`） | 时间排序 |
+| `source` | string | `transcript-poster`（零 LLM 原文留痕）\| 无（Agent 手工转录，可能含摘要改写） | 通道溯源；dashboard 详情标题据此显示来源徽标 |
 
 ### 4.9.3 持久事实（type=fact 等）与留痕的关系
 
@@ -2063,6 +2107,82 @@ Agent 工具调用（add_memory）
 | `infer` | 默认 `false`（原文留痕）。`true` 才走 LLM 抽取（消耗供应商额度） |
 | 幂等性 | 服务端按内容哈希去重 → 重试/补录/重放安全 |
 | 超时 | MCP server → API 的 httpx 超时 120s；`trust_env=false` 不走系统代理 |
+| **转录直投**（§4.11） | poster 纯脚本直投 REST `POST /memories`（`messages` 数组 + `infer=false`），不经过 MCP 层 |
+
+## 4.11 转录直投管道（零 LLM 逐字留痕，2026-09-19 起）
+
+> **定位**：会话留痕的**权威通道**。与 §4.3–§4.7 的 Agent 每轮 `add_memory`（LLM
+> 转录，可能含摘要改写）互补；两条通道按内容哈希去重可并存，以
+> `metadata.source=transcript-poster` 区分。dashboard 记忆详情标题显示来源徽标
+> （🟢 零 LLM 原文留痕 / 🟡 Agent 转录）。
+
+### 4.11.1 原理
+
+> **落盘事实（2026-09-19 修订）**：CodeBuddy **IDE（图形界面）的会话转录实际落盘本地**，
+> 完整保留消息 / 思考(reasoning) / 工具调用(tool-call) / 工具结果(tool-result) 全部原文。
+> 真实路径即：
+> `%LOCALAPPDATA%/CodeBuddyExtension/Data/<userId>/CodeBuddyIDE/<userId>/history/<workspaceHash>/<sessionId>/messages/<msgId>.json`
+> （`<workspaceHash>` 为该工作区稳定哈希；`<sessionId>` 即会话目录；同目录 `index.json`
+> 给出消息顺序 `id/role/isComplete`）。CLI 另写 `~/.codebuddy/projects/<munged-cwd>/<session-uuid>.jsonl`。
+> 两者均由纯脚本（零 LLM、`infer=false`）直投 mem0：`mem0-ide-session-poster.mjs`（IDE 历史路径）
+> 与 `mem0-transcript-poster.mjs`（CLI JSONL）。
+
+**通道 A（CLI 会话，全要素零 LLM）**：poster 纯字符串处理 JSONL：
+
+```
+JSONL → 按 user 消息切轮次 → 组装 Q:/### Thinking N/### Tool N/### 最终回复原文
+      → 过滤 Caveat 系统注入噪声轮次 → POST {rest}/memories（X-API-Key + infer=false）
+```
+
+**通道 B（IDE 会话，全要素零 LLM）**：`SessionStart` hook（`mem0-ide-session-poster.mjs`）
+直接读取 IDE 本地落盘的会话转录
+（`CodeBuddyExtension\Data\...\history\<workspaceHash>\<sessionId>\messages\*.json`），
+逐字组装 `Q:` / `### Thinking N` / `### Tool N` / `### 最终回复原文` 后直投 mem0（`infer=false`），
+**无需任何 LLM 调用**；支持断点续传（状态存 `<repo>/.mem0/.ide-poster-state.json`，按已提交轮次）。
+
+**通道 C（IDE 工具层增强，零 LLM）**：`PostToolUse` hook（`mem0-tool-capture-hook.mjs`）
+把 IDE 原样传出的 `tool_input`/`tool_response` 原样 append 到
+`<repo>/.mem0/tool-events.jsonl`——工具参数与输出 **100% 逐字**，与通道 B 互补。
+
+- 断点续传：CLI 通道状态存 `<repo>/.mem0/.poster-state.json`，IDE 通道存 `<repo>/.mem0/.ide-poster-state.json`（均按已处理进度推进，失败不前进）
+- 凭证读 `<repo>/.mem0/mem0.config.json`；`session_id` 优先取 `.mem0/.session_id-cb`
+- REST 契约注意：直连 REST 必须用 `messages` 数组（`text` 是 MCP 层的包装参数）
+
+### 4.11.2 接线（`mem0-setup` 已自动完成）
+
+`mem0-setup.ps1` / `mem0-setup.sh`（§4.2）现在会自动接线**三个** hook：
+① 复制 `mem0-transcript-poster.mjs` 到 `~/.codebuddy/hooks/` 并幂等合并 `SessionStart`（CLI 会话 flush）；
+② 复制 `mem0-ide-session-poster.mjs` 并幂等合并 `SessionStart`（IDE 会话 flush 本地落盘转录，零 LLM）；
+③ 复制 `mem0-tool-capture-hook.mjs` 并幂等合并 `PostToolUse`（matcher `.*`，
+IDE 会话工具层捕获，事件落盘 `<repo>/.mem0/tool-events.jsonl`）。已有同名条目则
+跳过；解析失败先备份。手动接线片段见 `scripts/README-mem0-poster.md`。
+
+### 4.11.3 用法与校验
+
+```bash
+# CLI 会话转录零 LLM 直投（通常由 SessionStart hook 触发；手动 flush 上一会话）
+node scripts/mem0-transcript-poster.mjs --workspace <repo>
+
+# IDE 会话本地落盘转录零 LLM 直投（SessionStart hook 触发）
+node scripts/mem0-ide-session-poster.mjs --workspace <repo>
+
+# 预演（不落盘、不提交）
+node scripts/mem0-ide-session-poster.mjs --workspace . --dry-run
+
+# 端到端原样校验：取真实轮次 POST→回读→字节级比对→清理（退出码 0=PASS）
+node scripts/mem0-ide-session-poster.mjs --workspace . --verify --rest-url http://localhost:8002
+```
+
+`--verify` 实测结果（2026-09-19）：本地组装 526 chars = 服务端回读 526 chars，
+**字节级一致 PASS**；Q/Thinking/ToolOutput 均可逐字溯源到 JSONL——整条链路零 LLM。
+
+### 4.11.4 已知边界
+
+- 转录 JSONL 由 IDE 在**会话结束/切走时** flush——留痕实时性为"下次会话启动时到账"
+  （Agent 兜底通道不受影响，仍每轮实时）
+- 界面图片/附件不在 JSONL 文本记录内
+- 新工作区首次会话尚无 `<munged-cwd>` 目录：poster 输出 `no transcript dir` 并以
+  退出码 0 静默退出，不影响会话启动
 
 ---
 
@@ -2168,6 +2288,9 @@ Agent 工具调用（add_memory）
 - [ ] 任意一轮后：Dashboard → 记忆页 → 粘贴该会话 `session_id` 能看到 Q/A 转录流
 - [ ] `metadata.turn_seq` 随轮次递增、`type=conversation` 正确
 - [ ] 故意断开 MCP（改错端口）→ Agent 明确告知"服务不可达"而非编造记忆
+- [ ] 转录直投 hook 已接线（`settings.json` SessionStart 含 `mem0-transcript-poster`）
+- [ ] `node scripts/mem0-transcript-poster.mjs --workspace . --verify` 退出码 0（字节级 PASS）
+- [ ] poster 入库的记忆 `metadata.source=transcript-poster`，dashboard 详情显示绿色徽标
 
 > 以上清单以 CodeBuddy 为例；Qoder / Cursor / Codex / Claude Code 按 §4.4–§4.7 将对应路径（MCP 配置、凭证文件、规则文件、session_id 文件）替换后逐项自查。
 

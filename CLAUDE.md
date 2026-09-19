@@ -53,6 +53,15 @@ add_memory(
 
 ### 2.1 会话留痕（每轮对话原文强制入库）
 
+> **⚡ 逐字权威通道（仅 CLI 生效，零 LLM）**：只有 **CodeBuddy CLI** 才会把会话以 JSONL
+> 形式落盘（含消息/思考/工具调用全部原文，验证于 `~/.codebuddy/projects/<dir>/<uuid>.jsonl`）。
+> `scripts/mem0-transcript-poster.mjs` 以纯脚本（零 LLM）从落盘 JSONL 逐字组装 Q/A Markdown
+> 并直投 mem0 REST（infer=false），由 `SessionStart` hook 触发 flush 上一 CLI 会话
+> （其他 IDE 的转录目录差异见 `scripts/README-mem0-poster.md`）。
+> **⚠ IDE（图形界面）不在本地写会话原文**，故该管道对 IDE 会话不生效；IDE 下改走
+> **PostToolUse hook（仅落盘工具事件）+ 本节下述 Agent 逐字转录规则（IDE 主通道，
+> 强制 `add_memory`，不得跳过）**。CLI 与 IDE 产出按内容哈希去重，可并存。
+
 本工程要求**每一轮对话的原始文本都强制提交到 mem0**，使服务端（dashboard）能按
 `session_id` 把同一工程的不同会话分别显示。纯 MCP 方案无 Hook，故由 Agent 在每轮
 回复**完成时固定触发** `add_memory`，不得跳过。
